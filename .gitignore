@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Python tool caches (local only, never commit)
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.tox/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker named volumes (local data)
+# (not tracked — managed by docker)
+
+# Logs
+*.log
+
+# Node (if frontend ever gets a package manager)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Playwright / E2E artifacts (per-run harness output)
+test-results/
