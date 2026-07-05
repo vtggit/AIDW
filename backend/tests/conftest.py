@@ -294,18 +294,7 @@ def clean_database(client):
             # Truncate all tables in a single statement so PostgreSQL handles
             # foreign-key constraints atomically (e.g. contact_tag_mapping has
             # FKs to both contacts and contact_tags).
-            tables = [
-                "contact_tag_mapping",
-                "contact_tags",
-                "contact_consent",
-                "contacts",
-                "templates",
-                "leads",
-                "deal_outcomes",
-                "activities",
-                "settings",
-                "audit_log",
-            ]
+            tables = ["audit_log"]
             cur.execute("TRUNCATE TABLE " + ", ".join(tables) + " RESTART IDENTITY;")
         conn.commit()
     except Exception:
