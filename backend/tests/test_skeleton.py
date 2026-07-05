@@ -1,6 +1,7 @@
 """AIDW warehouse-infra skeleton smoke tests — health, auth, audit, and the audit_log baseline.
 Purpose-built for the reduced skeleton (no inherited AICRM domain assumptions); the warehouse
 domain grows its own tests via CodeAgent."""
+
 import psycopg2
 import pytest
 

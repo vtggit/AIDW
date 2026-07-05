@@ -1,6 +1,7 @@
 """Migration tests — the AIDW warehouse-infra baseline (audit_log). AICRM domain-table
 assertions were removed with the CRM entities; the warehouse grows its own tables via CodeAgent.
 """
+
 import psycopg2
 import pytest
 
@@ -35,6 +36,8 @@ def test_audit_log_table_schema():
                 "WHERE table_name = 'audit_log' AND table_schema = 'public'"
             )
             columns = {row[0] for row in cur.fetchall()}
-            assert not (required - columns), "audit_log missing: %s" % (required - columns)
+            assert not (required - columns), "audit_log missing: %s" % (
+                required - columns
+            )
     finally:
         conn.close()

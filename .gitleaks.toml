@@ -1,0 +1,26 @@
+# gitleaks configuration for AIDW (referenced by .github/workflows/backend-ci.yml).
+#
+# Uses the upstream default ruleset so real committed credentials are caught, and
+# allowlists ONLY known non-secret dev/test placeholders and CI fixtures. Real source
+# credentials (OData/DB/API auth, the build token) live in host-side env files outside
+# the repository and are never committed.
+
+title = "AIDW gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secret dev/test placeholders and CI fixtures"
+
+# Placeholder/dev values that are intentionally present in the repo and are not real secrets.
+regexes = [
+  '''dev-secret-token''',
+  '''change-me-in-production''',
+]
+
+# Paths whose contents are test fixtures or CI config (throwaway DB creds, dev tokens).
+paths = [
+  '''(^|/)\.github/workflows/.*''',
+  '''(^|/)backend/tests/.*''',
+]
