@@ -1,0 +1,130 @@
+# CodeAgent contract merge-gate — ENFORCING (contract-v2 Phase 4a.4).
+#
+# Resolves a PR's codeagent-pr-contract against the linked issue's
+# codeagent-contract + a real test run, and posts a per-AC verdict to the job
+# summary. The checker uses real exit codes, so a failing verdict FAILS this job
+# (a red check). It only BLOCKS merge once a maintainer marks the
+# "CodeAgent contract gate" check REQUIRED in branch protection — see
+# docs/branch-protection.md.
+#
+# TWO FAMILIES: a backend PR is proven by the pytest suite (Postgres service); a
+# FRONTEND PR (proof-map nodeids under app/tests/*.spec.js) is proven by the
+# @playwright/test suite run in real Chromium — the checker is junit-format-
+# agnostic, so the same per-AC binding applies with --repo-root app.
+name: CodeAgent merge gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: ca-merge-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  contract-gate:
+    name: CodeAgent contract gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: aicrm
+          POSTGRES_USER: aicrm
+          POSTGRES_PASSWORD: change-me-in-production
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install gate tooling
+        run: python -m pip install -U pip pytest
+
+      - name: ca_gate self-tests (no DB)
+        run: python -m pytest tests/ca_gate/ -q || true   # report-only: never block
+
+      - name: Fetch PR body + changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+          gh pr view "$PR" --repo "${{ github.repository }}" --json body -q .body > "${RUNNER_TEMP}/pr_body.md"
+          gh pr diff "$PR" --repo "${{ github.repository }}" --name-only > "${RUNNER_TEMP}/changed.txt"
+
+      - name: Detect proof family (backend pytest vs frontend Playwright)
+        id: fam
+        run: |
+          if grep -qE '^app/tests/.*\.spec\.js$' "${RUNNER_TEMP}/changed.txt"; then
+            echo "family=frontend" >> "$GITHUB_OUTPUT"
+            echo "repo_root=app"   >> "$GITHUB_OUTPUT"
+          else
+            echo "family=backend" >> "$GITHUB_OUTPUT"
+            echo "repo_root=backend" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install backend deps
+        if: steps.fam.outputs.family == 'backend'
+        run: |
+          python -m pip install alembic
+          pip install -r backend/requirements.txt
+
+      - name: Run backend suite -> junitxml
+        if: steps.fam.outputs.family == 'backend'
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: aicrm
+          DB_USER: aicrm
+          DB_PASSWORD: change-me-in-production
+          AUTH_MODE: development
+          AUTH_DEV_TOKEN: dev-secret-token
+        run: |
+          cd backend
+          python -m alembic upgrade head || true
+          python -m pytest tests/ -q --junitxml="${RUNNER_TEMP}/report.xml" || true
+
+      - name: Run frontend Playwright suite -> junitxml
+        if: steps.fam.outputs.family == 'frontend'
+        run: |
+          cd app/tests
+          npm i @playwright/test@1.57.0 --no-save --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npx playwright test || true
+          # playwright.config.js writes ./report.xml (junit reporter); mirror the
+          # local builder's fixup: add the repo-relative `file` attr per testcase
+          # so the checker's changed-files binding + --repo-root stripping align.
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          t = ET.parse("report.xml")
+          for tc in t.getroot().iter("testcase"):
+              cn = tc.get("classname") or ""
+              if cn and not tc.get("file"):
+                  tc.set("file", "app/tests/%s" % cn)
+          t.write("report.xml")
+          PY
+          cp report.xml "${RUNNER_TEMP}/report.xml"
+
+      - name: Contract gate (enforcing)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/ca_gate/check_pr_contract.py \
+            --pr-body-file "${RUNNER_TEMP}/pr_body.md" \
+            --junit "${RUNNER_TEMP}/report.xml" \
+            --changed-files-file "${RUNNER_TEMP}/changed.txt" \
+            --repo-root "${{ steps.fam.outputs.repo_root }}"

@@ -1,0 +1,256 @@
+"""AICRM FastAPI application factory.
+
+Startup behavior:
+    1. Bootstrap structured logging
+    2. Register middleware (request ID, request logging, CORS)
+    3. Register global exception handlers for operational clarity
+    4. Mount all API routers
+    5. Log startup confirmation
+
+Failure behavior:
+    - Database connection errors during requests return 503 with a clear message
+    - All unhandled exceptions return 500 with request ID for tracing
+"""
+
+import logging
+
+import psycopg2
+import psycopg2.errors
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.config import APP_NAME, APP_VERSION, CORS_ORIGINS
+from app.observability.logging import setup_logging
+from app.observability.middleware import (
+    RequestIDMiddleware,
+    RequestLoggingMiddleware,
+)
+
+# ---------------------------------------------------------------------------
+# Bootstrap logging before anything else runs
+# ---------------------------------------------------------------------------
+setup_logging()
+
+logger = logging.getLogger(__name__)
+
+
+def create_app() -> FastAPI:
+    """Application factory — returns a configured FastAPI instance.
+
+    Exists primarily so tests can create isolated app instances after
+    mutating environment variables.  The module-level ``app`` variable
+    calls this factory for normal startup.
+    """
+    application = FastAPI(
+        title=APP_NAME,
+        version=APP_VERSION,
+    )
+
+    # Request correlation — must be added before CORS so it wraps every request
+    application.add_middleware(RequestIDMiddleware)
+
+    # Per-request logging — logs method, path, status, and duration
+    application.add_middleware(RequestLoggingMiddleware)
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # -----------------------------------------------------------------------
+    # Global exception handlers for operational clarity
+    # -----------------------------------------------------------------------
+
+    @application.exception_handler(psycopg2.errors.ForeignKeyViolation)
+    async def foreign_key_violation_handler(
+        request: Request, exc: psycopg2.errors.ForeignKeyViolation
+    ):
+        """A write referenced a missing row (SQLSTATE 23503).
+
+        Returns a structured 422 naming the invalid reference (from the
+        driver diagnostics) instead of the generic 5xx database error.
+        Starlette resolves handlers by MRO, so this specific handler wins
+        over the generic ``psycopg2.Error`` -> 503 handler below.
+        """
+        from app.observability.logging import get_request_id
+
+        request_id = get_request_id()
+        diag = getattr(exc, "diag", None)
+        reference = (
+            getattr(diag, "message_detail", None)
+            or getattr(diag, "constraint_name", None)
+            or "a foreign key constraint was violated"
+        )
+        logger.warning(
+            "invalid reference during request %s %s — %s request_id=%s",
+            request.method,
+            request.url.path,
+            reference,
+            request_id,
+        )
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": f"Invalid reference: {reference}",
+                "request_id": request_id,
+            },
+        )
+
+    @application.exception_handler(psycopg2.errors.UniqueViolation)
+    async def unique_violation_handler(
+        request: Request, exc: psycopg2.errors.UniqueViolation
+    ):
+        """A write violated a unique constraint (SQLSTATE 23505).
+
+        Returns 409 Conflict naming the duplicate (from the driver
+        diagnostics) instead of the generic 5xx database error.
+        """
+        from app.observability.logging import get_request_id
+
+        request_id = get_request_id()
+        diag = getattr(exc, "diag", None)
+        duplicate = (
+            getattr(diag, "message_detail", None)
+            or getattr(diag, "constraint_name", None)
+            or "a unique constraint was violated"
+        )
+        logger.warning(
+            "duplicate value during request %s %s — %s request_id=%s",
+            request.method,
+            request.url.path,
+            duplicate,
+            request_id,
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"Duplicate value: {duplicate}",
+                "request_id": request_id,
+            },
+        )
+
+    @application.exception_handler(psycopg2.Error)
+    async def database_error_handler(request: Request, exc: psycopg2.Error):
+        """Handle PostgreSQL connection and query errors.
+
+        Returns 503 Service Unavailable with a clear message.
+        The request ID is included for tracing.
+        """
+        from app.observability.logging import get_request_id
+
+        request_id = get_request_id()
+        logger.error(
+            "database error during request %s %s — %s request_id=%s",
+            request.method,
+            request.url.path,
+            exc,
+            request_id,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Database service is currently unavailable. Please try again later.",
+                "request_id": request_id,
+            },
+        )
+
+    @application.exception_handler(RequestValidationError)
+    async def validation_error_handler(request: Request, exc: RequestValidationError):
+        """Handle FastAPI request validation errors with consistent formatting."""
+        from app.observability.logging import get_request_id
+
+        request_id = get_request_id()
+        errors = []
+        for error in exc.errors():
+            errors.append(
+                {
+                    "field": ".".join(str(loc) for loc in error.get("loc", [])),
+                    "message": error.get("msg", ""),
+                    "type": error.get("type", ""),
+                }
+            )
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "Request validation failed.",
+                "errors": errors,
+                "request_id": request_id,
+            },
+        )
+
+    @application.exception_handler(Exception)
+    async def unhandled_error_handler(request: Request, exc: Exception):
+        """Catch-all for unhandled exceptions.
+
+        Returns 500 Internal Server Error with request ID for tracing.
+        Never leaks internal details to the client.
+        """
+        from app.observability.logging import get_request_id
+
+        request_id = get_request_id()
+        logger.exception(
+            "unhandled exception during request %s %s — %s request_id=%s",
+            request.method,
+            request.url.path,
+            exc,
+            request_id,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "An internal server error occurred. Please try again later.",
+                "request_id": request_id,
+            },
+        )
+
+    # Import routers inside the factory so they capture the current
+    # app instance when reloaded between tests.
+    from app.api.activities import router as activities_router
+    from app.api.analytics import router as analytics_router
+    from app.api.audit import router as audit_router
+    from app.api.auth import router as auth_router
+    from app.api.companies import router as companies_router
+    from app.api.contacts import router as contacts_router
+    from app.api.deal_outcomes import router as deal_outcomes_router
+    from app.api.health import router as health_router
+    from app.api.leads import router as leads_router
+    from app.api.sales_goals import router as sales_goals_router
+    from app.api.settings import router as settings_router
+    from app.api.suppressions import router as suppressions_router
+    from app.api.tags import router as tags_router
+    from app.api.templates import router as templates_router
+
+    application.include_router(health_router)
+    application.include_router(auth_router)
+    application.include_router(contacts_router)
+    application.include_router(suppressions_router)
+    application.include_router(tags_router)
+    application.include_router(templates_router)
+    application.include_router(leads_router)
+    application.include_router(activities_router)
+    application.include_router(settings_router)
+    application.include_router(analytics_router)
+    application.include_router(audit_router)
+    application.include_router(deal_outcomes_router)
+    application.include_router(sales_goals_router)
+    application.include_router(companies_router)
+
+    @application.on_event("startup")
+    def on_startup():
+        """Log startup — schema migrations are handled by Alembic in start.sh."""
+        logger.info("AICRM backend started (version=%s)", APP_VERSION)
+
+    @application.get("/")
+    def root():
+        return {"message": f"{APP_NAME} backend is running"}
+
+    return application
+
+
+# Module-level app for normal uvicorn startup
+app = create_app()

@@ -1,0 +1,119 @@
+services:
+  # ------------------------------------------------------------------
+  # PostgreSQL — system of record
+  # ------------------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: aidw-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT_HOST:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - aicrm-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ------------------------------------------------------------------
+  # PostgreSQL — ephemeral test database (no persistent volume)
+  # ------------------------------------------------------------------
+  test-db:
+    image: postgres:15-alpine
+    container_name: aidw-test-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  # ------------------------------------------------------------------
+  # Backend — FastAPI REST API
+  # ------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aidw-backend
+    # Hardening (#122): immutable rootfs, no capabilities, explicit writable tmp
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT_HOST:-9000}:9000"
+    environment:
+      # Database
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Authentication
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      AUTH_MODE: ${AUTH_MODE:-development}
+      AUTH_DEV_TOKEN: ${AUTH_DEV_TOKEN:-dev-secret-token}
+      AUTH_ISSUER: ${AUTH_ISSUER:-https://dev.example.com/realms/aicrm}
+      AUTH_CLIENT_ID: ${AUTH_CLIENT_ID:-aidw-backend}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-aidw-backend}
+      AUTH_ALGORITHMS: ${AUTH_ALGORITHMS:-RS256}
+      AUTH_JWKS_CACHE_TTL: ${AUTH_JWKS_CACHE_TTL:-3600}
+      AUTH_ROLE_CLAIMS: ${AUTH_ROLE_CLAIMS:-roles,realm_access.roles,resource_access.{client_id}.roles}
+      AUTH_GROUP_CLAIMS: ${AUTH_GROUP_CLAIMS:-groups}
+      AUTH_DEV_ROLES: ${AUTH_DEV_ROLES:-user}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # CORS — allow the frontend container origin
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://frontend}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ------------------------------------------------------------------
+  # Frontend — static SPA served by nginx
+  # ------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: aidw-frontend
+    # Hardening (#122): immutable rootfs, no capabilities, explicit writable tmp
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT_HOST:-8080}:8080"
+    # nginx does not use env vars at runtime for this config, but we
+    # document the expected API base here for clarity.
+    # The nginx proxy forwards /api/* to the backend container.
+    depends_on:
+      - backend
+
+volumes:
+  aicrm-postgres-data:
+    driver: local

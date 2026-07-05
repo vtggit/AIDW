@@ -1,0 +1,47 @@
+# AICRM — Python quality tooling configuration
+#
+# This file configures the formatter (black) and linter (ruff) used by
+# CI and local development to enforce consistent, readable Python code.
+#
+# Tools:
+#   black  — formatting (deterministic, no-op re-runs)
+#   ruff   — linting (fast, practical rules)
+#
+# Run locally:
+#   black --check backend/
+#   ruff check backend/
+#   shellcheck backend/*.sh
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+include = "backend/.*\\.pyi?$"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["backend"]
+
+# Focus on practical issues, not style micromanagement.
+# F = pyflakes (undefined names, unused imports, etc.)
+# E = pycodestyle errors (indentation, syntax)
+# W = pycodestyle warnings (line length, whitespace)
+# I = isort (import ordering)
+# SIM = simplify (obvious simplifications)
+# UP = pyupgrade (modern syntax)
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "SIM", "UP"]
+
+# Intentionally relaxed:
+# - E501: line-too-long (black handles formatting)
+# - SIM102: nested-if-with-no-else (sometimes nested ifs are clearer)
+ignore = ["E501", "SIM102"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use unused imports for fixtures and have simpler patterns
+"backend/tests/**/*.py" = ["F401"]
+# main.py intentionally calls setup_logging() before importing logging
+"backend/app/main.py" = ["E402"]
+# try/except/pass and import-position patterns that are intentional
+"backend/app/repositories/activities_postgres_repository.py" = ["SIM105"]
+"backend/tests/conftest.py" = ["SIM105"]

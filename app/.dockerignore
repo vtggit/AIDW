@@ -1,0 +1,3 @@
+# Docker build artifacts
+Dockerfile
+.dockerignore

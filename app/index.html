@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AICRM - Customer Relationship Management</title>
+    <link rel="stylesheet" href="css/styles.css?v=0.2.3">
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">AICRM</h1>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item active" data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Dashboard</span>
+                </li>
+                <li class="nav-item" data-page="contacts">
+                    <span class="nav-icon">👥</span>
+                    <span class="nav-label">Contacts</span>
+                </li>
+                <li class="nav-item" data-page="leads">
+                    <span class="nav-icon">🎯</span>
+                    <span class="nav-label">Leads</span>
+                </li>
+                <li class="nav-item" data-page="analytics">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-label">Analytics</span>
+                </li>
+                <li class="nav-item" data-page="activities">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-label">Activities</span>
+                    <span id="overdue-badge" class="nav-badge" style="display:none;">0</span>
+                </li>
+                <li class="nav-item" data-page="templates">
+                    <span class="nav-icon">📝</span>
+                    <span class="nav-label">Templates</span>
+                </li>
+                <li class="nav-item" data-page="winloss">
+                    <span class="nav-icon">🏆</span>
+                    <span class="nav-label">Win/Loss</span>
+                </li>
+                <li class="nav-item" data-page="salesgoals">
+                    <span class="nav-icon">📐</span>
+                    <span class="nav-label">Sales Goals</span>
+                </li>
+                                <li class="nav-item" data-page="companies">
+                    <span class="nav-icon">📦</span>
+                    <span class="nav-label">Companies</span>
+                </li>
+                <li class="nav-item" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">Settings</span>
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <span id="app-version-sidebar" class="version"></span>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main id="main-content" class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div class="header-left">
+                    <button id="menu-toggle" class="menu-toggle" aria-label="Toggle menu">☰</button>
+                    <h2 id="page-title">Dashboard</h2>
+                </div>
+                <div class="header-right">
+                    <div id="auth-status" class="auth-status" title="Authentication status">
+                        <span class="auth-indicator">⏳</span>
+                    </div>
+                    <div class="search-box">
+                        <input type="text" id="global-search" placeholder="Search contacts, leads..." aria-label="Global search">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                    <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme">🌙</button>
+                    <button id="shortcuts-toggle" class="icon-btn" aria-label="Keyboard shortcuts">⌨️</button>
+                </div>
+            </header>
+
+            <!-- Page Content Container -->
+            <div id="page-container" class="page-container">
+                <!-- Dashboard Page -->
+                <div id="page-dashboard" class="page active">
+                    <div class="dashboard-header-actions">
+                        <button id="btn-export-pdf" class="btn btn-secondary" title="Export Dashboard as PDF Report">📄 Export PDF Report</button>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-info">
+                                <h3 id="stat-total-contacts">0</h3>
+                                <p>Total Contacts</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🎯</div>
+                            <div class="stat-info">
+                                <h3 id="stat-total-leads">0</h3>
+                                <p>Total Leads</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">✅</div>
+                            <div class="stat-info">
+                                <h3 id="stat-converted-leads">0</h3>
+                                <p>Converted Leads</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📋</div>
+                            <div class="stat-info">
+                                <h3 id="stat-today-activities">0</h3>
+                                <p>Today's Activities</p>
+                            </div>
+                        </div>
+                        <div class="stat-card revenue-card">
+                            <div class="stat-icon">💰</div>
+                            <div class="stat-info">
+                                <h3 id="stat-pipeline-value">$0</h3>
+                                <p>Pipeline Value</p>
+                            </div>
+                        </div>
+                        <div class="stat-card revenue-card">
+                            <div class="stat-icon">🏆</div>
+                            <div class="stat-info">
+                                <h3 id="stat-won-revenue">$0</h3>
+                                <p>Won Revenue</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">⚠️</div>
+                            <div class="stat-info">
+                                <h3 id="stat-overdue-activities">0</h3>
+                                <p>Overdue Activities</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="dashboard-card">
+                            <h3>Recent Activities</h3>
+                            <div id="recent-activities" class="activity-list">
+                                <p class="empty-state">No recent activities</p>
+                            </div>
+                        </div>
+                        <div class="dashboard-card">
+                            <h3>Lead Pipeline</h3>
+                            <div id="lead-pipeline-overview" class="pipeline-overview">
+                                <div class="pipeline-stage">
+                                    <span class="stage-label">New</span>
+                                    <span class="stage-info">
+                                        <span id="pipeline-new" class="stage-count">0</span>
+                                        <span id="pipeline-new-value" class="stage-value"></span>
+                                    </span>
+                                </div>
+                                <div class="pipeline-stage">
+                                    <span class="stage-label">Contacted</span>
+                                    <span class="stage-info">
+                                        <span id="pipeline-contacted" class="stage-count">0</span>
+                                        <span id="pipeline-contacted-value" class="stage-value"></span>
+                                    </span>
+                                </div>
+                                <div class="pipeline-stage">
+                                    <span class="stage-label">Qualified</span>
+                                    <span class="stage-info">
+                                        <span id="pipeline-qualified" class="stage-count">0</span>
+                                        <span id="pipeline-qualified-value" class="stage-value"></span>
+                                    </span>
+                                </div>
+                                <div class="pipeline-stage">
+                                    <span class="stage-label">Proposal</span>
+                                    <span class="stage-info">
+                                        <span id="pipeline-proposal" class="stage-count">0</span>
+                                        <span id="pipeline-proposal-value" class="stage-value"></span>
+                                    </span>
+                                </div>
+                                <div class="pipeline-stage">
+                                    <span class="stage-label">Won</span>
+                                    <span class="stage-info">
+                                        <span id="pipeline-won" class="stage-count">0</span>
+                                        <span id="pipeline-won-value" class="stage-value"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dashboard-card">
+                            <h3>🤖 Recommended Actions</h3>
+                            <div id="recommended-actions" class="recommendation-list">
+                                <p class="empty-state">No recommendations yet</p>
+                            </div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="dashboard-card-header">
+                                <h3>Recent Contacts</h3>
+                                <a href="#" class="view-all-link" onclick="App.navigate('contacts'); return false;">View All →</a>
+                            </div>
+                            <div id="recent-contacts" class="recent-items-list">
+                                <p class="empty-state">No recent contacts</p>
+                            </div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="dashboard-card-header">
+                                <h3>Recent Leads</h3>
+                                <a href="#" class="view-all-link" onclick="App.navigate('leads'); return false;">View All →</a>
+                            </div>
+                            <div id="recent-leads" class="recent-items-list">
+                                <p class="empty-state">No recent leads</p>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card">
+                            <div class="dashboard-card-header-row">
+                                <h3>Activity Trends</h3>
+                                <div class="trend-controls">
+                                    <select id="trend-range" class="filter-select" title="Time range">
+                                        <option value="7d">Last 7 days</option>
+                                        <option value="30d" selected>Last 30 days</option>
+                                        <option value="90d">Last 90 days</option>
+                                        <option value="1y">Last 1 year</option>
+                                    </select>
+                                    <select id="trend-group" class="filter-select" title="Group by">
+                                        <option value="day" selected>By Day</option>
+                                        <option value="week">By Week</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="activity-trend-overview" class="activity-trend-overview">
+                                <!-- Summary stats rendered by JS -->
+                            </div>
+                            <div id="activity-trend-chart" class="activity-trend-chart">
+                                <!-- Bar chart rendered by JS -->
+                            </div>
+                            <div id="activity-trend-legend" class="activity-trend-legend">
+                                <!-- Legend rendered by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contacts Page -->
+                <div id="page-contacts" class="page">
+                    <div class="page-actions">
+                        <button id="btn-add-contact" class="btn btn-primary" data-admin-only="true">+ Add Contact</button>
+                        <button id="btn-manage-tags" class="btn btn-secondary" data-admin-only="true" title="Manage contact tags">🏷️ Manage Tags</button>
+                        <div class="filter-controls">
+                            <button id="btn-export-csv" class="btn btn-secondary" title="Export contacts to CSV">📥 Export CSV</button>
+                            <button id="btn-import-csv" class="btn btn-secondary" title="Import contacts from CSV" data-admin-only="true">📤 Import CSV</button>
+                            <button id="btn-import-vcard" class="btn btn-secondary" title="Import contacts from vCard (VCF)" data-admin-only="true">📇 Import vCard</button>
+                            <button id="btn-find-duplicates" class="btn btn-secondary" title="Find duplicate contacts">🔍 Find Duplicates</button>
+                            <select id="contact-filter-status" class="filter-select">
+                                <option value="">All Statuses</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="vip">VIP</option>
+                            </select>
+                            <select id="contact-sort" class="filter-select">
+                                <option value="name-asc">Name A-Z</option>
+                                <option value="name-desc">Name Z-A</option>
+                                <option value="recent">Most Recent</option>
+                            </select>
+                        </div>
+                    </div>
+                    <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                    <input type="file" id="vcard-file-input" accept=".vcf,.vcard" style="display: none;">
+                    <div id="contacts-list" class="contacts-grid">
+                        <div class="empty-state-card">
+                            <p>No contacts yet. Click "Add Contact" to get started.</p>
+                        </div>
+                    </div>
+                    <!-- Bulk Action Bar -->
+                    <div id="bulk-action-bar" class="bulk-action-bar hidden">
+                        <div class="bulk-selection-info">
+                            <span id="bulk-selection-count">0</span> contact(s) selected
+                            <button id="btn-select-all" class="btn btn-link">Select All</button>
+                            <button id="btn-select-none" class="btn btn-link">Select None</button>
+                        </div>
+                        <div class="bulk-actions">
+                            <select id="bulk-status-change" class="filter-select">
+                                <option value="">Change Status...</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="vip">VIP</option>
+                            </select>
+                            <button id="btn-bulk-status" class="btn btn-warning" disabled>Apply Status</button>
+                            <select id="bulk-tag-select" class="filter-select">
+                                <option value="">Add Tag...</option>
+                            </select>
+                            <button id="btn-bulk-tag" class="btn btn-info" disabled>🏷️ Add Tag</button>
+                            <button id="btn-bulk-delete" class="btn btn-danger">🗑️ Delete Selected</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leads Page -->
+                <div id="page-leads" class="page">
+                    <div class="page-actions">
+                        <button id="btn-add-lead" class="btn btn-primary">+ Add Lead</button>
+                        <div class="filter-controls">
+                            <button id="btn-toggle-kanban" class="btn btn-secondary" title="Toggle Kanban Board View (K)">📊 Kanban</button>
+                            <button id="btn-export-leads-csv" class="btn btn-secondary" title="Export leads to CSV">📥 Export CSV</button>
+                            <button id="btn-import-leads-csv" class="btn btn-secondary" title="Import leads from CSV">📤 Import CSV</button>
+                            <select id="lead-filter-stage" class="filter-select">
+                                <option value="">All Stages</option>
+                                <option value="new">New</option>
+                                <option value="contacted">Contacted</option>
+                                <option value="qualified">Qualified</option>
+                                <option value="proposal">Proposal</option>
+                                <option value="won">Won</option>
+                                <option value="lost">Lost</option>
+                            </select>
+                            <select id="lead-filter-score" class="filter-select">
+                                <option value="">All Scores</option>
+                                <option value="critical">🔴 Critical (70+)</option>
+                                <option value="hot">🟠 Hot (45-69)</option>
+                                <option value="warm">🟡 Warm (25-44)</option>
+                                <option value="cold">⚪ Cold (0-24)</option>
+                            </select>
+                            <select id="lead-sort" class="filter-select">
+                                <option value="recent">Most Recent</option>
+                                <option value="value-desc">Value High-Low</option>
+                                <option value="value-asc">Value Low-High</option>
+                                <option value="score-desc">Highest Score</option>
+                            </select>
+                        </div>
+                    </div>
+                    <input type="file" id="leads-csv-file-input" accept=".csv" style="display: none;">
+                    <div id="leads-list" class="leads-grid">
+                        <div class="empty-state-card">
+                            <p>No leads yet. Click "Add Lead" to get started.</p>
+                        </div>
+                    </div>
+                    <div id="kanban-board" class="kanban-board" style="display: none;">
+                        <div class="kanban-column" data-stage="new">
+                            <div class="kanban-header">
+                                <h3 class="kanban-stage-title">New</h3>
+                                <span class="kanban-count">0</span>
+                                <span class="kanban-value">$0</span>
+                            </div>
+                            <div class="kanban-cards" data-stage="new"></div>
+                        </div>
+                        <div class="kanban-column" data-stage="contacted">
+                            <div class="kanban-header">
+                                <h3 class="kanban-stage-title">Contacted</h3>
+                                <span class="kanban-count">0</span>
+                                <span class="kanban-value">$0</span>
+                            </div>
+                            <div class="kanban-cards" data-stage="contacted"></div>
+                        </div>
+                        <div class="kanban-column" data-stage="qualified">
+                            <div class="kanban-header">
+                                <h3 class="kanban-stage-title">Qualified</h3>
+                                <span class="kanban-count">0</span>
+                                <span class="kanban-value">$0</span>
+                            </div>
+                            <div class="kanban-cards" data-stage="qualified"></div>
+                        </div>
+                        <div class="kanban-column" data-stage="proposal">
+                            <div class="kanban-header">
+                                <h3 class="kanban-stage-title">Proposal</h3>
+                                <span class="kanban-count">0</span>
+                                <span class="kanban-value">$0</span>
+                            </div>
+                            <div class="kanban-cards" data-stage="proposal"></div>
+                        </div>
+                        <div class="kanban-column" data-stage="won">
+                            <div class="kanban-header">
+                                <h3 class="kanban-stage-title">Won</h3>
+                                <span class="kanban-count">0</span>
+                                <span class="kanban-value">$0</span>
+                            </div>
+                            <div class="kanban-cards" data-stage="won"></div>
+                        </div>
+                        <div class="kanban-column" data-stage="lost">
+                            <div class="kanban-header">
+                                <h3 class="kanban-stage-title">Lost</h3>
+                                <span class="kanban-count">0</span>
+                                <span class="kanban-value">$0</span>
+                            </div>
+                            <div class="kanban-cards" data-stage="lost"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Page -->
+                <div id="page-analytics" class="page">
+                    <div class="analytics-overview">
+                        <div class="analytics-stat-card">
+                            <h3>Total Leads</h3>
+                            <div id="analytics-total-leads" class="analytics-stat-value">0</div>
+                        </div>
+                        <div class="analytics-stat-card">
+                            <h3>Won Deals</h3>
+                            <div id="analytics-won-leads" class="analytics-stat-value success-text">0</div>
+                        </div>
+                        <div class="analytics-stat-card">
+                            <h3>Conversion Rate</h3>
+                            <div id="analytics-conversion-rate" class="analytics-stat-value accent-text">0%</div>
+                        </div>
+                        <div class="analytics-stat-card">
+                            <h3>Total Pipeline Value</h3>
+                            <div id="analytics-pipeline-value" class="analytics-stat-value">$0</div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-section">
+                        <div class="dashboard-card">
+                            <h3>Conversion Funnel</h3>
+                            <div id="funnel-chart" class="funnel-chart">
+                                <!-- Funnel steps rendered by JS -->
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card">
+                            <h3>Stage-by-Stage Breakdown</h3>
+                            <div id="funnel-breakdown" class="funnel-breakdown">
+                                <!-- Breakdown table rendered by JS -->
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Activities Page -->
+                <div id="page-activities" class="page">
+                    <div class="page-actions">
+                        <button id="btn-add-activity" class="btn btn-primary">+ Add Activity</button>
+                        <div class="filter-controls">
+                            <select id="activity-filter-type" class="filter-select">
+                                <option value="">All Types</option>
+                                <option value="call">Call</option>
+                                <option value="email">Email</option>
+                                <option value="meeting">Meeting</option>
+                                <option value="note">Note</option>
+                                <option value="task">Task</option>
+                            </select>
+                            <select id="activity-filter-status" class="filter-select">
+                                <option value="">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="overdue">Overdue</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                            <button id="btn-toggle-calendar" class="btn btn-secondary" title="Toggle Calendar View (C)">📅 Calendar</button>
+                        </div>
+                    </div>
+                    <div id="activities-list" class="activities-timeline">
+                        <div class="empty-state-card">
+                            <p>No activities recorded yet.</p>
+                        </div>
+                    </div>
+                    <div id="activities-calendar" class="activities-calendar" style="display: none;">
+                        <div class="calendar-header">
+                            <button id="calendar-prev-month" class="btn btn-secondary" title="Previous Month">◀</button>
+                            <button id="calendar-today" class="btn btn-secondary" title="Go to Today">Today</button>
+                            <h3 id="calendar-month-year"></h3>
+                            <button id="calendar-next-month" class="btn btn-secondary" title="Next Month">▶</button>
+                        </div>
+                        <div class="calendar-weekdays">
+                            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                        </div>
+                        <div id="calendar-grid" class="calendar-grid"></div>
+                    </div>
+                </div>
+
+                <!-- Templates Page -->
+                <div id="page-templates" class="page">
+                    <div class="page-actions">
+                        <button id="btn-add-template" class="btn btn-primary" data-admin-only="true">+ Add Template</button>
+                        <div class="filter-controls">
+                            <select id="template-filter-category" class="filter-select">
+                                <option value="">All Categories</option>
+                                <option value="follow-up">Follow-up</option>
+                                <option value="introduction">Introduction</option>
+                                <option value="proposal">Proposal</option>
+                                <option value="thank-you">Thank You</option>
+                                <option value="meeting">Meeting</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="template-variable-help" class="template-variable-help">
+                        <strong>Available Variables:</strong>
+                        <code>{{contact_name}}</code>
+                        <code>{{contact_email}}</code>
+                        <code>{{contact_phone}}</code>
+                        <code>{{contact_company}}</code>
+                        <code>{{lead_name}}</code>
+                        <code>{{lead_company}}</code>
+                        <code>{{lead_value}}</code>
+                    </div>
+                    <div id="templates-list" class="templates-grid">
+                        <div class="empty-state-card">
+                            <p>No templates yet. Click "Add Template" to get started.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Win/Loss Reasons Page -->
+                <div id="page-winloss" class="page">
+                    <div class="winloss-overview" id="winloss-stats"></div>
+                    <div class="winloss-grid">
+                        <div class="dashboard-card winloss-card">
+                            <h3>Win Reasons</h3>
+                            <div id="win-reasons-chart" class="winloss-chart"></div>
+                        </div>
+                        <div class="dashboard-card winloss-card">
+                            <h3>Loss Reasons</h3>
+                            <div id="loss-reasons-chart" class="winloss-chart"></div>
+                        </div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>Competitor Mentions</h3>
+                        <div id="competitor-chart" class="winloss-chart"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <div class="page-actions">
+                            <h3>All Outcomes</h3>
+                        </div>
+                        <div id="winloss-table" class="data-table-container"></div>
+                    </div>
+                </div>
+
+                <!-- Settings Page -->
+                <div id="page-settings" class="page">
+                    <div class="settings-container">
+                        <div class="settings-card">
+                            <h3>Data Ownership</h3>
+                            <p>AICRM is a backend-owned application. All business domains are stored through the backend API and PostgreSQL. Browser storage is used only for transient session or UI state.</p>
+                            <ul class="settings-info">
+                                <li><strong>Contacts:</strong> Backend-managed (PostgreSQL)</li>
+                                <li><strong>Templates:</strong> Backend-managed (PostgreSQL)</li>
+                                <li><strong>Leads:</strong> Backend-managed (PostgreSQL)</li>
+                                <li><strong>Activities:</strong> Backend-managed (PostgreSQL)</li>
+                                <li><strong>Settings:</strong> Backend-managed (PostgreSQL)</li>
+                            </ul>
+                        </div>
+                        <div class="settings-card">
+                            <h3>Settings Backup</h3>
+                            <p>Export or import Settings as a JSON snapshot. This is a client-side convenience tool for settings only — all business data (Contacts, Templates, Leads, Activities) is managed by the backend and is not affected.</p>
+                            <div class="settings-actions">
+                                <button id="btn-create-backup" class="btn btn-primary">Export Settings</button>
+                                <button id="btn-restore-backup" class="btn btn-secondary">Import Settings</button>
+                                <button id="btn-clear-data" class="btn btn-danger">Reset Settings</button>
+                            </div>
+                            <div id="last-backup-info" class="last-backup-info">
+                                <span>Last export: <strong id="last-backup-date">Never</strong></span>
+                            </div>
+                            <input type="file" id="backup-file-input" accept=".json" style="display: none;">
+                        </div>
+                        <div class="settings-card">
+                            <h3>Activity Reminders & Notifications</h3>
+                            <p>Receive browser notifications for upcoming and overdue activities. Configure when and how you'd like to be reminded.</p>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="reminder-enabled"> Enable Activity Reminders
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="reminder-time">Daily Reminder Time</label>
+                                <input type="time" id="reminder-time" value="09:00">
+                            </div>
+                            <div class="form-group">
+                                <label for="reminder-advance">Advance Notice</label>
+                                <select id="reminder-advance">
+                                    <option value="0">On the due date only</option>
+                                    <option value="1" selected>1 day before</option>
+                                    <option value="2">2 days before</option>
+                                    <option value="3">3 days before</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="reminder-overdue"> Notify about overdue activities
+                                </label>
+                            </div>
+                            <div class="settings-actions">
+                                <button id="btn-save-reminders" class="btn btn-primary">Save Reminder Settings</button>
+                                <button id="btn-test-notification" class="btn btn-secondary">Test Notification</button>
+                            </div>
+                            <div id="reminder-status" class="reminder-status">
+                                <span>Notification permission: <strong id="notif-permission">Checking...</strong></span>
+                            </div>
+                        </div>
+                        <div class="settings-card">
+                            <h3>About AICRM</h3>
+                            <p>AICRM is a modern Customer Relationship Management system that helps you manage contacts, leads, and activities.</p>
+                            <ul class="settings-info">
+                                <li><strong>Version:</strong> <span id="app-version-settings"></span></li>
+                                <li><strong>Storage:</strong> All business data is backend-managed (PostgreSQL)</li>
+                                <li><strong>Features:</strong> Contact Management, Lead Pipeline, Activity Tracking, Email Templates</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                                <!-- Companies Page -->
+                <div id="page-companies" class="page">
+                    <div class="page-actions">
+                        <button id="btn-add-company" class="btn btn-primary" data-admin-only="true" onclick="App.showCompanyModal(null)">+ Add Company</button>
+                    </div>
+                    <div id="companies-list" class="contacts-grid">
+                        <div class="empty-state-card"><p>No companies yet.</p></div>
+                    </div>
+                </div>
+
+                <!-- Sales Goals Page -->
+                <div id="page-salesgoals" class="page">
+                    <div class="sales-goals-container">
+                        <div class="sales-goals-header">
+                            <div class="sales-goals-summary">
+                                <div class="goal-summary-card">
+                                    <div class="goal-summary-icon">📊</div>
+                                    <div class="goal-summary-info">
+                                        <h3 id="goal-overall-progress">0%</h3>
+                                        <p>Overall Progress</p>
+                                    </div>
+                                </div>
+                                <div class="goal-summary-card">
+                                    <div class="goal-summary-icon">🎯</div>
+                                    <div class="goal-summary-info">
+                                        <h3 id="goal-active-count">0</h3>
+                                        <p>Active Goals</p>
+                                    </div>
+                                </div>
+                                <div class="goal-summary-card">
+                                    <div class="goal-summary-icon">✅</div>
+                                    <div class="goal-summary-info">
+                                        <h3 id="goal-completed-count">0</h3>
+                                        <p>Completed</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="sales-goals-actions">
+                                <button id="btn-recalculate-goals" class="btn btn-secondary">🔄 Recalculate</button>
+                                <button id="btn-add-goal" class="btn btn-primary">+ Add Goal</button>
+                            </div>
+                        </div>
+                        <div id="goals-list" class="goals-list">
+                            <p class="empty-state">No sales goals defined yet. Click "Add Goal" to get started.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Modal Container -->
+        <div id="modal-overlay" class="modal-overlay hidden">
+            <div id="modal-container" class="modal">
+                <div class="modal-header">
+                    <h3 id="modal-title">Modal Title</h3>
+                    <button id="modal-close" class="modal-close-btn" aria-label="Close modal">&times;</button>
+                </div>
+                <div id="modal-body" class="modal-body">
+                    <!-- Dynamic modal content -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notification-container"></div>
+
+    <!-- Quick-Add Activity FAB -->
+    <div id="fab-container" class="fab-container">
+        <div id="fab-chips" class="fab-chips hidden">
+            <button class="fab-chip" data-type="call" title="Log a Call">📞 Call</button>
+            <button class="fab-chip" data-type="email" title="Log an Email">📧 Email</button>
+            <button class="fab-chip" data-type="meeting" title="Log a Meeting">🤝 Meeting</button>
+            <button class="fab-chip" data-type="note" title="Add a Note">📝 Note</button>
+            <button class="fab-chip" data-type="task" title="Create a Task">✅ Task</button>
+        </div>
+        <button id="fab-button" class="fab-button" title="Quick Add Activity">+</button>
+    </div>
+
+    <script src="js/version.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/contacts-data-source.js"></script>
+    <script src="js/templates-data-source.js"></script>
+    <script src="js/leads-data-source.js"></script>
+    <script src="js/activities-data-source.js"></script>
+    <script src="js/settings-data-source.js"></script>
+    <script src="js/sales-goals-data-source.js"></script>
+    <script src="js/companies-data-source.js"></script>
+    <script src="js/app.js?v=0.1.9"></script>
+</body>
+</html>
