@@ -213,6 +213,7 @@ def create_app() -> FastAPI:
     from app.api.audit import router as audit_router
     from app.api.auth import router as auth_router
     from app.api.datasets import router as datasets_router
+    from app.api.discovered_fields import router as discovered_fields_router
     from app.api.health import router as health_router
     from app.api.sources import router as sources_router
 
@@ -221,6 +222,7 @@ def create_app() -> FastAPI:
     application.include_router(audit_router)
     application.include_router(sources_router)
     application.include_router(datasets_router)
+    application.include_router(discovered_fields_router)
 
     @application.on_event("startup")
     def on_startup():
