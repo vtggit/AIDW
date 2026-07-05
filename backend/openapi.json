@@ -1021,6 +1021,17 @@
       },
       "DatasetCreate": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -1047,6 +1058,17 @@
       },
       "DatasetResponse": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -1087,6 +1109,17 @@
       },
       "DatasetUpdate": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "name": {
             "anyOf": [
               {
