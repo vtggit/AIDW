@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class DiscoveredFieldCreate(BaseModel):
     """Request model for creating a discovered_field."""
 
+    is_key: bool | None = Field(default=None)
+
     is_nullable: bool | None = Field(default=None)
 
     dataset_id: str | None = Field(default=None)
@@ -17,6 +19,8 @@ class DiscoveredFieldCreate(BaseModel):
 class DiscoveredFieldUpdate(BaseModel):
     """Request model for updating a discovered_field (all fields optional)."""
 
+    is_key: bool | None = Field(default=None)
+
     is_nullable: bool | None = Field(default=None)
 
     dataset_id: str | None = Field(default=None)
@@ -27,6 +31,8 @@ class DiscoveredFieldUpdate(BaseModel):
 
 class DiscoveredFieldResponse(BaseModel):
     """Response model for a discovered_field record."""
+
+    is_key: bool | None = None
 
     is_nullable: bool | None = None
 
