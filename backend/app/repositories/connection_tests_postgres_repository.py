@@ -37,7 +37,7 @@ class ConnectionTestPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO connection_tests (id, name, status, message, source_id, latency_ms, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO connection_tests (id, name, status, message, source_id, latency_ms, tested_at, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -45,6 +45,7 @@ class ConnectionTestPostgresRepository:
                     data.get("message"),
                     data.get("source_id"),
                     data.get("latency_ms"),
+                    data.get("tested_at"),
                     now,
                     now,
                 ),
@@ -52,7 +53,14 @@ class ConnectionTestPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = ("name", "status", "message", "source_id", "latency_ms")
+        updatable = (
+            "name",
+            "status",
+            "message",
+            "source_id",
+            "latency_ms",
+            "tested_at",
+        )
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)

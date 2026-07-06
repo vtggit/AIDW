@@ -2436,6 +2436,17 @@
       },
       "ConnectionTestCreate": {
         "properties": {
+          "tested_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tested At"
+          },
           "latency_ms": {
             "anyOf": [
               {
@@ -2495,6 +2506,17 @@
       },
       "ConnectionTestResponse": {
         "properties": {
+          "tested_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tested At"
+          },
           "latency_ms": {
             "anyOf": [
               {
@@ -2568,6 +2590,17 @@
       },
       "ConnectionTestUpdate": {
         "properties": {
+          "tested_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tested At"
+          },
           "latency_ms": {
             "anyOf": [
               {
