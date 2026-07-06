@@ -90,7 +90,7 @@ class ODataSchemaReader(SchemaReader):
                 entry = {"name": name, "props": props, "keys": keys}
                 types[name] = entry
                 if ns:
-                    types["%s.%s" % (ns, name)] = entry
+                    types[f"{ns}.{name}"] = entry
 
         # 2) EntitySets -> datasets (resolve the referenced EntityType by qualified or short name)
         out: list[DiscoveredDataset] = []
@@ -129,7 +129,7 @@ def get_reader(connector_type: str) -> SchemaReader:
     reader = _READERS.get((connector_type or "").strip().lower())
     if reader is None:
         raise ValueError(
-            "no schema reader for connector type %r (have: %s)"
-            % (connector_type, ", ".join(sorted(_READERS)))
+            f"no schema reader for connector type {connector_type!r} "
+            f"(have: {', '.join(sorted(_READERS))})"
         )
     return reader

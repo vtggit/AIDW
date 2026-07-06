@@ -79,7 +79,7 @@ def test_discover_disabled_returns_503(client, admin_headers, monkeypatch):
     monkeypatch.setattr("app.api.discovery.ENABLE_INAPI_EGRESS", False)
     sid = _make_odata_source(client, admin_headers)
     assert (
-        client.post("/api/sources/%s/discover" % sid, headers=admin_headers).status_code
+        client.post(f"/api/sources/{sid}/discover", headers=admin_headers).status_code
         == 503
     )
 
@@ -102,7 +102,7 @@ def test_discover_populates_datasets_and_fields_with_lineage(
     monkeypatch.setattr("app.discovery.service._fetch_metadata", lambda url: _EDMX)
     sid = _make_odata_source(client, admin_headers)
 
-    r = client.post("/api/sources/%s/discover" % sid, headers=admin_headers)
+    r = client.post(f"/api/sources/{sid}/discover", headers=admin_headers)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["datasets_discovered"] == 2 and body["fields_discovered"] == 5
@@ -123,5 +123,5 @@ def test_discover_populates_datasets_and_fields_with_lineage(
     assert len(fields) == 5  # lineage: every discovered field links to a dataset
 
     # idempotent re-discovery: nothing new created the second time
-    again = client.post("/api/sources/%s/discover" % sid, headers=admin_headers).json()
+    again = client.post(f"/api/sources/{sid}/discover", headers=admin_headers).json()
     assert again["datasets_created"] == 0 and again["fields_created"] == 0
