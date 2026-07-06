@@ -2824,6 +2824,17 @@
       },
       "DiscoveredFieldCreate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -2850,6 +2861,17 @@
       },
       "DiscoveredFieldResponse": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -2890,6 +2912,17 @@
       },
       "DiscoveredFieldUpdate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "name": {
             "anyOf": [
               {
