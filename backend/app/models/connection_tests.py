@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class ConnectionTestCreate(BaseModel):
     """Request model for creating a connection_test."""
 
+    latency_ms: int | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str = Field(..., min_length=1)
@@ -16,6 +18,8 @@ class ConnectionTestCreate(BaseModel):
 class ConnectionTestUpdate(BaseModel):
     """Request model for updating a connection_test (all fields optional)."""
 
+    latency_ms: int | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str | None = Field(default=None)
@@ -25,6 +29,8 @@ class ConnectionTestUpdate(BaseModel):
 
 class ConnectionTestResponse(BaseModel):
     """Response model for a connection_test record."""
+
+    latency_ms: int | None = None
 
     source_id: str | None = None
 

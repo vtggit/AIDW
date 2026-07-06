@@ -2436,6 +2436,17 @@
       },
       "ConnectionTestCreate": {
         "properties": {
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
           "source_id": {
             "anyOf": [
               {
@@ -2484,6 +2495,17 @@
       },
       "ConnectionTestResponse": {
         "properties": {
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
           "source_id": {
             "anyOf": [
               {
@@ -2546,6 +2568,17 @@
       },
       "ConnectionTestUpdate": {
         "properties": {
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
           "source_id": {
             "anyOf": [
               {
