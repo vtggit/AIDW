@@ -80,16 +80,36 @@ def discover_source(source_id: str) -> dict:
                 )
                 if cur.fetchone():
                     cur.execute(
-                        "UPDATE discovered_fields SET data_type = %s, updated_at = %s "
+                        "UPDATE discovered_fields SET data_type = %s, is_nullable = %s, "
+                        "is_key = %s, field_position = %s, updated_at = %s "
                         "WHERE dataset_id = %s AND name = %s",
-                        (f.data_type, now, ds_id, f.name),
+                        (
+                            f.data_type,
+                            f.nullable,
+                            f.is_key,
+                            f.field_position,
+                            now,
+                            ds_id,
+                            f.name,
+                        ),
                     )
                     updated_f += 1
                 else:
                     cur.execute(
-                        "INSERT INTO discovered_fields (id, name, data_type, dataset_id, "
-                        "created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                        (str(uuid4()), f.name, f.data_type, ds_id, now, now),
+                        "INSERT INTO discovered_fields (id, name, data_type, is_nullable, "
+                        "is_key, field_position, dataset_id, created_at, updated_at) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                        (
+                            str(uuid4()),
+                            f.name,
+                            f.data_type,
+                            f.nullable,
+                            f.is_key,
+                            f.field_position,
+                            ds_id,
+                            now,
+                            now,
+                        ),
                     )
                     created_f += 1
 

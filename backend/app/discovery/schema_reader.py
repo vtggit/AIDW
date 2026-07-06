@@ -21,6 +21,7 @@ class DiscoveredField:
     data_type: str  # source-native type (e.g. OData "Edm.String")
     nullable: bool
     is_key: bool
+    field_position: int  # 0-based position within the dataset
 
 
 @dataclasses.dataclass(frozen=True)
@@ -110,8 +111,9 @@ class ODataSchemaReader(SchemaReader):
                     data_type=p["type"],
                     nullable=p["nullable"],
                     is_key=p["name"] in t["keys"],
+                    field_position=i,
                 )
-                for p in t["props"]
+                for i, p in enumerate(t["props"])
             )
             out.append(
                 DiscoveredDataset(name=es_name, object_type="EntitySet", fields=fields)
