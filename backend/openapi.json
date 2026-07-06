@@ -1984,6 +1984,17 @@
       },
       "SourceConnectionCreate": {
         "properties": {
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          },
           "source_id": {
             "anyOf": [
               {
@@ -2032,6 +2043,17 @@
       },
       "SourceConnectionResponse": {
         "properties": {
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          },
           "source_id": {
             "anyOf": [
               {
@@ -2094,6 +2116,17 @@
       },
       "SourceConnectionUpdate": {
         "properties": {
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          },
           "source_id": {
             "anyOf": [
               {
