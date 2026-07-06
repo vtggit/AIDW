@@ -2880,6 +2880,17 @@
       },
       "DiscoveredFieldCreate": {
         "properties": {
+          "is_nullable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Nullable"
+          },
           "dataset_id": {
             "anyOf": [
               {
@@ -2917,6 +2928,17 @@
       },
       "DiscoveredFieldResponse": {
         "properties": {
+          "is_nullable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Nullable"
+          },
           "dataset_id": {
             "anyOf": [
               {
@@ -2968,6 +2990,17 @@
       },
       "DiscoveredFieldUpdate": {
         "properties": {
+          "is_nullable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Nullable"
+          },
           "dataset_id": {
             "anyOf": [
               {
