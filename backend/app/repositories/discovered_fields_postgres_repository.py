@@ -37,11 +37,12 @@ class DiscoveredFieldPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO discovered_fields (id, name, data_type, created_at, updated_at) VALUES (%s, %s, %s, %s, %s)",
+                "INSERT INTO discovered_fields (id, name, data_type, dataset_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("data_type"),
+                    data.get("dataset_id"),
                     now,
                     now,
                 ),
@@ -49,10 +50,7 @@ class DiscoveredFieldPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = (
-            "name",
-            "data_type",
-        )
+        updatable = ("name", "data_type", "dataset_id")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
