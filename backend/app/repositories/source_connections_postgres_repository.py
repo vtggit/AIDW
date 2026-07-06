@@ -37,12 +37,13 @@ class SourceConnectionPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO source_connections (id, name, endpoint, protocol_version, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                "INSERT INTO source_connections (id, name, endpoint, protocol_version, source_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("endpoint"),
                     data.get("protocol_version"),
+                    data.get("source_id"),
                     now,
                     now,
                 ),
@@ -50,11 +51,7 @@ class SourceConnectionPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = (
-            "name",
-            "endpoint",
-            "protocol_version",
-        )
+        updatable = ("name", "endpoint", "protocol_version", "source_id")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
