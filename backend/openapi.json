@@ -2491,6 +2491,17 @@
       },
       "OdataServiceConfigCreate": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -2528,6 +2539,17 @@
       },
       "OdataServiceConfigResponse": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -2579,6 +2601,17 @@
       },
       "OdataServiceConfigUpdate": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "name": {
             "anyOf": [
               {
