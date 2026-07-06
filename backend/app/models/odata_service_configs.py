@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class OdataServiceConfigCreate(BaseModel):
     """Request model for creating a odata_service_config."""
 
+    supports_delta: bool | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str = Field(..., min_length=1)
@@ -16,6 +18,8 @@ class OdataServiceConfigCreate(BaseModel):
 class OdataServiceConfigUpdate(BaseModel):
     """Request model for updating a odata_service_config (all fields optional)."""
 
+    supports_delta: bool | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str | None = Field(default=None)
@@ -25,6 +29,8 @@ class OdataServiceConfigUpdate(BaseModel):
 
 class OdataServiceConfigResponse(BaseModel):
     """Response model for a odata_service_config record."""
+
+    supports_delta: bool | None = None
 
     source_id: str | None = None
 

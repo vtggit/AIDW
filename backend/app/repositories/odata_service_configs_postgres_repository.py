@@ -39,13 +39,14 @@ class OdataServiceConfigPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO odata_service_configs (id, name, metadata_path, default_entity_set, source_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO odata_service_configs (id, name, metadata_path, default_entity_set, source_id, supports_delta, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("metadata_path"),
                     data.get("default_entity_set"),
                     data.get("source_id"),
+                    data.get("supports_delta"),
                     now,
                     now,
                 ),
@@ -53,7 +54,13 @@ class OdataServiceConfigPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = ("name", "metadata_path", "default_entity_set", "source_id")
+        updatable = (
+            "name",
+            "metadata_path",
+            "default_entity_set",
+            "source_id",
+            "supports_delta",
+        )
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
