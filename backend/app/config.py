@@ -41,6 +41,13 @@ BUILD_TIMESTAMP: str = os.getenv("BUILD_TIMESTAMP", "")
 ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 DEBUG: bool = os.getenv("DEBUG", "true").lower() in ("true", "1", "yes")
 
+# Interim in-API egress for schema discovery (the connector worker takes this over later).
+ENABLE_INAPI_EGRESS: bool = os.getenv("ENABLE_INAPI_EGRESS", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 # ---------------------------------------------------------------------------
 # CORS — comma-separated list of allowed frontend origins
 # ---------------------------------------------------------------------------

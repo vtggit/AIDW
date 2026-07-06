@@ -215,6 +215,7 @@ def create_app() -> FastAPI:
     from app.api.connection_tests import router as connection_tests_router
     from app.api.datasets import router as datasets_router
     from app.api.discovered_fields import router as discovered_fields_router
+    from app.api.discovery import router as discovery_router
     from app.api.health import router as health_router
     from app.api.odata_service_configs import router as odata_service_configs_router
     from app.api.source_connections import router as source_connections_router
@@ -226,6 +227,7 @@ def create_app() -> FastAPI:
     application.include_router(audit_router)
     application.include_router(sources_router)
     application.include_router(datasets_router)
+    application.include_router(discovery_router)
     application.include_router(discovered_fields_router)
     application.include_router(source_connections_router)
     application.include_router(source_credentials_router)
