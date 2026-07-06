@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class SourceConnectionCreate(BaseModel):
     """Request model for creating a source_connection."""
 
+    verify_tls: bool | None = Field(default=None)
+
     timeout_seconds: int | None = Field(default=None)
 
     source_id: str | None = Field(default=None)
@@ -18,6 +20,8 @@ class SourceConnectionCreate(BaseModel):
 class SourceConnectionUpdate(BaseModel):
     """Request model for updating a source_connection (all fields optional)."""
 
+    verify_tls: bool | None = Field(default=None)
+
     timeout_seconds: int | None = Field(default=None)
 
     source_id: str | None = Field(default=None)
@@ -29,6 +33,8 @@ class SourceConnectionUpdate(BaseModel):
 
 class SourceConnectionResponse(BaseModel):
     """Response model for a source_connection record."""
+
+    verify_tls: bool | None = None
 
     timeout_seconds: int | None = None
 

@@ -1984,6 +1984,17 @@
       },
       "SourceConnectionCreate": {
         "properties": {
+          "verify_tls": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Tls"
+          },
           "timeout_seconds": {
             "anyOf": [
               {
@@ -2043,6 +2054,17 @@
       },
       "SourceConnectionResponse": {
         "properties": {
+          "verify_tls": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Tls"
+          },
           "timeout_seconds": {
             "anyOf": [
               {
@@ -2116,6 +2138,17 @@
       },
       "SourceConnectionUpdate": {
         "properties": {
+          "verify_tls": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Tls"
+          },
           "timeout_seconds": {
             "anyOf": [
               {

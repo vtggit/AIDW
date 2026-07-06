@@ -37,7 +37,7 @@ class SourceConnectionPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO source_connections (id, name, endpoint, protocol_version, source_id, timeout_seconds, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO source_connections (id, name, endpoint, protocol_version, source_id, timeout_seconds, verify_tls, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -45,6 +45,7 @@ class SourceConnectionPostgresRepository:
                     data.get("protocol_version"),
                     data.get("source_id"),
                     data.get("timeout_seconds"),
+                    data.get("verify_tls"),
                     now,
                     now,
                 ),
@@ -58,6 +59,7 @@ class SourceConnectionPostgresRepository:
             "protocol_version",
             "source_id",
             "timeout_seconds",
+            "verify_tls",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
