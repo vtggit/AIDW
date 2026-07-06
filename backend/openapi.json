@@ -2880,6 +2880,17 @@
       },
       "DiscoveredFieldCreate": {
         "properties": {
+          "field_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Position"
+          },
           "is_key": {
             "anyOf": [
               {
@@ -2939,6 +2950,17 @@
       },
       "DiscoveredFieldResponse": {
         "properties": {
+          "field_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Position"
+          },
           "is_key": {
             "anyOf": [
               {
@@ -3012,6 +3034,17 @@
       },
       "DiscoveredFieldUpdate": {
         "properties": {
+          "field_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Position"
+          },
           "is_key": {
             "anyOf": [
               {
