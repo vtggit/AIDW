@@ -10,6 +10,7 @@ entries are grouped here under `[Unreleased]` until a version is cut.
 ## [Unreleased]
 
 ### Added
+- Behavioral-layer architecture spec (`docs/BEHAVIORAL-ARCHITECTURE.md`) — verified design + buildable backlog.
 
 - `sources` entity — configured connections to source systems (CRUD at `/api/sources`).
 - `datasets` entity — discovered tables/objects from a source (CRUD at `/api/datasets`).
