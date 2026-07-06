@@ -2520,6 +2520,17 @@
       },
       "SourceCredentialCreate": {
         "properties": {
+          "token_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Endpoint"
+          },
           "secret_ref": {
             "anyOf": [
               {
@@ -2579,6 +2590,17 @@
       },
       "SourceCredentialResponse": {
         "properties": {
+          "token_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Endpoint"
+          },
           "secret_ref": {
             "anyOf": [
               {
@@ -2652,6 +2674,17 @@
       },
       "SourceCredentialUpdate": {
         "properties": {
+          "token_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Endpoint"
+          },
           "secret_ref": {
             "anyOf": [
               {
