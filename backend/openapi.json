@@ -2520,6 +2520,17 @@
       },
       "SourceCredentialCreate": {
         "properties": {
+          "secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          },
           "source_id": {
             "anyOf": [
               {
@@ -2568,6 +2579,17 @@
       },
       "SourceCredentialResponse": {
         "properties": {
+          "secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          },
           "source_id": {
             "anyOf": [
               {
@@ -2630,6 +2652,17 @@
       },
       "SourceCredentialUpdate": {
         "properties": {
+          "secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          },
           "source_id": {
             "anyOf": [
               {
