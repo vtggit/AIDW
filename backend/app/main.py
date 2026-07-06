@@ -212,6 +212,7 @@ def create_app() -> FastAPI:
     # app instance when reloaded between tests.
     from app.api.audit import router as audit_router
     from app.api.auth import router as auth_router
+    from app.api.connection_tests import router as connection_tests_router
     from app.api.datasets import router as datasets_router
     from app.api.discovered_fields import router as discovered_fields_router
     from app.api.health import router as health_router
@@ -229,6 +230,7 @@ def create_app() -> FastAPI:
     application.include_router(source_connections_router)
     application.include_router(source_credentials_router)
     application.include_router(odata_service_configs_router)
+    application.include_router(connection_tests_router)
 
     @application.on_event("startup")
     def on_startup():
