@@ -38,6 +38,7 @@ def test_odata_reader_parses_entitysets_keys_and_nullable():
     assert pid.is_key and pid.nullable is False and pid.data_type == "Edm.Int32"
     name = next(f for f in prod.fields if f.name == "Name")
     assert name.nullable is True and not name.is_key
+    assert [f.field_position for f in prod.fields] == [0, 1, 2]
 
 
 def _make_odata_source(client, admin_headers, endpoint="https://svc.example/odata"):
@@ -121,6 +122,10 @@ def test_discover_populates_datasets_and_fields_with_lineage(
         if f.get("dataset_id") in ds_ids
     ]
     assert len(fields) == 5  # lineage: every discovered field links to a dataset
+    prodid = next(f for f in fields if f["name"] == "ProductID")
+    assert (
+        prodid["is_key"] is True and prodid["is_nullable"] is False
+    )  # enrichment persisted
 
     # idempotent re-discovery: nothing new created the second time
     again = client.post(f"/api/sources/{sid}/discover", headers=admin_headers).json()
