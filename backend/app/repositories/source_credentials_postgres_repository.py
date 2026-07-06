@@ -37,12 +37,13 @@ class SourceCredentialPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO source_credentials (id, name, auth_scheme, principal, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                "INSERT INTO source_credentials (id, name, auth_scheme, principal, source_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("auth_scheme"),
                     data.get("principal"),
+                    data.get("source_id"),
                     now,
                     now,
                 ),
@@ -50,11 +51,7 @@ class SourceCredentialPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = (
-            "name",
-            "auth_scheme",
-            "principal",
-        )
+        updatable = ("name", "auth_scheme", "principal", "source_id")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
