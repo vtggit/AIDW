@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class SourceCredentialCreate(BaseModel):
     """Request model for creating a source_credential."""
 
+    secret_ref: str | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str = Field(..., min_length=1)
@@ -16,6 +18,8 @@ class SourceCredentialCreate(BaseModel):
 class SourceCredentialUpdate(BaseModel):
     """Request model for updating a source_credential (all fields optional)."""
 
+    secret_ref: str | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str | None = Field(default=None)
@@ -25,6 +29,8 @@ class SourceCredentialUpdate(BaseModel):
 
 class SourceCredentialResponse(BaseModel):
     """Response model for a source_credential record."""
+
+    secret_ref: str | None = None
 
     source_id: str | None = None
 
