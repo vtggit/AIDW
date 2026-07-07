@@ -247,6 +247,9 @@ def create_app() -> FastAPI:
     from app.api.audit import router as audit_router
     from app.api.auth import router as auth_router
     from app.api.connection_tests import router as connection_tests_router
+    from app.api.dashboard_item_fields import router as dashboard_item_fields_router
+    from app.api.dashboard_items import router as dashboard_items_router
+    from app.api.dashboards import router as dashboards_router
     from app.api.datasets import router as datasets_router
     from app.api.discovered_fields import router as discovered_fields_router
     from app.api.discovery import router as discovery_router
@@ -271,6 +274,9 @@ def create_app() -> FastAPI:
     application.include_router(connection_tests_router)
     application.include_router(suggestions_router)
     application.include_router(suggestion_fields_router)
+    application.include_router(dashboards_router)
+    application.include_router(dashboard_items_router)
+    application.include_router(dashboard_item_fields_router)
 
     @application.on_event("startup")
     def on_startup():

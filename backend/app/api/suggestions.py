@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
+from app.dashboard.service import accept_suggestion, dismiss_suggestion
+from app.models.dashboard_items import DashboardItemResponse
 from app.models.suggestions import (
     SuggestionCreate,
     SuggestionResponse,
@@ -84,3 +86,29 @@ def delete_suggestion(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Suggestion '{entity_id}' not found.",
         )
+
+
+@router.post("/{entity_id}/accept", response_model=DashboardItemResponse)
+def accept(
+    entity_id: str,
+    dashboard_id: str | None = None,
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+):
+    """Accept a suggestion into a dashboard item (idempotent). Optional ``dashboard_id`` query param
+    targets a specific dashboard; omitted, a default dashboard is used."""
+    try:
+        return accept_suggestion(entity_id, dashboard_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.post("/{entity_id}/dismiss", response_model=SuggestionResponse)
+def dismiss(
+    entity_id: str,
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+):
+    """Dismiss a suggestion (sticky — the reconciler never resurrects it)."""
+    try:
+        return dismiss_suggestion(entity_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
