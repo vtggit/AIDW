@@ -7,12 +7,16 @@ by natural key (source_id+name for datasets, dataset_id+name for fields), so dis
 repeatedly without duplicating.
 """
 
+import logging
 import urllib.request
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.db.connection import get_cursor
 from app.discovery.schema_reader import get_reader
+from app.suggestion.service import regenerate_suggestions_for_source
+
+logger = logging.getLogger(__name__)
 
 
 class DiscoveryError(Exception):
@@ -113,6 +117,21 @@ def discover_source(source_id: str) -> dict:
                     )
                     created_f += 1
 
+    # Automatic trigger: regenerate schema-tier suggestions now that the schema is persisted.
+    # Best-effort — a suggestion failure must never fail the discovery that already committed.
+    suggestion_counts = {
+        "suggestions_created": 0,
+        "suggestions_revived": 0,
+        "suggestions_staled": 0,
+    }
+    try:
+        suggestion_counts = regenerate_suggestions_for_source(source_id)
+    except Exception:
+        logger.exception(
+            "schema-tier suggestion regeneration failed for source %s (discovery still succeeded)",
+            source_id,
+        )
+
     return {
         "source_id": source_id,
         "datasets_discovered": len(datasets),
@@ -120,4 +139,5 @@ def discover_source(source_id: str) -> dict:
         "datasets_created": created_ds,
         "fields_created": created_f,
         "fields_updated": updated_f,
+        **suggestion_counts,
     }
