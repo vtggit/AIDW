@@ -1,0 +1,11 @@
+{
+  "name": "aidw-frontend-tests",
+  "private": true,
+  "description": "Playwright end-to-end tests for the AIDW frontend (run against a live stack).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

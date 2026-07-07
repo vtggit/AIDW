@@ -4,19 +4,40 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AIDW — AI Data Warehouse</title>
-  <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/warehouse.css" />
 </head>
 <body>
-  <main style="max-width:640px;margin:4rem auto;font-family:system-ui,sans-serif;line-height:1.5">
-    <h1>AIDW — AI Data Warehouse</h1>
-    <p>A self-hosted, AI-operated data warehouse, built and operated by its own CodeAgent
-    instance. The UI grows here as CodeAgent builds the warehouse domain
-    (sources, datasets, pipelines, runs).</p>
-    <p>The API client shell (<code>js/api.js</code>, <code>js/config.js</code>,
-    <code>js/auth.js</code>) is present so frontend recipes have an anchor.</p>
+  <header class="wh-header">
+    <div class="wh-brand">AIDW <span>· AI Data Warehouse</span></div>
+    <div class="wh-auth" id="auth-status" data-testid="auth-status">…</div>
+  </header>
+
+  <main class="wh-main">
+    <section class="wh-panel">
+      <div class="wh-panel-head">
+        <h2>Suggested dashboard items <span class="badge wh-count" id="inbox-count" data-testid="inbox-count">0</span></h2>
+        <p class="wh-sub">Generated automatically from your discovered schema — no rows required.
+        Accept the useful ones; dismiss the noise.</p>
+      </div>
+      <div id="inbox" class="wh-cards" data-testid="inbox"></div>
+    </section>
+
+    <section class="wh-panel">
+      <div class="wh-panel-head">
+        <h2>Dashboards</h2>
+        <p class="wh-sub">Accepted suggestions land here as dashboard items.</p>
+      </div>
+      <div id="dashboards" class="wh-dashboards" data-testid="dashboards"></div>
+    </section>
   </main>
+
+  <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
+
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/warehouse.js"></script>
+  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init(); });</script>
 </body>
 </html>
