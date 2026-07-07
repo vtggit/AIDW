@@ -104,8 +104,32 @@
 
 .wh-card-actions {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
     flex-shrink: 0;
+}
+
+.wh-conf {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.wh-conf-high {
+    background: var(--success-light);
+    color: var(--success);
+}
+
+.wh-conf-med {
+    background: var(--warning-light);
+    color: var(--warning);
+}
+
+.wh-conf-low {
+    background: var(--bg-primary);
+    color: var(--text-secondary);
 }
 
 .wh-dashboards {
