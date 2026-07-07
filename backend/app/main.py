@@ -134,6 +134,40 @@ def create_app() -> FastAPI:
             },
         )
 
+    @application.exception_handler(psycopg2.errors.CheckViolation)
+    async def check_violation_handler(
+        request: Request, exc: psycopg2.errors.CheckViolation
+    ):
+        """A write violated a CHECK constraint (SQLSTATE 23514) — e.g. an out-of-enum value.
+
+        That is a bad-input (client) error, so return 422 naming the constraint (from the driver
+        diagnostics) instead of the generic 5xx. More specific than the ``psycopg2.Error`` handler
+        below, so Starlette's MRO resolution picks this one.
+        """
+        from app.observability.logging import get_request_id
+
+        request_id = get_request_id()
+        diag = getattr(exc, "diag", None)
+        constraint = (
+            getattr(diag, "constraint_name", None)
+            or getattr(diag, "message_primary", None)
+            or "a check constraint was violated"
+        )
+        logger.warning(
+            "check violation during request %s %s — %s request_id=%s",
+            request.method,
+            request.url.path,
+            constraint,
+            request_id,
+        )
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": f"Invalid value: {constraint}",
+                "request_id": request_id,
+            },
+        )
+
     @application.exception_handler(psycopg2.Error)
     async def database_error_handler(request: Request, exc: psycopg2.Error):
         """Handle PostgreSQL connection and query errors.
@@ -221,6 +255,8 @@ def create_app() -> FastAPI:
     from app.api.source_connections import router as source_connections_router
     from app.api.source_credentials import router as source_credentials_router
     from app.api.sources import router as sources_router
+    from app.api.suggestion_fields import router as suggestion_fields_router
+    from app.api.suggestions import router as suggestions_router
 
     application.include_router(health_router)
     application.include_router(auth_router)
@@ -233,6 +269,8 @@ def create_app() -> FastAPI:
     application.include_router(source_credentials_router)
     application.include_router(odata_service_configs_router)
     application.include_router(connection_tests_router)
+    application.include_router(suggestions_router)
+    application.include_router(suggestion_fields_router)
 
     @application.on_event("startup")
     def on_startup():
