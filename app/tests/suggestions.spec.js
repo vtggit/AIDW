@@ -8,7 +8,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:8080';
 const TOKEN = 'dev-secret-token:admin';
 const MARK = `FE-${Date.now()}`; // unique per run so assertions never collide with existing rows
 
-async function createSuggestion(request, title, itemType, aggregation) {
+async function createSuggestion(request, title, itemType, aggregation, score = 0.55) {
     const res = await request.post(`${BASE}/api/suggestions`, {
         headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
         data: {
@@ -18,7 +18,7 @@ async function createSuggestion(request, title, itemType, aggregation) {
             aggregation,
             status: 'suggested',
             strategy: 'schema-only',
-            score: 0.55,
+            score,
         },
     });
     expect(res.ok(), `create suggestion failed: ${res.status()}`).toBeTruthy();
@@ -47,4 +47,28 @@ test('inbox renders suggestions; accept lands one on a dashboard; dismiss remove
     // Dismiss -> the card leaves the inbox
     await page.locator(`[data-testid="suggestion"][data-id="${dismissId}"] [data-action="dismiss"]`).click();
     await expect(inbox.getByText(kpiTitle)).toHaveCount(0);
+});
+
+test('inbox ranks suggestions by score — profile-tier confirmation rises to the top', async ({ page, request }) => {
+    // seed out of order; the inbox must render them high -> low so profile-tier ranking is visible
+    const low = await createSuggestion(request, `${MARK} low`, 'bar', 'count', 0.20);
+    const high = await createSuggestion(request, `${MARK} high`, 'bar', 'count', 0.90);
+    const mid = await createSuggestion(request, `${MARK} mid`, 'bar', 'count', 0.55);
+
+    await page.addInitScript((t) => { window.sessionStorage.setItem('aicrm_token', t); }, TOKEN);
+    await page.goto('/');
+    await page.waitForSelector('[data-testid="suggestion"]');
+
+    const ids = await page
+        .locator('[data-testid="suggestion"]')
+        .evaluateAll((els) => els.map((e) => e.getAttribute('data-id')));
+    // among just the three we seeded, DOM order must be descending by score
+    const seen = ids.filter((id) => [low, high, mid].includes(id));
+    expect(seen).toEqual([high, mid, low]);
+
+    // the top (0.90) reads High, the bottom (0.20) reads Low
+    const topConf = page.locator(`[data-testid="suggestion"][data-id="${high}"] [data-testid="confidence"]`);
+    const lowConf = page.locator(`[data-testid="suggestion"][data-id="${low}"] [data-testid="confidence"]`);
+    await expect(topConf).toHaveText('High');
+    await expect(lowConf).toHaveText('Low');
 });

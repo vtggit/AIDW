@@ -51,7 +51,9 @@ const Warehouse = {
             el.innerHTML = this._notice('Could not load suggestions.', true);
             return;
         }
-        const suggested = (res.data || []).filter((s) => s.status === 'suggested');
+        const suggested = (res.data || [])
+            .filter((s) => s.status === 'suggested')
+            .sort((a, b) => (b.score || 0) - (a.score || 0));
         const count = document.getElementById('inbox-count');
         if (count) count.textContent = String(suggested.length);
         el.innerHTML = suggested.length
@@ -76,6 +78,7 @@ const Warehouse = {
     // ---- pure render helpers (data -> HTML) ---------------------------------
 
     renderSuggestionCard(s) {
+        const conf = Warehouse._confidence(s.score);
         return `<div class="wh-card" data-testid="suggestion" data-id="${Warehouse._attr(s.id)}">
       <div class="wh-card-main">
         <span class="badge wh-chart">${Warehouse._chartLabel(s.item_type)}</span>
@@ -83,10 +86,21 @@ const Warehouse = {
         <span class="wh-agg">${Warehouse._esc(s.aggregation || '')}</span>
       </div>
       <div class="wh-card-actions">
+        <span class="wh-conf ${conf.cls}" data-testid="confidence" title="score ${conf.value}">${conf.label}</span>
         <button class="btn btn-primary btn-sm" data-action="accept" data-id="${Warehouse._attr(s.id)}">Accept</button>
         <button class="btn btn-secondary btn-sm" data-action="dismiss" data-id="${Warehouse._attr(s.id)}">Dismiss</button>
       </div>
     </div>`;
+    },
+
+    /** Map a suggestion score to a confidence chip. Profile-tier's re-scoring surfaces here: a
+     * data-confirmed low-arity dimension reads High; a demoted near-unique field reads Low. */
+    _confidence(score) {
+        const v = typeof score === 'number' ? score : 0;
+        const value = v.toFixed(2);
+        if (v >= 0.7) return { label: 'High', cls: 'wh-conf-high', value };
+        if (v >= 0.4) return { label: 'Medium', cls: 'wh-conf-med', value };
+        return { label: 'Low', cls: 'wh-conf-low', value };
     },
 
     renderDashboards(dashboards, items) {
