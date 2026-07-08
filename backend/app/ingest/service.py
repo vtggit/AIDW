@@ -1,12 +1,15 @@
-"""Cursor-ingest orchestration (interim in-API egress path).
+"""Cursor-ingest orchestration, split enqueue ⊥ execute (doc §1 API⊥worker).
 
-Composes the three fixture-tested modules — filters (page URL from watermark), mapper (page →
-rows), cursor (op-log + watermark transaction) — into one run of a pipeline: load the pipeline's
-dataset/connection/key fields, bootstrap a delta_cursor on first run (first non-key temporal
-field, kind ``timestamp``; datasets with no temporal field ingest full pages each run — the op-log
-unique key keeps that idempotent), record a ``runs`` row around the fetch, and on success fire the
-§6 automatic pass: profile + re-score this source's suggestions. Fetch is factored out so tests
-substitute a fixture without the network. The Milestone 6 worker migrates this logic unchanged.
+``create_pending_run`` validates and enqueues (a ``pending`` runs row, no egress — safe for the
+API in worker mode); ``execute_run`` atomically claims (pending→running) and executes: bootstrap a
+delta_cursor on first run (first non-key temporal field, kind ``timestamp``; datasets with no
+temporal field ingest full pages each run — the op-log unique key keeps that idempotent), build
+the watermark page URL, fetch + apply through the fixture-tested mapper/filters/cursor modules,
+finalize the run, and on success fire the §6 automatic pass: profile + re-score this source's
+suggestions. ``start_run`` composes both for the interim in-API executor; the worker
+(``app.worker``) calls the same ``execute_run`` — identical rows either way, so nothing is thrown
+away when execution moves out of the API. Fetch is factored out so tests substitute a fixture
+without the network.
 """
 
 import logging
@@ -126,35 +129,77 @@ def _bootstrap_cursor(cur, pipeline: dict, fields: list[dict], now) -> dict | No
     return row
 
 
-def start_run(pipeline_id: str) -> dict:
-    """Execute one cursor-ingest run of a pipeline and return the finished run record plus the
-    observable counts. Raises LookupError (unknown pipeline) / IngestError (bad preconditions)
-    BEFORE any run row exists; ANY failure after the run row exists (fetch, parse, watermark
-    rendering, the apply transaction itself) is recorded ON the run (status=failed, error_detail)
-    rather than raised — a committed 'running' row must never be left behind."""
+def create_pending_run(pipeline_id: str, trigger: str = "manual") -> dict:
+    """Validate the pipeline's preconditions and enqueue ONE pending run (no egress happens
+    here — the API can call this in worker mode). Raises LookupError (unknown pipeline) /
+    IngestError (bad preconditions) BEFORE any run row exists. Edge: if the inline caller dies
+    between this commit and its claim, the row stays visible as ``pending`` residue — it is NOT
+    auto-reaped (a down worker's backlog must survive a restart); an admin can delete it.
+    """
     ctx = _load_context(pipeline_id)
-    pipeline, dataset = ctx["pipeline"], ctx["dataset"]
     now = datetime.now(timezone.utc)
     run_id = str(uuid4())
-
     with get_cursor() as cur:
-        cursor_row = ctx["cursor_row"]
-        if cursor_row is None:
-            cursor_row = _bootstrap_cursor(cur, pipeline, ctx["fields"], now)
         cur.execute(
-            "INSERT INTO runs (id, name, pipeline_id, status, trigger, started_at, "
-            "created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO runs (id, name, pipeline_id, status, trigger, "
+            "created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
             (
                 run_id,
-                f"ingest:{pipeline['name']}"[:255],
+                f"ingest:{ctx['pipeline']['name']}"[:255],
                 pipeline_id,
-                "running",
-                "manual",
-                now,
+                "pending",
+                trigger,
                 now,
                 now,
             ),
         )
+    return RunPostgresRepository().get_by_id(run_id)
+
+
+def execute_run(run_id: str, claimed: bool = False) -> dict | None:
+    """Claim (pending→running, atomic — exactly one executor wins) and execute one run; pass
+    ``claimed=True`` when the caller already flipped the row (the worker's SKIP LOCKED claim).
+    Returns None when the run was not claimable (unknown id, or another executor got it).
+    ANY failure after the claim (context drift, fetch, parse, watermark rendering, the apply
+    transaction itself) is recorded ON the run (status=failed, error_detail) rather than
+    raised — a committed 'running' row must never be left behind."""
+    now = datetime.now(timezone.utc)
+    with get_cursor() as cur:
+        if claimed:
+            cur.execute(
+                "SELECT pipeline_id FROM runs WHERE id = %s AND status = 'running'",
+                (run_id,),
+            )
+        else:
+            cur.execute(
+                "UPDATE runs SET status = 'running', started_at = %s, updated_at = %s "
+                "WHERE id = %s AND status = 'pending' RETURNING pipeline_id",
+                (now, now, run_id),
+            )
+        row = cur.fetchone()
+    if row is None:
+        return None
+
+    repo = RunPostgresRepository()
+    try:
+        if not row["pipeline_id"]:
+            raise IngestError("run has no pipeline_id (pipeline deleted after enqueue)")
+        ctx = _load_context(row["pipeline_id"])
+    except Exception as exc:
+        # at execute time the run row already exists, so EVERYTHING — context drift (pipeline/
+        # dataset/endpoint/key-fields gone since enqueue) AND unexpected errors (db blips,
+        # timeouts) — lands ON the run instead of raising; a narrower catch here would leave a
+        # committed 'running' row stuck when _load_context itself fails
+        return _finalize_failed(repo, run_id, exc)
+
+    pipeline, dataset = ctx["pipeline"], ctx["dataset"]
+    cursor_row = ctx["cursor_row"]
+    try:
+        if cursor_row is None:
+            with get_cursor() as cur:
+                cursor_row = _bootstrap_cursor(cur, pipeline, ctx["fields"], now)
+    except Exception as exc:
+        return _finalize_failed(repo, run_id, exc)
 
     fields_by_id = {f["id"]: f for f in ctx["fields"]}
     cursor_field_name = None
@@ -174,7 +219,6 @@ def start_run(pipeline_id: str) -> dict:
                 cursor_row["id"],
             )
 
-    repo = RunPostgresRepository()
     try:
         url = build_page_url(
             ctx["connection"]["endpoint"],
@@ -203,9 +247,13 @@ def start_run(pipeline_id: str) -> dict:
                 page_full=len(entries) >= _PAGE_SIZE,
             )
             finished = datetime.now(timezone.utc)
+            # status guard: if the reaper (or an admin) finalized this run while we executed,
+            # the terminal state wins — a zombie executor must not resurrect a reaped row,
+            # and its watermark advance must not land either (the op-log rows it wrote are
+            # idempotent upserts and stay, which is safe)
             cur.execute(
                 "UPDATE runs SET status = %s, rows_read = %s, rows_written = %s, "
-                "finished_at = %s, updated_at = %s WHERE id = %s",
+                "finished_at = %s, updated_at = %s WHERE id = %s AND status = 'running'",
                 (
                     "succeeded",
                     result["rows_read"],
@@ -215,6 +263,19 @@ def start_run(pipeline_id: str) -> dict:
                     run_id,
                 ),
             )
+            if cur.rowcount == 0:
+                logger.warning(
+                    "run %s was finalized externally while executing — discarding this "
+                    "executor's bookkeeping (op-log upserts already applied, idempotent)",
+                    run_id,
+                )
+                return _run_body(
+                    repo,
+                    run_id,
+                    inserts=result["inserts"],
+                    updates=result["updates"],
+                    skipped_no_key=result["skipped_no_key"],
+                )
             if cursor_row is not None and cursor_field_name is not None:
                 cur.execute(
                     "UPDATE delta_cursors SET cursor_value = %s, last_run_id = %s, "
@@ -222,23 +283,10 @@ def start_run(pipeline_id: str) -> dict:
                     (result["new_watermark"], run_id, finished, cursor_row["id"]),
                 )
     except Exception as exc:
-        # any failure after the committed run row — fetch, parse, watermark rendering, or the
-        # apply transaction (rolled back by get_cursor) — must land ON the run, never leave it
+        # any failure after the claim — fetch, parse, watermark rendering, or the apply
+        # transaction (rolled back by get_cursor) — must land ON the run, never leave it
         # stuck at status='running'
-        logger.exception("ingest run failed for pipeline %s", pipeline_id)
-        finished = datetime.now(timezone.utc)
-        with get_cursor() as cur:
-            cur.execute(
-                "UPDATE runs SET status = %s, error_detail = %s, finished_at = %s, "
-                "updated_at = %s WHERE id = %s",
-                ("failed", str(exc)[:1024], finished, finished, run_id),
-            )
-        return {
-            **repo.get_by_id(run_id),
-            "inserts": 0,
-            "updates": 0,
-            "skipped_no_key": 0,
-        }
+        return _finalize_failed(repo, run_id, exc)
 
     # §6 automatic trigger: on ingest-run success, a profile + re-score pass. Best-effort — a
     # profiling failure must not fail an already-succeeded ingest run.
@@ -252,15 +300,54 @@ def start_run(pipeline_id: str) -> dict:
         )
         profile_error = str(exc)
 
-    body = {
-        **repo.get_by_id(run_id),
-        "inserts": result["inserts"],
-        "updates": result["updates"],
-        "skipped_no_key": result["skipped_no_key"],
-        "cursor_value": result["new_watermark"],
-    }
+    body = _run_body(
+        repo,
+        run_id,
+        inserts=result["inserts"],
+        updates=result["updates"],
+        skipped_no_key=result["skipped_no_key"],
+        cursor_value=result["new_watermark"],
+    )
     if profile is not None:
         body["profile"] = profile
     if profile_error is not None:
         body["profile_error"] = profile_error
+    return body
+
+
+def _run_body(repo, run_id: str, **extras) -> dict:
+    """The run row spread with executor extras. A row deleted externally mid-flight (the
+    deletion flavor of external finalization) yields a stub instead of a None-spread crash.
+    """
+    row = repo.get_by_id(run_id)
+    if row is None:
+        logger.warning("run %s was deleted externally while executing", run_id)
+        row = {"id": run_id, "status": "deleted"}
+    return {**row, **extras}
+
+
+def _finalize_failed(repo, run_id: str, exc: Exception) -> dict:
+    """Record a post-claim failure ON the run and return the failed run body. Status-guarded:
+    a row already finalized externally (reaper, admin) keeps its terminal state."""
+    logger.exception("ingest run %s failed", run_id)
+    finished = datetime.now(timezone.utc)
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE runs SET status = %s, error_detail = %s, finished_at = %s, "
+            "updated_at = %s WHERE id = %s AND status = 'running'",
+            ("failed", str(exc)[:1024], finished, finished, run_id),
+        )
+    return _run_body(repo, run_id, inserts=0, updates=0, skipped_no_key=0)
+
+
+def start_run(pipeline_id: str, trigger: str = "manual") -> dict:
+    """Enqueue + execute synchronously — the interim in-API executor path, contract unchanged:
+    LookupError/IngestError raise BEFORE any run row exists; every later failure lands ON the
+    run. The worker path calls the same execute_run against rows it claimed itself."""
+    pending = create_pending_run(pipeline_id, trigger)
+    body = execute_run(pending["id"])
+    if (
+        body is None
+    ):  # another executor raced us to the claim — report the row as it stands
+        return _run_body(RunPostgresRepository(), pending["id"])
     return body

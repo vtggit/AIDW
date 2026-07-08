@@ -48,6 +48,11 @@ ENABLE_INAPI_EGRESS: bool = os.getenv("ENABLE_INAPI_EGRESS", "false").lower() in
     "yes",
 )
 
+# Who executes ingestion runs: "inline" = the interim in-API executor (requires
+# ENABLE_INAPI_EGRESS); "worker" = the API only enqueues a pending run (202) and the
+# connector/ingestion worker process (python -m app.worker) claims and executes it.
+INGEST_EXECUTOR: str = os.getenv("INGEST_EXECUTOR", "inline").strip().lower()
+
 # ---------------------------------------------------------------------------
 # CORS — comma-separated list of allowed frontend origins
 # ---------------------------------------------------------------------------

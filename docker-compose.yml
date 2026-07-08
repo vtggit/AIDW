@@ -81,6 +81,11 @@ services:
 
       # CORS — allow the frontend container origin
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://frontend}
+
+      # Ingestion executor — "inline" (interim in-API, needs ENABLE_INAPI_EGRESS=true) or
+      # "worker" (API enqueues only; the worker service below claims and executes)
+      INGEST_EXECUTOR: ${INGEST_EXECUTOR:-inline}
+      ENABLE_INAPI_EGRESS: ${ENABLE_INAPI_EGRESS:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -90,6 +95,45 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  # ------------------------------------------------------------------
+  # Connector/ingestion worker — claims pending runs (FOR UPDATE SKIP
+  # LOCKED) and executes them with the same app.ingest.service logic as
+  # the in-API executor, writing identical rows. Same image as the
+  # backend (start.sh waits for the DB + applies migrations, then execs
+  # the command). Waits for a healthy backend so migrations are settled.
+  # ------------------------------------------------------------------
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aidw-worker
+    # opt-in: only starts with --profile worker (or COMPOSE_PROFILES=worker), pairing with
+    # INGEST_EXECUTOR=worker on the backend — the default inline stack runs without it
+    profiles:
+      - worker
+    # Hardening (#122): immutable rootfs, no capabilities, explicit writable tmp
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-5}
+      WORKER_STALE_RUNNING_SECONDS: ${WORKER_STALE_RUNNING_SECONDS:-1800}
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
 
   # ------------------------------------------------------------------
   # Frontend — static SPA served by nginx
