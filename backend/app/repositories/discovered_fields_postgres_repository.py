@@ -37,7 +37,7 @@ class DiscoveredFieldPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO discovered_fields (id, name, data_type, dataset_id, is_nullable, is_key, field_position, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO discovered_fields (id, name, data_type, dataset_id, is_nullable, is_key, field_position, first_seen_run_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -46,6 +46,7 @@ class DiscoveredFieldPostgresRepository:
                     data.get("is_nullable"),
                     data.get("is_key"),
                     data.get("field_position"),
+                    data.get("first_seen_run_id"),
                     now,
                     now,
                 ),
@@ -60,6 +61,7 @@ class DiscoveredFieldPostgresRepository:
             "is_nullable",
             "is_key",
             "field_position",
+            "first_seen_run_id",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
