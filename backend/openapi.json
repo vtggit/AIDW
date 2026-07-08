@@ -7048,6 +7048,17 @@
       },
       "DiscoveredFieldCreate": {
         "properties": {
+          "last_seen_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen Run Id"
+          },
           "first_seen_run_id": {
             "anyOf": [
               {
@@ -7129,6 +7140,17 @@
       },
       "DiscoveredFieldResponse": {
         "properties": {
+          "last_seen_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen Run Id"
+          },
           "first_seen_run_id": {
             "anyOf": [
               {
@@ -7224,6 +7246,17 @@
       },
       "DiscoveredFieldUpdate": {
         "properties": {
+          "last_seen_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen Run Id"
+          },
           "first_seen_run_id": {
             "anyOf": [
               {
