@@ -37,12 +37,13 @@ class DiscoveryRunPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO discovery_runs (id, name, status, trigger, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                "INSERT INTO discovery_runs (id, name, status, trigger, source_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("status"),
                     data.get("trigger"),
+                    data.get("source_id"),
                     now,
                     now,
                 ),
@@ -50,11 +51,7 @@ class DiscoveryRunPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = (
-            "name",
-            "status",
-            "trigger",
-        )
+        updatable = ("name", "status", "trigger", "source_id")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)

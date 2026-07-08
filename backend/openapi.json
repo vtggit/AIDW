@@ -7209,6 +7209,17 @@
       },
       "DiscoveryRunCreate": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -7246,6 +7257,17 @@
       },
       "DiscoveryRunResponse": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -7297,6 +7319,17 @@
       },
       "DiscoveryRunUpdate": {
         "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "name": {
             "anyOf": [
               {
