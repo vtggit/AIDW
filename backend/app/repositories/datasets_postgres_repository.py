@@ -37,12 +37,13 @@ class DatasetPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO datasets (id, name, object_type, source_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                "INSERT INTO datasets (id, name, object_type, source_id, first_seen_run_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("object_type"),
                     data.get("source_id"),
+                    data.get("first_seen_run_id"),
                     now,
                     now,
                 ),
@@ -50,7 +51,7 @@ class DatasetPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = ("name", "object_type", "source_id")
+        updatable = ("name", "object_type", "source_id", "first_seen_run_id")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
