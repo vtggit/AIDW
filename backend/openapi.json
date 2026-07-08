@@ -6594,6 +6594,17 @@
       },
       "DatasetCreate": {
         "properties": {
+          "last_seen_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen Run Id"
+          },
           "first_seen_run_id": {
             "anyOf": [
               {
@@ -6642,6 +6653,17 @@
       },
       "DatasetResponse": {
         "properties": {
+          "last_seen_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen Run Id"
+          },
           "first_seen_run_id": {
             "anyOf": [
               {
@@ -6704,6 +6726,17 @@
       },
       "DatasetUpdate": {
         "properties": {
+          "last_seen_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen Run Id"
+          },
           "first_seen_run_id": {
             "anyOf": [
               {
