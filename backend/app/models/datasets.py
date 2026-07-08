@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class DatasetCreate(BaseModel):
     """Request model for creating a dataset."""
 
+    first_seen_run_id: str | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str = Field(..., min_length=1)
@@ -15,6 +17,8 @@ class DatasetCreate(BaseModel):
 class DatasetUpdate(BaseModel):
     """Request model for updating a dataset (all fields optional)."""
 
+    first_seen_run_id: str | None = Field(default=None)
+
     source_id: str | None = Field(default=None)
 
     name: str | None = Field(default=None)
@@ -23,6 +27,8 @@ class DatasetUpdate(BaseModel):
 
 class DatasetResponse(BaseModel):
     """Response model for a dataset record."""
+
+    first_seen_run_id: str | None = None
 
     source_id: str | None = None
 
