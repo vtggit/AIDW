@@ -6,7 +6,6 @@ computes per-field statistics into ``field_profiles``, and triggers the profile-
 a re-run updates each field's single profile row (keyed on discovered_field_id).
 """
 
-import json
 import logging
 import urllib.parse
 import urllib.request
@@ -15,6 +14,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.db.connection import get_cursor
+from app.ingest.mapper import parse_rows
 from app.suggestion.rescore import rescore_for_source
 
 logger = logging.getLogger(__name__)
@@ -32,19 +32,10 @@ def _fetch_rows(url: str) -> bytes:
 
 
 def _parse_rows(raw: bytes) -> list[dict]:
-    """Extract the row list from an OData JSON payload — V4 (``value``) or V2 (``d.results``)."""
-    data = json.loads(raw)
-    if isinstance(data, list):
-        return [r for r in data if isinstance(r, dict)]
-    if isinstance(data, dict):
-        if isinstance(data.get("value"), list):
-            return [r for r in data["value"] if isinstance(r, dict)]
-        d = data.get("d")
-        if isinstance(d, dict) and isinstance(d.get("results"), list):
-            return [r for r in d["results"] if isinstance(r, dict)]
-        if isinstance(d, list):
-            return [r for r in d if isinstance(r, dict)]
-    return []
+    """Extract the row list from an OData JSON payload — V4 (``value``) or V2 (``d.results``).
+    Delegates to the shared ingest mapper so the V2/V4 payload shapes live in one place.
+    """
+    return parse_rows(raw)
 
 
 def _stats(rows: list[dict], field_name: str) -> dict:
