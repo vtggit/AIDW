@@ -15,6 +15,8 @@ const Warehouse = {
         this._renderAuth();
         const inbox = document.getElementById('inbox');
         if (inbox) inbox.addEventListener('click', (e) => this._onCardClick(e));
+        const pii = document.getElementById('pii-inbox');
+        if (pii) pii.addEventListener('click', (e) => this._onPiiClick(e));
         await this.refresh();
     },
 
@@ -40,7 +42,7 @@ const Warehouse = {
     },
 
     async refresh() {
-        await Promise.all([this.loadInbox(), this.loadDashboards()]);
+        await Promise.all([this.loadInbox(), this.loadDashboards(), this.loadPiiFlags()]);
     },
 
     async loadInbox() {
@@ -158,6 +160,101 @@ const Warehouse = {
         if (res.ok) {
             this._toast('Dismissed.');
             await this.refresh();
+        } else {
+            this._toast('Dismiss failed.', true);
+        }
+    },
+
+    // ---- PII flags review ---------------------------------------------------
+
+    async loadPiiFlags() {
+        const el = document.getElementById('pii-inbox');
+        if (!el) return;
+        const [fRes, dRes, dfRes] = await Promise.all([
+            ApiClient.get('/pii-flags'),
+            ApiClient.get('/datasets'),
+            ApiClient.get('/discovered-fields'),
+        ]);
+        if (!fRes.ok || !dRes.ok || !dfRes.ok) {
+            el.innerHTML = this._notice('Could not load PII flags.', true);
+            return;
+        }
+        // only 'flagged' rows are pending review — confirmed/dismissed/stale are decided
+        const pending = (fRes.data || []).filter((f) => f.status === 'flagged');
+        const count = document.getElementById('pii-count');
+        if (count) count.textContent = String(pending.length);
+        const dsById = {};
+        for (const d of dRes.data || []) dsById[d.id] = d.name;
+        const fieldById = {};
+        for (const f of dfRes.data || []) fieldById[f.id] = f.name;
+        el.innerHTML = pending.length
+            ? this.renderPiiGroups(pending, dsById, fieldById)
+            : this._notice('No PII flags awaiting review. Discover or profile a source to scan.');
+    },
+
+    /** Group pending flags by dataset and render each group as a card of flag rows. */
+    renderPiiGroups(flags, dsById, fieldById) {
+        const byDs = {};
+        for (const f of flags) {
+            const key = f.dataset_id || '';
+            (byDs[key] = byDs[key] || []).push(f);
+        }
+        return Object.keys(byDs).map((dsId) => {
+            const name = dsById[dsId] || 'Unknown dataset';
+            const rows = byDs[dsId].map((f) => Warehouse.renderPiiCard(f, fieldById[f.discovered_field_id])).join('');
+            return `<div class="dashboard-card" data-testid="pii-group" data-id="${Warehouse._attr(dsId)}">
+        <h3>${Warehouse._esc(name)}</h3>
+        <div class="wh-cards">${rows}</div>
+      </div>`;
+        }).join('');
+    },
+
+    renderPiiCard(f, fieldName) {
+        const conf = Warehouse._confidence(f.confidence);
+        const field = fieldName || f.discovered_field_id || '(unbound field)';
+        return `<div class="wh-card" data-testid="pii-flag" data-id="${Warehouse._attr(f.id)}">
+      <div class="wh-card-main">
+        <span class="badge wh-chart">${Warehouse._esc(Warehouse._piiCategory(f.category))}</span>
+        <span class="wh-title">${Warehouse._esc(field)}</span>
+        <span class="wh-agg" data-testid="pii-tier">${Warehouse._esc(f.detection_tier || '')}</span>
+        <span class="wh-sub">${Warehouse._esc(f.rationale || '')}</span>
+      </div>
+      <div class="wh-card-actions">
+        <span class="wh-conf ${conf.cls}" data-testid="pii-confidence" title="confidence ${conf.value}">${conf.label}</span>
+        <button class="btn btn-primary btn-sm" data-action="pii-confirm" data-id="${Warehouse._attr(f.id)}">Confirm</button>
+        <button class="btn btn-secondary btn-sm" data-action="pii-dismiss" data-id="${Warehouse._attr(f.id)}">Dismiss</button>
+      </div>
+    </div>`;
+    },
+
+    _piiCategory(c) {
+        return String(c || '').replace(/_/g, ' ') || 'other';
+    },
+
+    _onPiiClick(e) {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const id = btn.getAttribute('data-id');
+        const action = btn.getAttribute('data-action');
+        if (action === 'pii-confirm') this.confirmPii(id);
+        else if (action === 'pii-dismiss') this.dismissPii(id);
+    },
+
+    async confirmPii(id) {
+        const res = await ApiClient.post(`/pii-flags/${encodeURIComponent(id)}/confirm`);
+        if (res.ok) {
+            this._toast('Confirmed — this field is personal data.');
+            await this.loadPiiFlags();
+        } else {
+            this._toast('Confirm failed.', true);
+        }
+    },
+
+    async dismissPii(id) {
+        const res = await ApiClient.post(`/pii-flags/${encodeURIComponent(id)}/dismiss`);
+        if (res.ok) {
+            this._toast('Dismissed — not personal data.');
+            await this.loadPiiFlags();
         } else {
             this._toast('Dismiss failed.', true);
         }

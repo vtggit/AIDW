@@ -182,3 +182,12 @@
     background: var(--danger);
     color: #fff;
 }
+
+/* PII flags review: full-width group cards (NOT the narrow dashboards grid — the flag cards need
+   room for the field name beside the Confirm/Dismiss actions). */
+.wh-pii-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1rem;
+}
