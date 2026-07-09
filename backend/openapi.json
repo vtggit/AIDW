@@ -8581,6 +8581,17 @@
       },
       "PiiFlagCreate": {
         "properties": {
+          "discovered_field_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovered Field Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -8662,6 +8673,17 @@
       },
       "PiiFlagResponse": {
         "properties": {
+          "discovered_field_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovered Field Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -8757,6 +8779,17 @@
       },
       "PiiFlagUpdate": {
         "properties": {
+          "discovered_field_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovered Field Id"
+          },
           "name": {
             "anyOf": [
               {
