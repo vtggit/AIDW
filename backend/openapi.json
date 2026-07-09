@@ -8581,6 +8581,17 @@
       },
       "PiiFlagCreate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "discovered_field_id": {
             "anyOf": [
               {
@@ -8673,6 +8684,17 @@
       },
       "PiiFlagResponse": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "discovered_field_id": {
             "anyOf": [
               {
@@ -8779,6 +8801,17 @@
       },
       "PiiFlagUpdate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "discovered_field_id": {
             "anyOf": [
               {
