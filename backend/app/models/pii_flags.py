@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class PiiFlagCreate(BaseModel):
     """Request model for creating a pii_flag."""
 
+    dataset_id: str | None = Field(default=None)
+
     discovered_field_id: str | None = Field(default=None)
 
     name: str = Field(..., min_length=1)
@@ -20,6 +22,8 @@ class PiiFlagCreate(BaseModel):
 class PiiFlagUpdate(BaseModel):
     """Request model for updating a pii_flag (all fields optional)."""
 
+    dataset_id: str | None = Field(default=None)
+
     discovered_field_id: str | None = Field(default=None)
 
     name: str | None = Field(default=None)
@@ -33,6 +37,8 @@ class PiiFlagUpdate(BaseModel):
 
 class PiiFlagResponse(BaseModel):
     """Response model for a pii_flag record."""
+
+    dataset_id: str | None = None
 
     discovered_field_id: str | None = None
 

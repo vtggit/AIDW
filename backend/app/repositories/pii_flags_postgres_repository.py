@@ -37,7 +37,7 @@ class PiiFlagPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO pii_flags (id, name, category, detection_tier, status, confidence, rationale, fingerprint, discovered_field_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO pii_flags (id, name, category, detection_tier, status, confidence, rationale, fingerprint, discovered_field_id, dataset_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -48,6 +48,7 @@ class PiiFlagPostgresRepository:
                     data.get("rationale"),
                     data.get("fingerprint"),
                     data.get("discovered_field_id"),
+                    data.get("dataset_id"),
                     now,
                     now,
                 ),
@@ -64,6 +65,7 @@ class PiiFlagPostgresRepository:
             "rationale",
             "fingerprint",
             "discovered_field_id",
+            "dataset_id",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
