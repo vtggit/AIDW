@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from app.db.connection import get_cursor
 from app.discovery.schema_reader import get_reader
+from app.pii.service import scan_pii_for_source
 from app.suggestion.service import regenerate_suggestions_for_source
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,23 @@ def discover_source(source_id: str) -> dict:
             source_id,
         )
 
+    # Automatic trigger: schema-tier PII watchdog scan (governance #75). Also best-effort — and
+    # its retro-scrub closes the profile leak for any field newly flagged as PII.
+    pii_counts = {
+        "pii_flags_created": 0,
+        "pii_flags_revived": 0,
+        "pii_flags_upgraded": 0,
+        "pii_flags_staled": 0,
+        "profiles_redacted": 0,
+    }
+    try:
+        pii_counts = scan_pii_for_source(source_id)
+    except Exception:
+        logger.exception(
+            "PII watchdog scan failed for source %s (discovery still succeeded)",
+            source_id,
+        )
+
     return {
         "source_id": source_id,
         "datasets_discovered": len(datasets),
@@ -140,4 +158,5 @@ def discover_source(source_id: str) -> dict:
         "fields_created": created_f,
         "fields_updated": updated_f,
         **suggestion_counts,
+        **pii_counts,
     }
