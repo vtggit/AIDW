@@ -15,11 +15,40 @@ from uuid import uuid4
 
 from app.db.connection import get_cursor
 from app.ingest.mapper import parse_rows
+from app.pii.engine import pii_fingerprint
+from app.pii.service import reconcile_flags_for_dataset
+from app.pii.values import categories_above_floor
 from app.suggestion.rescore import rescore_for_source
 
 logger = logging.getLogger(__name__)
 
 _SAMPLE_SIZE = 200
+_PROFILE_TIER = "profile"
+
+
+def _pii_candidates_from_sample(fields: list[dict], rows: list[dict]) -> list[dict]:
+    """Profile-tier PII candidates: run the value detectors over each field's sampled values and
+    emit a candidate for every category clearing the match-ratio floor. Confidence rises with the
+    match ratio and always exceeds the schema-tier band (value evidence beats a name guess).
+    """
+    candidates = []
+    for f in fields:
+        values = [r.get(f["name"]) for r in rows]
+        for category, ratio in categories_above_floor(values).items():
+            candidates.append(
+                {
+                    "field_name": f["name"],
+                    "category": category,
+                    "confidence": round(0.8 + 0.2 * ratio, 2),
+                    "rationale": (
+                        f"profile: {round(ratio * 100)}% of sampled values match the "
+                        f"{category} format"
+                    ),
+                    "detection_tier": _PROFILE_TIER,
+                    "fingerprint": pii_fingerprint(f["name"], category),
+                }
+            )
+    return candidates
 
 
 class ProfilingError(Exception):
@@ -125,6 +154,7 @@ def profile_source(source_id: str) -> dict:
     now = datetime.now(timezone.utc)
     profiled_fields = 0
     profiled_datasets = 0
+    pii_flagged = 0
     with get_cursor() as cur:
         for ds in datasets:
             cur.execute(
@@ -141,8 +171,35 @@ def profile_source(source_id: str) -> dict:
                 logger.exception("profiling fetch failed for dataset %s", ds["name"])
                 continue
             profiled_datasets += 1
+
+            # profile-tier PII detection over the sample, reconciled into pii_flags in this same
+            # transaction (a column that IS emails flags regardless of its name)
+            candidates = _pii_candidates_from_sample(fields, rows)
+            counts = reconcile_flags_for_dataset(
+                cur, ds["id"], fields, candidates, _PROFILE_TIER, now
+            )
+            pii_flagged += counts["created"] + counts["upgraded"]
+
+            # detect-before-write suppression: a field carrying ANY active flag (schema or
+            # profile tier) gets its example values withheld BEFORE the profile is written, so
+            # new profiling never persists raw PII values (zero leak window)
+            cur.execute(
+                "SELECT DISTINCT discovered_field_id FROM pii_flags WHERE dataset_id = %s "
+                "AND status IN ('flagged', 'confirmed') AND discovered_field_id IS NOT NULL",
+                (ds["id"],),
+            )
+            flagged_ids = {r["discovered_field_id"] for r in cur.fetchall()}
+
             for f in fields:
-                _upsert_profile(cur, f["id"], _stats(rows, f["name"]), now)
+                st = _stats(rows, f["name"])
+                if f["id"] in flagged_ids:
+                    st = {
+                        **st,
+                        "min_value": None,
+                        "max_value": None,
+                        "most_common_value": None,
+                    }
+                _upsert_profile(cur, f["id"], st, now)
                 profiled_fields += 1
 
     rescore = rescore_for_source(source_id)
@@ -150,5 +207,6 @@ def profile_source(source_id: str) -> dict:
         "source_id": source_id,
         "datasets_profiled": profiled_datasets,
         "fields_profiled": profiled_fields,
+        "pii_fields_flagged": pii_flagged,
         **rescore,
     }

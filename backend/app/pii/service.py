@@ -211,6 +211,57 @@ def reconcile_flags_for_dataset(
     }
 
 
+def _flag_response(cur, flag_id: str) -> dict:
+    cur.execute("SELECT * FROM pii_flags WHERE id = %s", (flag_id,))
+    row = cur.fetchone()
+    if row is None:
+        return None
+    d = dict(row)
+    for key in ("created_at", "updated_at"):
+        if d.get(key) and isinstance(d[key], datetime):
+            d[key] = d[key].isoformat()
+    return d
+
+
+def _audit_decision(cur, flag_id, action, actor_sub, now) -> None:
+    """Audit a steward decision on the SAME cursor as the status change (Option B: an audit
+    failure rolls the whole mutation back, so no decision is ever unrecorded)."""
+    cur.execute(
+        "INSERT INTO audit_log (entity_type, entity_id, action, actor_sub, timestamp, "
+        "details_json) VALUES (%s, %s, %s, %s, %s, %s)",
+        ("pii_flag", flag_id, action, actor_sub, now, json.dumps({})),
+    )
+
+
+def _set_flag_status(
+    flag_id: str, new_status: str, action: str, actor_sub: str
+) -> dict:
+    """Steward decision: set a flag's status and audit it atomically. Raises LookupError if the
+    flag is missing. ``actor_sub`` is the authenticated user's subject."""
+    now = datetime.now(timezone.utc)
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE pii_flags SET status = %s, updated_at = %s WHERE id = %s",
+            (new_status, now, flag_id),
+        )
+        if cur.rowcount == 0:
+            raise LookupError("pii_flag not found")
+        _audit_decision(cur, flag_id, action, actor_sub, now)
+        return _flag_response(cur, flag_id)
+
+
+def confirm_flag(flag_id: str, actor_sub: str) -> dict:
+    """Steward confirms a flag IS PII: status='confirmed' (sticky — the reconciler never stales
+    or resurrects it) + audit. Its profile stays suppressed permanently."""
+    return _set_flag_status(flag_id, "confirmed", "confirm", actor_sub)
+
+
+def dismiss_flag(flag_id: str, actor_sub: str) -> dict:
+    """Steward dismisses a false positive: status='dismissed' (sticky) + audit. Suppression lifts
+    at the next profile pass (the field no longer carries an active flag)."""
+    return _set_flag_status(flag_id, "dismissed", "dismiss", actor_sub)
+
+
 def scan_pii_for_source(source_id: str) -> dict:
     """Schema-tier PII scan across every dataset of a source: run the name rules, reconcile into
     ``pii_flags``, retro-scrub any leaked profile values. Its own transaction, so a discovery
