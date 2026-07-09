@@ -30,6 +30,16 @@
       </div>
       <div id="dashboards" class="wh-dashboards" data-testid="dashboards"></div>
     </section>
+
+    <section class="wh-panel">
+      <div class="wh-panel-head">
+        <h2>PII flags <span class="badge wh-count" id="pii-count" data-testid="pii-count">0</span></h2>
+        <p class="wh-sub">Fields the watchdog flagged as personal data, grouped by dataset.
+        Confirm the real ones; dismiss false positives. Confirmed fields keep their example
+        values suppressed.</p>
+      </div>
+      <div id="pii-inbox" class="wh-pii-groups" data-testid="pii-inbox"></div>
+    </section>
   </main>
 
   <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
