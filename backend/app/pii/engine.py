@@ -120,9 +120,15 @@ _CATEGORY_ORDER = (
 )
 
 
-def _fingerprint(field_name: str, category: str) -> str:
-    """sha256('<field name>|<category>') — the reconciler's upsert identity."""
+def pii_fingerprint(field_name: str, category: str) -> str:
+    """sha256('<field name>|<category>') — the reconciler's upsert identity. Public so the
+    profile tier computes the SAME fingerprint a schema-tier detection did, and therefore
+    UPGRADES that flag rather than duplicating it."""
     return hashlib.sha256(f"{field_name}|{category}".encode()).hexdigest()
+
+
+# internal alias kept for the existing call sites in this module
+_fingerprint = pii_fingerprint
 
 
 def _name_rule_categories(tokens: list[str]) -> dict[str, str]:
