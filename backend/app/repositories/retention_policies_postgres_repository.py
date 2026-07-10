@@ -37,13 +37,14 @@ class RetentionPolicyPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO retention_policies (id, name, table_class, action, scope, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO retention_policies (id, name, table_class, action, scope, dataset_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("table_class"),
                     data.get("action"),
                     data.get("scope"),
+                    data.get("dataset_id"),
                     now,
                     now,
                 ),
@@ -51,12 +52,7 @@ class RetentionPolicyPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = (
-            "name",
-            "table_class",
-            "action",
-            "scope",
-        )
+        updatable = ("name", "table_class", "action", "scope", "dataset_id")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
