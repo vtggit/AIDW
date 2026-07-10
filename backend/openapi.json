@@ -9612,6 +9612,17 @@
       },
       "RetentionPolicyCreate": {
         "properties": {
+          "retention_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Period Days"
+          },
           "dataset_id": {
             "anyOf": [
               {
@@ -9671,6 +9682,17 @@
       },
       "RetentionPolicyResponse": {
         "properties": {
+          "retention_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Period Days"
+          },
           "dataset_id": {
             "anyOf": [
               {
@@ -9744,6 +9766,17 @@
       },
       "RetentionPolicyUpdate": {
         "properties": {
+          "retention_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Period Days"
+          },
           "dataset_id": {
             "anyOf": [
               {
