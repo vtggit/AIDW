@@ -9612,6 +9612,17 @@
       },
       "RetentionPolicyCreate": {
         "properties": {
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          },
           "retention_period_days": {
             "anyOf": [
               {
@@ -9682,6 +9693,17 @@
       },
       "RetentionPolicyResponse": {
         "properties": {
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          },
           "retention_period_days": {
             "anyOf": [
               {
@@ -9766,6 +9788,17 @@
       },
       "RetentionPolicyUpdate": {
         "properties": {
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          },
           "retention_period_days": {
             "anyOf": [
               {
