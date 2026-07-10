@@ -10155,6 +10155,17 @@
       },
       "RetentionRunCreate": {
         "properties": {
+          "records_anonymized": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Records Anonymized"
+          },
           "records_purged": {
             "anyOf": [
               {
@@ -10214,6 +10225,17 @@
       },
       "RetentionRunResponse": {
         "properties": {
+          "records_anonymized": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Records Anonymized"
+          },
           "records_purged": {
             "anyOf": [
               {
@@ -10287,6 +10309,17 @@
       },
       "RetentionRunUpdate": {
         "properties": {
+          "records_anonymized": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Records Anonymized"
+          },
           "records_purged": {
             "anyOf": [
               {
