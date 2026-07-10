@@ -266,6 +266,7 @@ def create_app() -> FastAPI:
     from app.api.pipelines import router as pipelines_router
     from app.api.profiling import router as profiling_router
     from app.api.retention_policies import router as retention_policies_router
+    from app.api.retention_runs import router as retention_runs_router
     from app.api.runs import router as runs_router
     from app.api.source_connections import router as source_connections_router
     from app.api.source_credentials import router as source_credentials_router
@@ -301,6 +302,7 @@ def create_app() -> FastAPI:
     application.include_router(pii_decisions_router)
     application.include_router(pii_scan_router)
     application.include_router(retention_policies_router)
+    application.include_router(retention_runs_router)
 
     @application.on_event("startup")
     def on_startup():
