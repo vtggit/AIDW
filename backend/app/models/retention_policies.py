@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class RetentionPolicyCreate(BaseModel):
     """Request model for creating a retention_policy."""
 
+    is_enabled: bool | None = Field(default=None)
+
     retention_period_days: int | None = Field(default=None)
 
     dataset_id: str | None = Field(default=None)
@@ -19,6 +21,8 @@ class RetentionPolicyCreate(BaseModel):
 class RetentionPolicyUpdate(BaseModel):
     """Request model for updating a retention_policy (all fields optional)."""
 
+    is_enabled: bool | None = Field(default=None)
+
     retention_period_days: int | None = Field(default=None)
 
     dataset_id: str | None = Field(default=None)
@@ -31,6 +35,8 @@ class RetentionPolicyUpdate(BaseModel):
 
 class RetentionPolicyResponse(BaseModel):
     """Response model for a retention_policy record."""
+
+    is_enabled: bool | None = None
 
     retention_period_days: int | None = None
 
