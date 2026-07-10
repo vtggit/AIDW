@@ -10155,6 +10155,17 @@
       },
       "RetentionRunCreate": {
         "properties": {
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -10192,6 +10203,17 @@
       },
       "RetentionRunResponse": {
         "properties": {
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -10243,6 +10265,17 @@
       },
       "RetentionRunUpdate": {
         "properties": {
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
           "name": {
             "anyOf": [
               {
