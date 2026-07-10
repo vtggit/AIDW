@@ -37,7 +37,7 @@ class RetentionRunPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO retention_runs (id, name, status, trigger, policy_id, records_purged, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO retention_runs (id, name, status, trigger, policy_id, records_purged, records_anonymized, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -45,6 +45,7 @@ class RetentionRunPostgresRepository:
                     data.get("trigger"),
                     data.get("policy_id"),
                     data.get("records_purged"),
+                    data.get("records_anonymized"),
                     now,
                     now,
                 ),
@@ -52,7 +53,14 @@ class RetentionRunPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = ("name", "status", "trigger", "policy_id", "records_purged")
+        updatable = (
+            "name",
+            "status",
+            "trigger",
+            "policy_id",
+            "records_purged",
+            "records_anonymized",
+        )
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
