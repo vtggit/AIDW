@@ -79,6 +79,7 @@ def test_class_scoped_purge_deletes_only_past_cutoff(client, admin_headers):
     run = r.json()
     assert run["status"] == "succeeded"
     assert run["records_purged"] == 2 and run["records_anonymized"] == 0
+    assert run["error_detail"] is None  # success carries no failure detail
     remaining = _ids("connection_tests")
     assert fresh in remaining and old1 not in remaining and old2 not in remaining
     # idempotent: a second sweep finds nothing below the cutoff
@@ -180,6 +181,8 @@ def test_anonymize_fails_closed_on_the_run(client, admin_headers):
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "failed"  # recorded ON the run, not a 5xx
     assert run["records_purged"] == 0
+    # the CAUSE is on the run row too (issue #129), naming the unsupported action
+    assert run["error_detail"] and "anonymize" in run["error_detail"]
     # free the discovery_runs slot for the misconfigured-policy test
     client.delete(f"/api/retention-policies/{pid}", headers=admin_headers)
 
@@ -197,6 +200,7 @@ def test_enabled_policy_without_period_fails_closed(client, admin_headers):
     )  # period omitted (NULL)
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "failed"
+    assert run["error_detail"] and "retention_period_days" in run["error_detail"]
 
 
 def test_dataset_scope_without_dataset_column_fails_closed(client, admin_headers):

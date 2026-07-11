@@ -8,8 +8,8 @@ than raising, so a committed 'running' row is never left behind. The sweep itsel
 decision, so the correctness rails stay (closed table allowlist, parameterized predicates,
 fail-closed on unsupported action/scope) while backup/recovery machinery is deliberately absent.
 
-The run row cannot yet carry failure detail (no error_detail column — a field-add lane
-follow-up); failures are logged with the run id.
+A failure's cause lands on the run row itself (error_detail, VARCHAR(1024) — issue #129)
+and in the log.
 """
 
 from __future__ import annotations
@@ -89,11 +89,11 @@ def execute_sweep(run_id: str) -> dict | None:
     # for a claimed run.
     try:
         _do_sweep(run_id)
-    except Exception:
-        # the run row has no error_detail column yet; the log carries the cause
+    except Exception as exc:
         logger.exception("retention sweep %s failed", run_id)
         try:
-            _finish(run_id, "failed", 0, 0)
+            # the cause lands ON the run (issue #129): error_detail is VARCHAR(1024)
+            _finish(run_id, "failed", 0, 0, detail=str(exc)[:1024] or "unknown failure")
         except Exception:
             logger.exception("retention sweep %s: could not record the failure", run_id)
     try:
@@ -169,14 +169,16 @@ def _do_sweep(run_id: str) -> None:
         )
 
 
-def _finish(run_id: str, status: str, purged: int, anonymized: int) -> None:
+def _finish(
+    run_id: str, status: str, purged: int, anonymized: int, detail: str | None = None
+) -> None:
     now = datetime.now(timezone.utc)
     with get_cursor() as cur:
         cur.execute(
             "UPDATE retention_runs SET status = %s, records_purged = %s, "
-            "records_anonymized = %s, updated_at = %s "
+            "records_anonymized = %s, error_detail = %s, updated_at = %s "
             "WHERE id = %s AND status = 'running'",
-            (status, purged, anonymized, now, run_id),
+            (status, purged, anonymized, detail, now, run_id),
         )
 
 
@@ -184,7 +186,7 @@ def get_run(run_id: str) -> dict | None:
     with get_cursor() as cur:
         cur.execute(
             "SELECT id, name, status, trigger, policy_id, records_purged, "
-            "records_anonymized FROM retention_runs WHERE id = %s",
+            "records_anonymized, error_detail FROM retention_runs WHERE id = %s",
             (run_id,),
         )
         r = cur.fetchone()
