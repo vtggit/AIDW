@@ -6634,6 +6634,63 @@
         }
       }
     },
+    "/api/retention-policies/{policy_id}/sweep": {
+      "post": {
+        "tags": [
+          "retention-sweeps"
+        ],
+        "summary": "Sweep Policy",
+        "description": "Run one retention sweep for the policy now. Destructive by design (purge policies DELETE\nbelow the cutoff) \u2014 admin only.",
+        "operationId": "sweep_policy_api_retention_policies__policy_id__sweep_post",
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Root",
