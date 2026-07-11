@@ -41,10 +41,9 @@ def test_record_audit_rolls_back_with_a_failed_write(client, admin_headers):
     from app.db.connection import get_cursor
 
     eid = f"ent-{uuid.uuid4().hex[:8]}"
-    with pytest.raises(RuntimeError):
-        with get_cursor() as cur:
-            record_audit(cur, "tester", "delete", "widget", eid)
-            raise RuntimeError("the audited write failed after the audit insert")
+    with pytest.raises(RuntimeError), get_cursor() as cur:
+        record_audit(cur, "tester", "delete", "widget", eid)
+        raise RuntimeError("the audited write failed after the audit insert")
     # same transaction: the audit row must NOT have survived the rollback
     assert _count(eid) == 0
 
@@ -54,7 +53,6 @@ def test_record_audit_rejects_unknown_action_before_any_write(client, admin_head
     from app.db.connection import get_cursor
 
     eid = f"ent-{uuid.uuid4().hex[:8]}"
-    with get_cursor() as cur:
-        with pytest.raises(ValueError):
-            record_audit(cur, "tester", "purge", "widget", eid)
+    with get_cursor() as cur, pytest.raises(ValueError):
+        record_audit(cur, "tester", "purge", "widget", eid)
     assert _count(eid) == 0
