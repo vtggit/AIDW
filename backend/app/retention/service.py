@@ -11,6 +11,7 @@ fail-closed on unsupported action/scope) while backup/recovery machinery is deli
 The run row cannot yet carry failure detail (no error_detail column — a field-add lane
 follow-up); failures are logged with the run id.
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,7 +60,12 @@ def create_pending_sweep(policy_id: str, trigger: str = "manual") -> dict:
             "VALUES (%s, %s, 'pending', %s, %s, %s, %s)",
             (run_id, "sweep %s" % policy_id[:13], trigger, policy_id, now, now),
         )
-    return {"id": run_id, "status": "pending", "policy_id": policy_id, "trigger": trigger}
+    return {
+        "id": run_id,
+        "status": "pending",
+        "policy_id": policy_id,
+        "trigger": trigger,
+    }
 
 
 def execute_sweep(run_id: str) -> dict | None:
@@ -114,7 +120,7 @@ def _do_sweep(run_id: str) -> None:
         row = cur.fetchone()
     if row is None:
         raise SweepError("run %s has no policy attached" % run_id)
-    policy = dict(row)                      # get_cursor yields RealDictCursor rows
+    policy = dict(row)  # get_cursor yields RealDictCursor rows
 
     cutoff = plan_sweep(policy, now)
     if cutoff is None:
@@ -131,16 +137,21 @@ def _do_sweep(run_id: str) -> None:
         raise SweepError("table class %r is not sweepable" % table)
     has_dataset, lifecycle_guard = _SWEEPABLE[table]
     if policy["action"] != "purge":
-        raise SweepError("action %r is not yet supported (purge only)" % policy["action"])
+        raise SweepError(
+            "action %r is not yet supported (purge only)" % policy["action"]
+        )
 
     where, params = "created_at < %s", [cutoff]
     if lifecycle_guard:
-        where += " " + lifecycle_guard      # terminal rows only — never queued/in-flight work
+        where += (
+            " " + lifecycle_guard
+        )  # terminal rows only — never queued/in-flight work
     if policy["scope"] == "dataset":
         if not has_dataset:
             raise SweepError(
                 "table class %r has no dataset_id column — a dataset-scoped policy "
-                "cannot sweep it" % table)
+                "cannot sweep it" % table
+            )
         if not policy["dataset_id"]:
             raise SweepError("dataset-scoped policy has no dataset_id set")
         where += " AND dataset_id = %s"

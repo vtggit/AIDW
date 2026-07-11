@@ -27,5 +27,7 @@ def sweep_policy(
         raise HTTPException(status_code=404, detail=str(exc))
     finished = execute_sweep(run["id"])
     if finished is None:  # claimed by a concurrent executor between enqueue and execute
-        raise HTTPException(status_code=409, detail="run %s already claimed" % run["id"])
+        raise HTTPException(
+            status_code=409, detail="run %s already claimed" % run["id"]
+        )
     return finished

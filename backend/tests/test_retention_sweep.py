@@ -2,7 +2,8 @@
 
 Every test drives the REAL stack: policies via the API, seeds via SQL against the test DB, the
 sweep via POST /api/retention-policies/{id}/sweep, and assertions on both the run row (the audit
-spine) and the swept table (observable state). Failures land ON the run — never a 5xx."""
+spine) and the swept table (observable state). Failures land ON the run — never a 5xx.
+"""
 
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -32,7 +33,7 @@ def _ids(table):
 
     with get_cursor() as cur:
         cur.execute('SELECT id FROM "%s"' % table)
-        return {r["id"] for r in cur.fetchall()}       # RealDictCursor rows
+        return {r["id"] for r in cur.fetchall()}  # RealDictCursor rows
 
 
 def _mk_policy(client, admin_headers, **fields):
@@ -54,13 +55,24 @@ FRESH = NOW - timedelta(days=1)
 
 
 def test_class_scoped_purge_deletes_only_past_cutoff(client, admin_headers):
-    pid = _mk_policy(client, admin_headers, table_class="connection_tests", action="purge",
-                     scope="class", retention_period_days=30, is_enabled=True)
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="connection_tests",
+        action="purge",
+        scope="class",
+        retention_period_days=30,
+        is_enabled=True,
+    )
     old1, old2, fresh = ("ct-%s" % uuid.uuid4().hex[:8] for _ in range(3))
-    _seed("connection_tests", [
-        {"id": old1, "created_at": OLD}, {"id": old2, "created_at": OLD},
-        {"id": fresh, "created_at": FRESH},
-    ])
+    _seed(
+        "connection_tests",
+        [
+            {"id": old1, "created_at": OLD},
+            {"id": old2, "created_at": OLD},
+            {"id": fresh, "created_at": FRESH},
+        ],
+    )
     r = _sweep(client, admin_headers, pid)
     assert r.status_code == 200, r.text
     run = r.json()
@@ -78,29 +90,47 @@ def test_dataset_scoped_purge_touches_only_that_dataset(client, admin_headers):
     ds_b = client.post("/api/datasets", json={"name": "sweep-b"}, headers=admin_headers)
     assert ds_a.status_code == 201 and ds_b.status_code == 201
     a, b = ds_a.json()["id"], ds_b.json()["id"]
-    pid = _mk_policy(client, admin_headers, table_class="ingested_records", action="purge",
-                     scope="dataset", dataset_id=a, retention_period_days=30, is_enabled=True)
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="ingested_records",
+        action="purge",
+        scope="dataset",
+        dataset_id=a,
+        retention_period_days=30,
+        is_enabled=True,
+    )
     old_a, old_b, fresh_a = ("ir-%s" % uuid.uuid4().hex[:8] for _ in range(3))
-    _seed("ingested_records", [
-        {"id": old_a, "created_at": OLD, "dataset_id": a},
-        {"id": old_b, "created_at": OLD, "dataset_id": b},
-        {"id": fresh_a, "created_at": FRESH, "dataset_id": a},
-    ])
+    _seed(
+        "ingested_records",
+        [
+            {"id": old_a, "created_at": OLD, "dataset_id": a},
+            {"id": old_b, "created_at": OLD, "dataset_id": b},
+            {"id": fresh_a, "created_at": FRESH, "dataset_id": a},
+        ],
+    )
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "succeeded" and run["records_purged"] == 1
     remaining = _ids("ingested_records")
-    assert old_a not in remaining                    # A's old row purged
+    assert old_a not in remaining  # A's old row purged
     assert old_b in remaining and fresh_a in remaining  # other dataset + fresh row kept
 
 
 def test_disabled_policy_is_a_recorded_noop(client, admin_headers):
-    pid = _mk_policy(client, admin_headers, table_class="runs", action="purge",
-                     scope="class", retention_period_days=30, is_enabled=False)
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="runs",
+        action="purge",
+        scope="class",
+        retention_period_days=30,
+        is_enabled=False,
+    )
     doomed = "ct-%s" % uuid.uuid4().hex[:8]
     _seed("connection_tests", [{"id": doomed, "created_at": OLD}])
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "succeeded" and run["records_purged"] == 0
-    assert doomed in _ids("connection_tests")        # nothing deleted
+    assert doomed in _ids("connection_tests")  # nothing deleted
     # free the runs class-wide slot (PR#109 partial-unique) for the lifecycle-guard test
     client.delete("/api/retention-policies/%s" % pid, headers=admin_headers)
 
@@ -108,27 +138,46 @@ def test_disabled_policy_is_a_recorded_noop(client, admin_headers):
 def test_sweep_never_deletes_queued_or_inflight_runs(client, admin_headers):
     # `runs` is ALSO the ingest worker's live queue: a pending row IS queued work and a running
     # row is in-flight evidence — retention ages out TERMINAL rows only
-    pid = _mk_policy(client, admin_headers, table_class="runs", action="purge",
-                     scope="class", retention_period_days=30, is_enabled=True)
-    old_pending, old_running, old_done = ("run-%s" % uuid.uuid4().hex[:8] for _ in range(3))
-    _seed("runs", [
-        {"id": old_pending, "created_at": OLD, "status": "pending"},
-        {"id": old_running, "created_at": OLD, "status": "running"},
-        {"id": old_done, "created_at": OLD, "status": "succeeded"},
-    ])
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="runs",
+        action="purge",
+        scope="class",
+        retention_period_days=30,
+        is_enabled=True,
+    )
+    old_pending, old_running, old_done = (
+        "run-%s" % uuid.uuid4().hex[:8] for _ in range(3)
+    )
+    _seed(
+        "runs",
+        [
+            {"id": old_pending, "created_at": OLD, "status": "pending"},
+            {"id": old_running, "created_at": OLD, "status": "running"},
+            {"id": old_done, "created_at": OLD, "status": "succeeded"},
+        ],
+    )
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "succeeded" and run["records_purged"] == 1
     remaining = _ids("runs")
-    assert old_done not in remaining                 # terminal row aged out
+    assert old_done not in remaining  # terminal row aged out
     assert old_pending in remaining and old_running in remaining  # live work untouched
     client.delete("/api/retention-policies/%s" % pid, headers=admin_headers)
 
 
 def test_anonymize_fails_closed_on_the_run(client, admin_headers):
-    pid = _mk_policy(client, admin_headers, table_class="discovery_runs", action="anonymize",
-                     scope="class", retention_period_days=30, is_enabled=True)
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="discovery_runs",
+        action="anonymize",
+        scope="class",
+        retention_period_days=30,
+        is_enabled=True,
+    )
     run = _sweep(client, admin_headers, pid).json()
-    assert run["status"] == "failed"                 # recorded ON the run, not a 5xx
+    assert run["status"] == "failed"  # recorded ON the run, not a 5xx
     assert run["records_purged"] == 0
     # free the discovery_runs slot for the misconfigured-policy test
     client.delete("/api/retention-policies/%s" % pid, headers=admin_headers)
@@ -137,20 +186,33 @@ def test_anonymize_fails_closed_on_the_run(client, admin_headers):
 def test_enabled_policy_without_period_fails_closed(client, admin_headers):
     # an ENABLED policy with no retention_period_days is a misconfiguration, not a no-op —
     # a green "succeeded, 0 purged" would hide "retention never enforced" forever
-    pid = _mk_policy(client, admin_headers, table_class="discovery_runs", action="purge",
-                     scope="class", is_enabled=True)          # period omitted (NULL)
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="discovery_runs",
+        action="purge",
+        scope="class",
+        is_enabled=True,
+    )  # period omitted (NULL)
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "failed"
 
 
 def test_dataset_scope_without_dataset_column_fails_closed(client, admin_headers):
-    pid = _mk_policy(client, admin_headers, table_class="field_profiles", action="purge",
-                     scope="dataset", retention_period_days=30, is_enabled=True)
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="field_profiles",
+        action="purge",
+        scope="dataset",
+        retention_period_days=30,
+        is_enabled=True,
+    )
     survivor = "ct-%s" % uuid.uuid4().hex[:8]
     _seed("connection_tests", [{"id": survivor, "created_at": OLD}])
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "failed"
-    assert survivor in _ids("connection_tests")      # fail-closed: nothing swept
+    assert survivor in _ids("connection_tests")  # fail-closed: nothing swept
 
 
 def test_unknown_policy_404s(client, admin_headers):
@@ -163,9 +225,16 @@ def test_run_claim_is_single_shot(client, admin_headers):
 
     # ingested_records CLASS-scoped: coexists with the dataset-scoped policy above (the PR#109
     # partial-unique indexes are disjoint), and every other class already has a policy here
-    pid = _mk_policy(client, admin_headers, table_class="ingested_records", action="purge",
-                     scope="class", retention_period_days=30, is_enabled=True)
+    pid = _mk_policy(
+        client,
+        admin_headers,
+        table_class="ingested_records",
+        action="purge",
+        scope="class",
+        retention_period_days=30,
+        is_enabled=True,
+    )
     run = create_pending_sweep(pid)
     first = execute_sweep(run["id"])
     assert first is not None and first["status"] == "succeeded"
-    assert execute_sweep(run["id"]) is None          # already claimed: exactly-one-executor
+    assert execute_sweep(run["id"]) is None  # already claimed: exactly-one-executor
