@@ -10212,6 +10212,17 @@
       },
       "RetentionRunCreate": {
         "properties": {
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
           "records_anonymized": {
             "anyOf": [
               {
@@ -10282,6 +10293,17 @@
       },
       "RetentionRunResponse": {
         "properties": {
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
           "records_anonymized": {
             "anyOf": [
               {
@@ -10366,6 +10388,17 @@
       },
       "RetentionRunUpdate": {
         "properties": {
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
           "records_anonymized": {
             "anyOf": [
               {

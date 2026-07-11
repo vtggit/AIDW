@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class RetentionRunCreate(BaseModel):
     """Request model for creating a retention_run."""
 
+    error_detail: str | None = Field(default=None)
+
     records_anonymized: int | None = Field(default=None)
 
     records_purged: int | None = Field(default=None)
@@ -20,6 +22,8 @@ class RetentionRunCreate(BaseModel):
 class RetentionRunUpdate(BaseModel):
     """Request model for updating a retention_run (all fields optional)."""
 
+    error_detail: str | None = Field(default=None)
+
     records_anonymized: int | None = Field(default=None)
 
     records_purged: int | None = Field(default=None)
@@ -33,6 +37,8 @@ class RetentionRunUpdate(BaseModel):
 
 class RetentionRunResponse(BaseModel):
     """Response model for a retention_run record."""
+
+    error_detail: str | None = None
 
     records_anonymized: int | None = None
 
