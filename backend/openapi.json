@@ -68,6 +68,25 @@
         }
       }
     },
+    "/api/endpoint": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Route Api Endpoint",
+        "operationId": "route_api_endpoint_api_endpoint_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/me": {
       "get": {
         "tags": [
