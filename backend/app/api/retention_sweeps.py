@@ -28,6 +28,6 @@ def sweep_policy(
     finished = execute_sweep(run["id"])
     if finished is None:  # claimed by a concurrent executor between enqueue and execute
         raise HTTPException(
-            status_code=409, detail="run %s already claimed" % run["id"]
+            status_code=409, detail="run {} already claimed".format(run["id"])
         )
     return finished

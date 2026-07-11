@@ -53,12 +53,12 @@ def create_pending_sweep(policy_id: str, trigger: str = "manual") -> dict:
     with get_cursor() as cur:
         cur.execute("SELECT id FROM retention_policies WHERE id = %s", (policy_id,))
         if cur.fetchone() is None:
-            raise SweepError("no such retention policy: %s" % policy_id)
+            raise SweepError(f"no such retention policy: {policy_id}")
         cur.execute(
             "INSERT INTO retention_runs "
             "(id, name, status, trigger, policy_id, created_at, updated_at) "
             "VALUES (%s, %s, 'pending', %s, %s, %s, %s)",
-            (run_id, "sweep %s" % policy_id[:13], trigger, policy_id, now, now),
+            (run_id, f"sweep {policy_id[:13]}", trigger, policy_id, now, now),
         )
     return {
         "id": run_id,
@@ -119,7 +119,7 @@ def _do_sweep(run_id: str) -> None:
         )
         row = cur.fetchone()
     if row is None:
-        raise SweepError("run %s has no policy attached" % run_id)
+        raise SweepError(f"run {run_id} has no policy attached")
     policy = dict(row)  # get_cursor yields RealDictCursor rows
 
     cutoff = plan_sweep(policy, now)
@@ -134,11 +134,11 @@ def _do_sweep(run_id: str) -> None:
 
     table = policy["table_class"]
     if table not in _SWEEPABLE:
-        raise SweepError("table class %r is not sweepable" % table)
+        raise SweepError(f"table class {table!r} is not sweepable")
     has_dataset, lifecycle_guard = _SWEEPABLE[table]
     if policy["action"] != "purge":
         raise SweepError(
-            "action %r is not yet supported (purge only)" % policy["action"]
+            "action {!r} is not yet supported (purge only)".format(policy["action"])
         )
 
     where, params = "created_at < %s", [cutoff]
@@ -149,8 +149,8 @@ def _do_sweep(run_id: str) -> None:
     if policy["scope"] == "dataset":
         if not has_dataset:
             raise SweepError(
-                "table class %r has no dataset_id column — a dataset-scoped policy "
-                "cannot sweep it" % table
+                f"table class {table!r} has no dataset_id column — a dataset-scoped policy "
+                "cannot sweep it"
             )
         if not policy["dataset_id"]:
             raise SweepError("dataset-scoped policy has no dataset_id set")
@@ -160,7 +160,7 @@ def _do_sweep(run_id: str) -> None:
     with get_cursor() as cur:
         # `table` and the guard fragment come from the closed _SWEEPABLE allowlist above —
         # never from input. DELETE + audit record: one transaction, atomic.
-        cur.execute('DELETE FROM "%s" WHERE %s' % (table, where), params)
+        cur.execute(f'DELETE FROM "{table}" WHERE {where}', params)
         purged = cur.rowcount
         cur.execute(
             "UPDATE retention_runs SET status = 'succeeded', records_purged = %s, "

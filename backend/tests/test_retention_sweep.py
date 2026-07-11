@@ -22,8 +22,9 @@ def _seed(table, rows):
                     cols.append(extra)
                     params.append(r[extra])
             cur.execute(
-                'INSERT INTO "%s" (%s) VALUES (%s)'
-                % (table, ", ".join(cols), ", ".join(["%s"] * len(cols))),
+                'INSERT INTO "{}" ({}) VALUES ({})'.format(
+                    table, ", ".join(cols), ", ".join(["%s"] * len(cols))
+                ),
                 params,
             )
 
@@ -32,12 +33,12 @@ def _ids(table):
     from app.db.connection import get_cursor
 
     with get_cursor() as cur:
-        cur.execute('SELECT id FROM "%s"' % table)
+        cur.execute(f'SELECT id FROM "{table}"')
         return {r["id"] for r in cur.fetchall()}  # RealDictCursor rows
 
 
 def _mk_policy(client, admin_headers, **fields):
-    body = {"name": "policy-%s" % uuid.uuid4().hex[:8], **fields}
+    body = {"name": f"policy-{uuid.uuid4().hex[:8]}", **fields}
     resp = client.post("/api/retention-policies", json=body, headers=admin_headers)
     assert resp.status_code == 201, resp.text
     return resp.json()["id"]
@@ -45,7 +46,7 @@ def _mk_policy(client, admin_headers, **fields):
 
 def _sweep(client, admin_headers, policy_id):
     return client.post(
-        "/api/retention-policies/%s/sweep" % policy_id, headers=admin_headers
+        f"/api/retention-policies/{policy_id}/sweep", headers=admin_headers
     )
 
 
@@ -64,7 +65,7 @@ def test_class_scoped_purge_deletes_only_past_cutoff(client, admin_headers):
         retention_period_days=30,
         is_enabled=True,
     )
-    old1, old2, fresh = ("ct-%s" % uuid.uuid4().hex[:8] for _ in range(3))
+    old1, old2, fresh = (f"ct-{uuid.uuid4().hex[:8]}" for _ in range(3))
     _seed(
         "connection_tests",
         [
@@ -100,7 +101,7 @@ def test_dataset_scoped_purge_touches_only_that_dataset(client, admin_headers):
         retention_period_days=30,
         is_enabled=True,
     )
-    old_a, old_b, fresh_a = ("ir-%s" % uuid.uuid4().hex[:8] for _ in range(3))
+    old_a, old_b, fresh_a = (f"ir-{uuid.uuid4().hex[:8]}" for _ in range(3))
     _seed(
         "ingested_records",
         [
@@ -126,13 +127,13 @@ def test_disabled_policy_is_a_recorded_noop(client, admin_headers):
         retention_period_days=30,
         is_enabled=False,
     )
-    doomed = "ct-%s" % uuid.uuid4().hex[:8]
+    doomed = f"ct-{uuid.uuid4().hex[:8]}"
     _seed("connection_tests", [{"id": doomed, "created_at": OLD}])
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "succeeded" and run["records_purged"] == 0
     assert doomed in _ids("connection_tests")  # nothing deleted
     # free the runs class-wide slot (PR#109 partial-unique) for the lifecycle-guard test
-    client.delete("/api/retention-policies/%s" % pid, headers=admin_headers)
+    client.delete(f"/api/retention-policies/{pid}", headers=admin_headers)
 
 
 def test_sweep_never_deletes_queued_or_inflight_runs(client, admin_headers):
@@ -148,7 +149,7 @@ def test_sweep_never_deletes_queued_or_inflight_runs(client, admin_headers):
         is_enabled=True,
     )
     old_pending, old_running, old_done = (
-        "run-%s" % uuid.uuid4().hex[:8] for _ in range(3)
+        f"run-{uuid.uuid4().hex[:8]}" for _ in range(3)
     )
     _seed(
         "runs",
@@ -163,7 +164,7 @@ def test_sweep_never_deletes_queued_or_inflight_runs(client, admin_headers):
     remaining = _ids("runs")
     assert old_done not in remaining  # terminal row aged out
     assert old_pending in remaining and old_running in remaining  # live work untouched
-    client.delete("/api/retention-policies/%s" % pid, headers=admin_headers)
+    client.delete(f"/api/retention-policies/{pid}", headers=admin_headers)
 
 
 def test_anonymize_fails_closed_on_the_run(client, admin_headers):
@@ -180,7 +181,7 @@ def test_anonymize_fails_closed_on_the_run(client, admin_headers):
     assert run["status"] == "failed"  # recorded ON the run, not a 5xx
     assert run["records_purged"] == 0
     # free the discovery_runs slot for the misconfigured-policy test
-    client.delete("/api/retention-policies/%s" % pid, headers=admin_headers)
+    client.delete(f"/api/retention-policies/{pid}", headers=admin_headers)
 
 
 def test_enabled_policy_without_period_fails_closed(client, admin_headers):
@@ -208,7 +209,7 @@ def test_dataset_scope_without_dataset_column_fails_closed(client, admin_headers
         retention_period_days=30,
         is_enabled=True,
     )
-    survivor = "ct-%s" % uuid.uuid4().hex[:8]
+    survivor = f"ct-{uuid.uuid4().hex[:8]}"
     _seed("connection_tests", [{"id": survivor, "created_at": OLD}])
     run = _sweep(client, admin_headers, pid).json()
     assert run["status"] == "failed"
