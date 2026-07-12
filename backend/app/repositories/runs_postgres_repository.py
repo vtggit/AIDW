@@ -50,8 +50,8 @@ class RunPostgresRepository:
         with get_cursor() as cur:
             cur.execute(
                 "INSERT INTO runs (id, name, pipeline_id, status, trigger, started_at, "
-                "finished_at, rows_read, rows_written, error_detail, created_at, updated_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "finished_at, rows_read, rows_written, error_detail, rows_suppressed, created_at, updated_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -63,6 +63,7 @@ class RunPostgresRepository:
                     data.get("rows_read"),
                     data.get("rows_written"),
                     data.get("error_detail"),
+                    data.get("rows_suppressed"),
                     now,
                     now,
                 ),
