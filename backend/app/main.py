@@ -252,6 +252,7 @@ def create_app() -> FastAPI:
     from app.api.dashboard_items import router as dashboard_items_router
     from app.api.dashboards import router as dashboards_router
     from app.api.datasets import router as datasets_router
+    from app.api.deletion_requests import router as deletion_requests_router
     from app.api.delta_cursors import router as delta_cursors_router
     from app.api.discovered_fields import router as discovered_fields_router
     from app.api.discovery import router as discovery_router
@@ -307,6 +308,7 @@ def create_app() -> FastAPI:
     application.include_router(retention_runs_router)
     application.include_router(retention_sweeps_router)
     application.include_router(audit_logs_router)
+    application.include_router(deletion_requests_router)
 
     @application.on_event("startup")
     def on_startup():
