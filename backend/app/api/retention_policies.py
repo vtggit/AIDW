@@ -38,10 +38,11 @@ def list_retention_policies(
 )
 def create_retention_policy(
     payload: RetentionPolicyCreate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: RetentionPolicyService = Depends(get_service),
 ):
-    return service.create_retention_policy(payload)
+    # governance objects are audited (governance #79): actor = the authenticated principal
+    return service.create_retention_policy(payload, actor=user.username or user.sub)
 
 
 @router.get("/{entity_id}", response_model=RetentionPolicyResponse)
@@ -63,10 +64,12 @@ def get_retention_policy(
 def update_retention_policy(
     entity_id: str,
     payload: RetentionPolicyUpdate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: RetentionPolicyService = Depends(get_service),
 ):
-    entity = service.update_retention_policy(entity_id, payload)
+    entity = service.update_retention_policy(
+        entity_id, payload, actor=user.username or user.sub
+    )
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -78,10 +81,10 @@ def update_retention_policy(
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_retention_policy(
     entity_id: str,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: RetentionPolicyService = Depends(get_service),
 ):
-    if not service.delete_retention_policy(entity_id):
+    if not service.delete_retention_policy(entity_id, actor=user.username or user.sub):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"RetentionPolicy '{entity_id}' not found.",
