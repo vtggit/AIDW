@@ -8939,6 +8939,17 @@
       },
       "DeletionRequestCreate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -9075,6 +9086,17 @@
       },
       "DeletionRequestResponse": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -9225,6 +9247,17 @@
       },
       "DeletionRequestUpdate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "name": {
             "anyOf": [
               {

@@ -37,7 +37,7 @@ class DeletionRequestPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO deletion_requests (id, name, subject_key, subject_key_hash, status, reason, error_detail, attempts, records_deleted, profiles_cleared, verified_by, verified_at, completed_at, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO deletion_requests (id, name, subject_key, subject_key_hash, status, reason, error_detail, attempts, records_deleted, profiles_cleared, verified_by, verified_at, completed_at, dataset_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -52,6 +52,7 @@ class DeletionRequestPostgresRepository:
                     data.get("verified_by"),
                     data.get("verified_at"),
                     data.get("completed_at"),
+                    data.get("dataset_id"),
                     now,
                     now,
                 ),
@@ -72,6 +73,7 @@ class DeletionRequestPostgresRepository:
             "verified_by",
             "verified_at",
             "completed_at",
+            "dataset_id",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
