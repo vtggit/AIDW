@@ -38,10 +38,10 @@ def list_suggestions(
 @router.post("", response_model=SuggestionResponse, status_code=status.HTTP_201_CREATED)
 def create_suggestion(
     payload: SuggestionCreate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: SuggestionService = Depends(get_service),
 ):
-    return service.create_suggestion(payload)
+    return service.create_suggestion(payload, actor=user.username or user.sub)
 
 
 @router.get("/{entity_id}", response_model=SuggestionResponse)
@@ -63,10 +63,12 @@ def get_suggestion(
 def update_suggestion(
     entity_id: str,
     payload: SuggestionUpdate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: SuggestionService = Depends(get_service),
 ):
-    entity = service.update_suggestion(entity_id, payload)
+    entity = service.update_suggestion(
+        entity_id, payload, actor=user.username or user.sub
+    )
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -78,10 +80,10 @@ def update_suggestion(
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_suggestion(
     entity_id: str,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: SuggestionService = Depends(get_service),
 ):
-    if not service.delete_suggestion(entity_id):
+    if not service.delete_suggestion(entity_id, actor=user.username or user.sub):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Suggestion '{entity_id}' not found.",
