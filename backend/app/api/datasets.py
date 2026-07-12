@@ -30,10 +30,10 @@ def list_datasets(
 @router.post("", response_model=DatasetResponse, status_code=status.HTTP_201_CREATED)
 def create_dataset(
     payload: DatasetCreate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: DatasetService = Depends(get_service),
 ):
-    return service.create_dataset(payload)
+    return service.create_dataset(payload, actor=user.username or user.sub)
 
 
 @router.get("/{entity_id}", response_model=DatasetResponse)
@@ -55,10 +55,10 @@ def get_dataset(
 def update_dataset(
     entity_id: str,
     payload: DatasetUpdate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: DatasetService = Depends(get_service),
 ):
-    entity = service.update_dataset(entity_id, payload)
+    entity = service.update_dataset(entity_id, payload, actor=user.username or user.sub)
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -70,10 +70,10 @@ def update_dataset(
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_dataset(
     entity_id: str,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: DatasetService = Depends(get_service),
 ):
-    if not service.delete_dataset(entity_id):
+    if not service.delete_dataset(entity_id, actor=user.username or user.sub):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dataset '{entity_id}' not found.",

@@ -36,10 +36,10 @@ def list_pipelines(
 @router.post("", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
 def create_pipeline(
     payload: PipelineCreate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: PipelineService = Depends(get_service),
 ):
-    return service.create_pipeline(payload)
+    return service.create_pipeline(payload, actor=user.username or user.sub)
 
 
 @router.get("/{entity_id}", response_model=PipelineResponse)
@@ -61,10 +61,12 @@ def get_pipeline(
 def update_pipeline(
     entity_id: str,
     payload: PipelineUpdate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: PipelineService = Depends(get_service),
 ):
-    entity = service.update_pipeline(entity_id, payload)
+    entity = service.update_pipeline(
+        entity_id, payload, actor=user.username or user.sub
+    )
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -76,10 +78,10 @@ def update_pipeline(
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_pipeline(
     entity_id: str,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: PipelineService = Depends(get_service),
 ):
-    if not service.delete_pipeline(entity_id):
+    if not service.delete_pipeline(entity_id, actor=user.username or user.sub):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pipeline '{entity_id}' not found.",
