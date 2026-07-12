@@ -30,10 +30,10 @@ def list_sources(
 @router.post("", response_model=SourceResponse, status_code=status.HTTP_201_CREATED)
 def create_source(
     payload: SourceCreate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: SourceService = Depends(get_service),
 ):
-    return service.create_source(payload)
+    return service.create_source(payload, actor=user.username or user.sub)
 
 
 @router.get("/{entity_id}", response_model=SourceResponse)
@@ -55,10 +55,10 @@ def get_source(
 def update_source(
     entity_id: str,
     payload: SourceUpdate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: SourceService = Depends(get_service),
 ):
-    entity = service.update_source(entity_id, payload)
+    entity = service.update_source(entity_id, payload, actor=user.username or user.sub)
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -70,10 +70,10 @@ def update_source(
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_source(
     entity_id: str,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: SourceService = Depends(get_service),
 ):
-    if not service.delete_source(entity_id):
+    if not service.delete_source(entity_id, actor=user.username or user.sub):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Source '{entity_id}' not found.",
