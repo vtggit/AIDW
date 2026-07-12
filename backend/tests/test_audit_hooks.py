@@ -72,6 +72,33 @@ def test_rejected_create_leaves_no_audit_row(client, admin_headers):
     client.delete(f"/api/retention-policies/{pid}", headers=admin_headers)
 
 
+def test_dataset_and_pipeline_mutations_are_audited(client, admin_headers):
+    # hooks #2 and #3 — the SAME three-layer shape applied to two more entities (the
+    # audit-hook recipe's repetition evidence)
+    for entity, route in (
+        ("datasets", "/api/datasets"),
+        ("pipelines", "/api/pipelines"),
+    ):
+        created = client.post(
+            route,
+            json={"name": f"audited-{uuid.uuid4().hex[:8]}"},
+            headers=admin_headers,
+        )
+        assert created.status_code == 201, created.text
+        eid = created.json()["id"]
+        upd = client.put(
+            f"{route}/{eid}",
+            json={"name": f"renamed-{uuid.uuid4().hex[:8]}"},
+            headers=admin_headers,
+        )
+        assert upd.status_code == 200, upd.text
+        dele = client.delete(f"{route}/{eid}", headers=admin_headers)
+        assert dele.status_code == 204
+        rows = _audit_rows(client, admin_headers, eid)
+        assert sorted(r["action"] for r in rows) == ["create", "delete", "update"]
+        assert all(r["entity_type"] == entity and r["actor"] for r in rows)
+
+
 def test_unaudited_paths_write_nothing(client, admin_headers):
     # reads are not audited; a delete of a nonexistent id (no write happened) is not audited
     before = len(client.get("/api/audit-logs", headers=admin_headers).json())

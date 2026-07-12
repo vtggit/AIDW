@@ -16,11 +16,15 @@ class DatasetService:
     def get_dataset(self, entity_id: str) -> dict | None:
         return self.repository.get_by_id(entity_id)
 
-    def create_dataset(self, payload: DatasetCreate) -> dict:
-        return self.repository.create(payload.model_dump())
+    def create_dataset(self, payload: DatasetCreate, actor: str | None = None) -> dict:
+        return self.repository.create(payload.model_dump(), actor=actor)
 
-    def update_dataset(self, entity_id: str, payload: DatasetUpdate) -> dict | None:
-        return self.repository.update(entity_id, payload.model_dump(exclude_unset=True))
+    def update_dataset(
+        self, entity_id: str, payload: DatasetUpdate, actor: str | None = None
+    ) -> dict | None:
+        return self.repository.update(
+            entity_id, payload.model_dump(exclude_unset=True), actor=actor
+        )
 
-    def delete_dataset(self, entity_id: str) -> bool:
-        return self.repository.delete(entity_id)
+    def delete_dataset(self, entity_id: str, actor: str | None = None) -> bool:
+        return self.repository.delete(entity_id, actor=actor)
