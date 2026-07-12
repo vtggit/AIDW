@@ -12006,6 +12006,17 @@
       },
       "RunCreate": {
         "properties": {
+          "rows_suppressed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Suppressed"
+          },
           "pipeline_id": {
             "anyOf": [
               {
@@ -12109,6 +12120,17 @@
       },
       "RunResponse": {
         "properties": {
+          "rows_suppressed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Suppressed"
+          },
           "pipeline_id": {
             "anyOf": [
               {
@@ -12226,6 +12248,17 @@
       },
       "RunUpdate": {
         "properties": {
+          "rows_suppressed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Suppressed"
+          },
           "pipeline_id": {
             "anyOf": [
               {

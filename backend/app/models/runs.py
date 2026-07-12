@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class RunCreate(BaseModel):
     """Request model for creating a run."""
 
+    rows_suppressed: int | None = Field(default=None)
+
     pipeline_id: str | None = Field(default=None)
     status: str | None = Field(default=None)
     trigger: str | None = Field(default=None)
@@ -21,6 +23,8 @@ class RunCreate(BaseModel):
 class RunUpdate(BaseModel):
     """Request model for updating a run (all fields optional)."""
 
+    rows_suppressed: int | None = Field(default=None)
+
     pipeline_id: str | None = Field(default=None)
     status: str | None = Field(default=None)
     trigger: str | None = Field(default=None)
@@ -35,6 +39,8 @@ class RunUpdate(BaseModel):
 
 class RunResponse(BaseModel):
     """Response model for a run record."""
+
+    rows_suppressed: int | None = None
 
     pipeline_id: str | None = None
     status: str | None = None
