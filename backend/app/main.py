@@ -276,6 +276,7 @@ def create_app() -> FastAPI:
     from app.api.sources import router as sources_router
     from app.api.suggestion_fields import router as suggestion_fields_router
     from app.api.suggestions import router as suggestions_router
+    from app.api.suppression_entries import router as suppression_entries_router
 
     application.include_router(health_router)
     application.include_router(auth_router)
@@ -309,6 +310,7 @@ def create_app() -> FastAPI:
     application.include_router(retention_sweeps_router)
     application.include_router(audit_logs_router)
     application.include_router(deletion_requests_router)
+    application.include_router(suppression_entries_router)
 
     @application.on_event("startup")
     def on_startup():
