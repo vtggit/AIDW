@@ -13401,6 +13401,17 @@
       },
       "SuppressionEntryCreate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -13427,6 +13438,17 @@
       },
       "SuppressionEntryResponse": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -13467,6 +13489,17 @@
       },
       "SuppressionEntryUpdate": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
           "name": {
             "anyOf": [
               {
