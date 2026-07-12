@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class DeletionRequestCreate(BaseModel):
     """Request model for creating a deletion_request."""
 
+    dataset_id: str | None = Field(default=None)
+
     name: str = Field(..., min_length=1)
     subject_key: str | None = Field(default=None)
     subject_key_hash: str | None = Field(default=None)
@@ -23,6 +25,8 @@ class DeletionRequestCreate(BaseModel):
 class DeletionRequestUpdate(BaseModel):
     """Request model for updating a deletion_request (all fields optional)."""
 
+    dataset_id: str | None = Field(default=None)
+
     name: str | None = Field(default=None)
     subject_key: str | None = Field(default=None)
     subject_key_hash: str | None = Field(default=None)
@@ -39,6 +43,8 @@ class DeletionRequestUpdate(BaseModel):
 
 class DeletionRequestResponse(BaseModel):
     """Response model for a deletion_request record."""
+
+    dataset_id: str | None = None
 
     id: str
     name: str
