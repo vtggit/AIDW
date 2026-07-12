@@ -18,13 +18,17 @@ class SuggestionService:
     def get_suggestion(self, entity_id: str) -> dict | None:
         return self.repository.get_by_id(entity_id)
 
-    def create_suggestion(self, payload: SuggestionCreate) -> dict:
-        return self.repository.create(payload.model_dump())
+    def create_suggestion(
+        self, payload: SuggestionCreate, actor: str | None = None
+    ) -> dict:
+        return self.repository.create(payload.model_dump(), actor=actor)
 
     def update_suggestion(
-        self, entity_id: str, payload: SuggestionUpdate
+        self, entity_id: str, payload: SuggestionUpdate, actor: str | None = None
     ) -> dict | None:
-        return self.repository.update(entity_id, payload.model_dump(exclude_unset=True))
+        return self.repository.update(
+            entity_id, payload.model_dump(exclude_unset=True), actor=actor
+        )
 
-    def delete_suggestion(self, entity_id: str) -> bool:
-        return self.repository.delete(entity_id)
+    def delete_suggestion(self, entity_id: str, actor: str | None = None) -> bool:
+        return self.repository.delete(entity_id, actor=actor)
