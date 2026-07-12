@@ -30,10 +30,10 @@ def list_pii_flags(
 @router.post("", response_model=PiiFlagResponse, status_code=status.HTTP_201_CREATED)
 def create_pii_flag(
     payload: PiiFlagCreate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: PiiFlagService = Depends(get_service),
 ):
-    return service.create_pii_flag(payload)
+    return service.create_pii_flag(payload, actor=user.username or user.sub)
 
 
 @router.get("/{entity_id}", response_model=PiiFlagResponse)
@@ -55,10 +55,12 @@ def get_pii_flag(
 def update_pii_flag(
     entity_id: str,
     payload: PiiFlagUpdate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: PiiFlagService = Depends(get_service),
 ):
-    entity = service.update_pii_flag(entity_id, payload)
+    entity = service.update_pii_flag(
+        entity_id, payload, actor=user.username or user.sub
+    )
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -70,10 +72,10 @@ def update_pii_flag(
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_pii_flag(
     entity_id: str,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: PiiFlagService = Depends(get_service),
 ):
-    if not service.delete_pii_flag(entity_id):
+    if not service.delete_pii_flag(entity_id, actor=user.username or user.sub):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"PiiFlag '{entity_id}' not found.",
