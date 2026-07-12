@@ -37,12 +37,13 @@ class SuppressionEntryPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO suppression_entries (id, name, key_hash, dataset_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                "INSERT INTO suppression_entries (id, name, key_hash, dataset_id, deletion_request_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("key_hash"),
                     data.get("dataset_id"),
+                    data.get("deletion_request_id"),
                     now,
                     now,
                 ),
@@ -50,7 +51,7 @@ class SuppressionEntryPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = ("name", "key_hash", "dataset_id")
+        updatable = ("name", "key_hash", "dataset_id", "deletion_request_id")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)

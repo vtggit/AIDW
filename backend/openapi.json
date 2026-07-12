@@ -13401,6 +13401,17 @@
       },
       "SuppressionEntryCreate": {
         "properties": {
+          "deletion_request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletion Request Id"
+          },
           "dataset_id": {
             "anyOf": [
               {
@@ -13438,6 +13449,17 @@
       },
       "SuppressionEntryResponse": {
         "properties": {
+          "deletion_request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletion Request Id"
+          },
           "dataset_id": {
             "anyOf": [
               {
@@ -13489,6 +13511,17 @@
       },
       "SuppressionEntryUpdate": {
         "properties": {
+          "deletion_request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletion Request Id"
+          },
           "dataset_id": {
             "anyOf": [
               {

@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class SuppressionEntryCreate(BaseModel):
     """Request model for creating a suppression_entry."""
 
+    deletion_request_id: str | None = Field(default=None)
+
     dataset_id: str | None = Field(default=None)
 
     name: str = Field(..., min_length=1)
@@ -15,6 +17,8 @@ class SuppressionEntryCreate(BaseModel):
 class SuppressionEntryUpdate(BaseModel):
     """Request model for updating a suppression_entry (all fields optional)."""
 
+    deletion_request_id: str | None = Field(default=None)
+
     dataset_id: str | None = Field(default=None)
 
     name: str | None = Field(default=None)
@@ -23,6 +27,8 @@ class SuppressionEntryUpdate(BaseModel):
 
 class SuppressionEntryResponse(BaseModel):
     """Response model for a suppression_entry record."""
+
+    deletion_request_id: str | None = None
 
     dataset_id: str | None = None
 
