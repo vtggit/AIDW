@@ -18,13 +18,19 @@ class SourceConnectionService:
     def get_source_connection(self, entity_id: str) -> dict | None:
         return self.repository.get_by_id(entity_id)
 
-    def create_source_connection(self, payload: SourceConnectionCreate) -> dict:
-        return self.repository.create(payload.model_dump())
+    def create_source_connection(
+        self, payload: SourceConnectionCreate, actor: str | None = None
+    ) -> dict:
+        return self.repository.create(payload.model_dump(), actor=actor)
 
     def update_source_connection(
-        self, entity_id: str, payload: SourceConnectionUpdate
+        self, entity_id: str, payload: SourceConnectionUpdate, actor: str | None = None
     ) -> dict | None:
-        return self.repository.update(entity_id, payload.model_dump(exclude_unset=True))
+        return self.repository.update(
+            entity_id, payload.model_dump(exclude_unset=True), actor=actor
+        )
 
-    def delete_source_connection(self, entity_id: str) -> bool:
-        return self.repository.delete(entity_id)
+    def delete_source_connection(
+        self, entity_id: str, actor: str | None = None
+    ) -> bool:
+        return self.repository.delete(entity_id, actor=actor)
