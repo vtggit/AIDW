@@ -16,6 +16,10 @@ name: CodeAgent merge gate
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+    # Pure-documentation PRs need no contract-gate build (mirrors backend-ci.yml).
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 permissions:
   contents: read
