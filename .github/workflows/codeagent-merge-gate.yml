@@ -86,7 +86,7 @@ jobs:
           python -m pip install alembic
           pip install -r backend/requirements.txt
 
-      - name: Run backend suite -> junitxml
+      - name: Run backend PROOF tests -> junitxml
         if: steps.fam.outputs.family == 'backend'
         env:
           DB_HOST: localhost
@@ -97,9 +97,25 @@ jobs:
           AUTH_MODE: development
           AUTH_DEV_TOKEN: dev-secret-token
         run: |
-          cd backend
-          python -m alembic upgrade head || true
-          python -m pytest tests/ -q --junitxml="${RUNNER_TEMP}/report.xml" || true
+          # De-dup (cost): run ONLY the contract's proving nodeids, not the whole suite —
+          # the full-suite regression stays backend-ci's job. list_proof_nodeids emits BASE
+          # nodeids so pytest runs every parametrization (matches the gate's base check).
+          # No mapped tests => empty junit; check_pr_contract then reports the missing proof.
+          # List BEFORE cd so contract_lib resolves; nodeids are backend-relative (tests/...).
+          python scripts/ca_gate/list_proof_nodeids.py \
+            --pr-body-file "${RUNNER_TEMP}/pr_body.md" > "${RUNNER_TEMP}/nodeids.txt"
+          echo "proving nodeids:"; cat "${RUNNER_TEMP}/nodeids.txt"
+          # array + count guard (not [ -s ]): a blank/whitespace line can never fall through
+          # to a bare pytest (which would run the whole suite); quoted expansion = no mis-split.
+          mapfile -t IDS < "${RUNNER_TEMP}/nodeids.txt"
+          if [ "${#IDS[@]}" -gt 0 ]; then
+            cd backend
+            python -m alembic upgrade head || true
+            python -m pytest "${IDS[@]}" -q --junitxml="${RUNNER_TEMP}/report.xml" || true
+          else
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<testsuite name="no-proof" tests="0"></testsuite>\n' \
+              > "${RUNNER_TEMP}/report.xml"
+          fi
 
       - name: Run frontend Playwright suite -> junitxml
         if: steps.fam.outputs.family == 'frontend'
