@@ -86,6 +86,15 @@ services:
       # "worker" (API enqueues only; the worker service below claims and executes)
       INGEST_EXECUTOR: ${INGEST_EXECUTOR:-inline}
       ENABLE_INAPI_EGRESS: ${ENABLE_INAPI_EGRESS:-false}
+
+      # Right-to-be-forgotten suppression pepper (governance #76). The HMAC key that makes
+      # erased-subject hashes non-attributable. Leave UNSET for deployments that never execute
+      # deletion requests — plain ingest skips hashing when a dataset has no suppression entries,
+      # so this is NOT a hard dependency of ordinary operation. It becomes REQUIRED to execute a
+      # deletion request (request verification + erasure fail closed without it) and is WRITE-ONCE:
+      # rotation orphans every entry. Generate `openssl rand -base64 48`, custody it offline
+      # like a DB backup. See docs/BEHAVIORAL-ARCHITECTURE.md (Suppression) and .env.example.
+      AIDW_SUPPRESSION_PEPPER: ${AIDW_SUPPRESSION_PEPPER:-}
     depends_on:
       db:
         condition: service_healthy
@@ -129,6 +138,13 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-5}
       WORKER_STALE_RUNNING_SECONDS: ${WORKER_STALE_RUNNING_SECONDS:-1800}
+
+      # Right-to-be-forgotten suppression pepper (governance #76). Must be the SAME value the
+      # backend sees — the worker executes erasures and filters ingests, both of which recompute
+      # this HMAC. (Profiling suppression is specified but not yet implemented — see .env.example.)
+      # Leave UNSET until the first deletion request; WRITE-ONCE thereafter.
+      # See the backend service above, docs/BEHAVIORAL-ARCHITECTURE.md (Suppression), .env.example.
+      AIDW_SUPPRESSION_PEPPER: ${AIDW_SUPPRESSION_PEPPER:-}
     depends_on:
       db:
         condition: service_healthy
