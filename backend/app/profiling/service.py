@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.db.connection import get_cursor
-from app.ingest.mapper import parse_rows
+from app.governance.hashing import subject_key_hash
+from app.ingest.mapper import business_key, parse_rows
 from app.pii.engine import pii_fingerprint
 from app.pii.service import reconcile_flags_for_dataset
 from app.pii.values import categories_above_floor
@@ -67,25 +68,37 @@ def _parse_rows(raw: bytes) -> list[dict]:
     return parse_rows(raw)
 
 
-def _stats(rows: list[dict], field_name: str) -> dict:
+def _stats(
+    rows: list[dict], field_name: str, value_rows: list[dict] | None = None
+) -> dict:
     """Per-field stats over the sample. All value handling is string-based so mixed/None/nested
     values never raise; distinct/min/max/most-common are computed on the string projection.
+
+    Aggregate COUNTS (row/null/distinct) come from ``rows``; VALUE columns (min/max/most_common)
+    come from ``value_rows`` (defaults to ``rows``). RTBF suppression passes value_rows with the
+    erased subjects removed, so a re-profile drops their values while the non-personal counts stay
+    full-sample — matching the erasure convention (executor + pii._scrub_profile keep the counts
+    and NULL only the value columns).
     """
+    value_rows = rows if value_rows is None else value_rows
     present = [r.get(field_name) for r in rows]
     keys = [str(v) for v in present if v is not None]
     row_count = len(present)
     null_count = row_count - len(keys)
+    value_keys = [
+        str(v) for v in (r.get(field_name) for r in value_rows) if v is not None
+    ]
 
     def _cap(s):
         return s[:255] if s is not None else None
 
-    most_common = Counter(keys).most_common(1)[0][0] if keys else None
+    most_common = Counter(value_keys).most_common(1)[0][0] if value_keys else None
     return {
         "row_count": row_count,
         "null_count": null_count,
         "distinct_count": len(set(keys)),
-        "min_value": _cap(min(keys)) if keys else None,
-        "max_value": _cap(max(keys)) if keys else None,
+        "min_value": _cap(min(value_keys)) if value_keys else None,
+        "max_value": _cap(max(value_keys)) if value_keys else None,
         "most_common_value": _cap(most_common),
     }
 
@@ -158,7 +171,8 @@ def profile_source(source_id: str) -> dict:
     with get_cursor() as cur:
         for ds in datasets:
             cur.execute(
-                "SELECT id, name FROM discovered_fields WHERE dataset_id = %s",
+                "SELECT id, name, is_key FROM discovered_fields WHERE dataset_id = %s "
+                "ORDER BY field_position NULLS LAST, name",
                 (ds["id"],),
             )
             fields = [dict(r) for r in cur.fetchall()]
@@ -173,7 +187,10 @@ def profile_source(source_id: str) -> dict:
             profiled_datasets += 1
 
             # profile-tier PII detection over the sample, reconciled into pii_flags in this same
-            # transaction (a column that IS emails flags regardless of its name)
+            # transaction (a column that IS emails flags regardless of its name). Deliberately runs
+            # over the FULL rows (pre-RTBF-suppression): a field's PII status is a column property
+            # and must not depend on one subject's erasure; it stores only category/ratio/field-name,
+            # never a raw value, so an erased subject cannot leak through here.
             candidates = _pii_candidates_from_sample(fields, rows)
             counts = reconcile_flags_for_dataset(
                 cur, ds["id"], fields, candidates, _PROFILE_TIER, now
@@ -190,8 +207,32 @@ def profile_source(source_id: str) -> dict:
             )
             flagged_ids = {r["discovered_field_id"] for r in cur.fetchall()}
 
+            # RTBF (#76): drop erased subjects BEFORE value-stats, so a re-profile never
+            # resurrects an erased subject's min/max/most_common from the live source (which may
+            # still hold them). Mirrors the ingest filter (cursor.apply_rows): hash ONLY when the
+            # dataset actually has suppression entries (no pepper needed otherwise); a missing
+            # pepper then raises and rolls back this whole transaction rather than resurrecting.
+            # Key derivation (is_key fields in field_position order) matches ingest exactly, so the
+            # hashes line up with what the erasure recorded.
+            cur.execute(
+                "SELECT key_hash FROM suppression_entries WHERE dataset_id = %s",
+                (ds["id"],),
+            )
+            suppressed = {r["key_hash"] for r in cur.fetchall()}
+            stats_rows = rows
+            if suppressed:
+                key_field_names = [fld["name"] for fld in fields if fld.get("is_key")]
+                stats_rows = []
+                for r in rows:
+                    bk = business_key(r, key_field_names)
+                    if bk is not None and subject_key_hash(ds["id"], bk) in suppressed:
+                        continue  # erased subject: excluded from value-stats
+                    stats_rows.append(r)
+
             for f in fields:
-                st = _stats(rows, f["name"])
+                # counts over the full sample (non-personal aggregates, kept); value columns over
+                # stats_rows (erased subjects removed) — see _stats and the erasure convention
+                st = _stats(rows, f["name"], value_rows=stats_rows)
                 if f["id"] in flagged_ids:
                     st = {
                         **st,
