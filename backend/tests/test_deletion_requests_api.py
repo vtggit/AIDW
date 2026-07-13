@@ -70,7 +70,10 @@ def test_deletion_requests_crud(client, admin_headers, user_headers):
     assert created["verified_by"] == "v1"
     assert created["verified_at"] == "v1"
     assert created["completed_at"] == "v1"
-    got = client.get(f"/api/deletion-requests/{entity_id}", headers=user_headers)
+    # reads are ADMIN-ONLY since the lifecycle slice: subject_key is PII (#76)
+    denied = client.get(f"/api/deletion-requests/{entity_id}", headers=user_headers)
+    assert denied.status_code == 403
+    got = client.get(f"/api/deletion-requests/{entity_id}", headers=admin_headers)
     assert got.status_code == 200 and got.json()["id"] == entity_id
     upd = client.put(
         f"/api/deletion-requests/{entity_id}",
@@ -80,7 +83,8 @@ def test_deletion_requests_crud(client, admin_headers, user_headers):
     assert upd.status_code == 200
     updated = upd.json()
     assert updated["name"] == "n2" and updated["subject_key"] == "v2"
-    listing = client.get("/api/deletion-requests", headers=user_headers)
+    assert client.get("/api/deletion-requests", headers=user_headers).status_code == 403
+    listing = client.get("/api/deletion-requests", headers=admin_headers)
     assert any(x["id"] == entity_id for x in listing.json())
     dele = client.delete(f"/api/deletion-requests/{entity_id}", headers=admin_headers)
     assert dele.status_code == 204
