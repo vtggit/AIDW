@@ -141,7 +141,8 @@ def _profile_row(field_id):
 
 def _business_key_of(ds, row):
     """The row's business_key using the SAME is_key/field_position ordering ingest uses — so the
-    suppressed hash matches what ingest/erasure would record, and the test pins profiling to it."""
+    suppressed hash matches what ingest/erasure would record, and the test pins profiling to it.
+    """
     from app.db.connection import get_cursor
     from app.ingest.mapper import business_key
 
@@ -215,7 +216,8 @@ def test_profiling_fails_closed_and_rolls_back_without_pepper(
     client, admin_headers, monkeypatch
 ):
     """Entries exist but the pepper is missing: profiling raises and the transaction rolls back,
-    leaving the prior profile untouched — no silent re-profiling of the erased subject."""
+    leaving the prior profile untouched — no silent re-profiling of the erased subject.
+    """
     monkeypatch.setenv("AIDW_SUPPRESSION_PEPPER", PEPPER)
     sid = _make_source(client, admin_headers)
     _discover(client, admin_headers, monkeypatch, sid, _EDMX)
@@ -241,18 +243,27 @@ def test_profiling_drops_suppressed_composite_key_subject(
     client, admin_headers, monkeypatch
 ):
     """Composite key (OrderID+LineID): the erased subject is dropped only if profiling concatenates
-    key fields in field_position order (matching ingest); its near-twin sharing OrderID is kept."""
+    key fields in field_position order (matching ingest); its near-twin sharing OrderID is kept.
+    """
     monkeypatch.setenv("AIDW_SUPPRESSION_PEPPER", PEPPER)
     sid = _make_source(client, admin_headers)
     _discover(client, admin_headers, monkeypatch, sid, _EDMX_COMPOSITE)
     ds = _dataset_id(sid)
-    _suppress(ds, _business_key_of(ds, _ROWS_COMPOSITE[0]))  # erase (OrderID 5, LineID 2)
+    _suppress(
+        ds, _business_key_of(ds, _ROWS_COMPOSITE[0])
+    )  # erase (OrderID 5, LineID 2)
 
     _profile(client, admin_headers, monkeypatch, sid, _ROWS_COMPOSITE_JSON)
 
     city = _profile_row(_field_id(ds, "City"))
     assert city is not None
-    assert "Zurich" not in {city["min_value"], city["max_value"], city["most_common_value"]}
+    assert "Zurich" not in {
+        city["min_value"],
+        city["max_value"],
+        city["most_common_value"],
+    }
     assert city["max_value"] == "Berlin"  # erased subject's "Zurich" gone
-    assert city["min_value"] == "Amsterdam"  # near-twin (5, 3) RETAINED — full key matched
+    assert (
+        city["min_value"] == "Amsterdam"
+    )  # near-twin (5, 3) RETAINED — full key matched
     assert city["row_count"] == 3  # counts stay full-sample
