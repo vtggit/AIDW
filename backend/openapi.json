@@ -7257,6 +7257,124 @@
         }
       }
     },
+    "/api/deletion-requests/{entity_id}/verify": {
+      "post": {
+        "tags": [
+          "deletion-requests"
+        ],
+        "summary": "Verify Deletion Request",
+        "description": "Identity verified off-system: received -> verifying (the claimable state). In inline\nexecutor mode the erasure then runs synchronously (no egress, no egress gate).",
+        "operationId": "verify_deletion_request_api_deletion_requests__entity_id__verify_post",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deletion-requests/{entity_id}/reject": {
+      "post": {
+        "tags": [
+          "deletion-requests"
+        ],
+        "summary": "Reject Deletion Request",
+        "description": "received|verifying -> rejected; terminal states win (409 on anything else).",
+        "operationId": "reject_deletion_request_api_deletion_requests__entity_id__reject_post",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/suppression-entries": {
       "get": {
         "tags": [
