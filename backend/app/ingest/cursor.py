@@ -18,6 +18,7 @@ import math
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.governance.hashing import subject_key_hash
 from app.ingest.mapper import business_key, normalize_cursor_value
 
 logger = logging.getLogger(__name__)
@@ -107,44 +108,55 @@ def apply_rows(
     page_full: bool = False,
 ) -> dict:
     """Upsert each row into the op-log and advance the watermark. Returns the observable counts:
-    rows_read/rows_written/inserts/updates/skipped_no_key and the new_watermark (unchanged if no
-    row was safely later)."""
+    rows_read/rows_written/inserts/updates/skipped_no_key/rows_suppressed and the new_watermark
+    (unchanged if no row was safely later).
+
+    Suppression (#76 RTBF): an erased subject's row is read but NEVER stored — no op-log
+    upsert — while its cursor value still advances the watermark like any other row's
+    (suppression is not a data error; a suppressed row at the page tail must not stall the
+    cursor). The dataset's suppression hashes load once per page, and hashing (which needs
+    the pepper) happens only when the dataset actually has suppression entries."""
     now = now or datetime.now(timezone.utc)
-    inserts = updates = skipped = 0
+    inserts = updates = skipped = suppressed_count = 0
+    suppressed_hashes = _load_suppressed_hashes(cur, dataset_id)
     values: list[str] = []
     for row in rows:
         key = business_key(row, key_fields)
         if key is None:
             skipped += 1
             continue
-        # xmax = 0 only on a freshly inserted row — the standard upsert insert-vs-update probe
-        cur.execute(
-            "INSERT INTO ingested_records (id, name, run_id, dataset_id, business_key, "
-            "op, ingested_at, created_at, updated_at) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON CONFLICT (dataset_id, business_key) DO UPDATE SET "
-            "op = %s, run_id = %s, ingested_at = %s, updated_at = %s "
-            "RETURNING (xmax = 0) AS inserted",
-            (
-                str(uuid4()),
-                f"rec:{key}"[:255],
-                run_id,
-                dataset_id,
-                key,
-                "insert",
-                now,
-                now,
-                now,
-                "update",
-                run_id,
-                now,
-                now,
-            ),
-        )
-        if cur.fetchone()["inserted"]:
-            inserts += 1
+        if suppressed_hashes and subject_key_hash(dataset_id, key) in suppressed_hashes:
+            suppressed_count += 1  # erased subject: read, counted, never stored
         else:
-            updates += 1
+            # xmax = 0 only on a freshly inserted row — the standard upsert
+            # insert-vs-update probe
+            cur.execute(
+                "INSERT INTO ingested_records (id, name, run_id, dataset_id, "
+                "business_key, op, ingested_at, created_at, updated_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (dataset_id, business_key) DO UPDATE SET "
+                "op = %s, run_id = %s, ingested_at = %s, updated_at = %s "
+                "RETURNING (xmax = 0) AS inserted",
+                (
+                    str(uuid4()),
+                    f"rec:{key}"[:255],
+                    run_id,
+                    dataset_id,
+                    key,
+                    "insert",
+                    now,
+                    now,
+                    now,
+                    "update",
+                    run_id,
+                    now,
+                    now,
+                ),
+            )
+            if cur.fetchone()["inserted"]:
+                inserts += 1
+            else:
+                updates += 1
         if cursor_field:
             value = normalize_cursor_value(row.get(cursor_field))
             if value is not None and _acceptable(value, cursor_kind):
@@ -155,9 +167,20 @@ def apply_rows(
         "inserts": inserts,
         "updates": updates,
         "skipped_no_key": skipped,
+        "rows_suppressed": suppressed_count,
         "new_watermark": (
             _advance(values, watermark, cursor_kind, page_full)
             if cursor_field
             else watermark
         ),
     }
+
+
+def _load_suppressed_hashes(cur, dataset_id: str) -> set[str]:
+    """The dataset's suppression list (#76): erased subjects must not be resurrected by
+    re-ingest. Empty for datasets with no erasures — and only a non-empty list ever needs
+    the pepper (a missing pepper then fails the run loudly rather than resurrecting)."""
+    cur.execute(
+        "SELECT key_hash FROM suppression_entries WHERE dataset_id = %s", (dataset_id,)
+    )
+    return {r["key_hash"] for r in cur.fetchall()}

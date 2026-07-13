@@ -253,11 +253,13 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
             # idempotent upserts and stay, which is safe)
             cur.execute(
                 "UPDATE runs SET status = %s, rows_read = %s, rows_written = %s, "
+                "rows_suppressed = %s, "
                 "finished_at = %s, updated_at = %s WHERE id = %s AND status = 'running'",
                 (
                     "succeeded",
                     result["rows_read"],
                     result["rows_written"],
+                    result["rows_suppressed"],
                     finished,
                     finished,
                     run_id,
