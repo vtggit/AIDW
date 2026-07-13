@@ -18,8 +18,24 @@ name: Backend CI
 on:
   push:
     branches: [main, master]
+    # Pure-documentation pushes need no build (prose can't break code). Any non-doc file
+    # in the change set makes paths-ignore not match, so mixed PRs still run everything.
+    # Nothing CI-executed may live under docs/ — keep runnable tests under backend/tests.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
     branches: [main, master]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+
+# Cancel a superseded run (e.g. a force-push) instead of letting both finish — the main
+# GitHub Actions-minutes saver during iterative work. Keyed per ref, so distinct PRs and
+# main are independent; only redundant runs of the SAME ref are cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release-metadata:
