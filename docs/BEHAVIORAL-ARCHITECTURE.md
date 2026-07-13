@@ -576,12 +576,16 @@ DB-backup-grade `[MI]`. Three verification-forced semantics:
   refetches forever. Test: full page suppressed ⇒ `rows_suppressed` = page size, zero op-log
   rows, watermark ADVANCED. `runs.rows_suppressed` is the observable output state (the
   reward-hack guard).
-- **Profiling consults the same suppression module.** `profile_source` (auto-triggered after
-  every successful ingest) re-samples the LIVE source — unfiltered, it would repopulate raw
-  min/max/most_common with the subject's values one cycle later, resurrecting exactly what was
-  erased, under the same premise the suppression list exists for (the source may not have erased
-  the subject). It derives each sampled row's business_key via the dataset's `is_key` fields and
-  drops suppressed rows before `_stats`. Test: erase, re-profile from an unchanged fixture,
+- **Profiling must consult the same suppression module (planned — #76 follow-up).** _**Status
+  (2026-07-13): SPECIFIED, NOT YET IMPLEMENTED.** `profile_source` does not currently consult the suppression list — this is the
+  active #76 follow-up gap. Until it lands, an erasure's profile value-column NULLing is undone by
+  the next profiling pass whenever the upstream source still holds the subject, so subjects must
+  also be erased at the source. The intended behavior described below is the target._ `profile_source`
+  (auto-triggered after every successful ingest) re-samples the LIVE source — unfiltered, it would
+  repopulate raw min/max/most_common with the subject's values one cycle later, resurrecting exactly
+  what was erased, under the same premise the suppression list exists for (the source may not have
+  erased the subject). It must derive each sampled row's business_key via the dataset's `is_key`
+  fields and drop suppressed rows before `_stats`. Test: erase, re-profile from an unchanged fixture,
   assert the subject's values are absent.
 
 **M6 landing arrival contract (designed now, lands compliant):** every per-dataset landing table
