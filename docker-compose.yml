@@ -13,7 +13,7 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - aicrm-postgres-data:/var/lib/postgresql/data
+      - aidw-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -175,5 +175,5 @@ services:
       - backend
 
 volumes:
-  aicrm-postgres-data:
+  aidw-postgres-data:
     driver: local

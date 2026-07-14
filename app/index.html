@@ -16,6 +16,25 @@
   <main class="wh-main">
     <section class="wh-panel">
       <div class="wh-panel-head">
+        <h2>Data sources <span class="badge wh-count" id="sources-count" data-testid="sources-count">0</span></h2>
+        <p class="wh-sub">Register a server and discover its schema — datasets, fields,
+        dashboard suggestions, and PII flags all flow from here. Anonymous-auth OData
+        servers in this version; credentialed sources are configured via the API.</p>
+      </div>
+      <form id="source-form" class="src-form" data-testid="source-form">
+        <input id="src-name" type="text" placeholder="Name (e.g. ERP production)" required />
+        <input id="src-endpoint" type="url" placeholder="https://host/odata/Service.svc" required />
+        <select id="src-version" title="OData protocol version">
+          <option value="v4">OData v4</option>
+          <option value="v2">OData v2</option>
+        </select>
+        <button id="src-submit" type="submit" class="btn btn-primary">Add &amp; discover</button>
+      </form>
+      <div id="sources" class="src-list" data-testid="sources"></div>
+    </section>
+
+    <section class="wh-panel">
+      <div class="wh-panel-head">
         <h2>Suggested dashboard items <span class="badge wh-count" id="inbox-count" data-testid="inbox-count">0</span></h2>
         <p class="wh-sub">Generated automatically from your discovered schema — no rows required.
         Accept the useful ones; dismiss the noise.</p>
@@ -48,6 +67,7 @@
   <script src="js/auth.js"></script>
   <script src="js/api.js"></script>
   <script src="js/warehouse.js"></script>
-  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init(); });</script>
+  <script src="js/sources.js"></script>
+  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); });</script>
 </body>
 </html>
