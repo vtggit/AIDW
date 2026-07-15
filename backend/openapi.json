@@ -3523,6 +3523,63 @@
         }
       }
     },
+    "/api/dashboard-items/{entity_id}/data": {
+      "get": {
+        "tags": [
+          "dashboard-items"
+        ],
+        "summary": "Get Dashboard Item Data",
+        "description": "Sampled, suppression-filtered chart series for one item (interim in-API egress).\n\nGated by ENABLE_INAPI_EGRESS like discovery/profiling; the endpoint fetched is the\nadmin-configured source connection, never caller input.",
+        "operationId": "get_dashboard_item_data_api_dashboard_items__entity_id__data_get",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dashboard-item-fields": {
       "get": {
         "tags": [

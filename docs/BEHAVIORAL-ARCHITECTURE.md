@@ -205,6 +205,38 @@ Rule sketch: categorical low-card → bar/pie; numeric measure + categorical dim
 temporal + measure → line; single high-fill numeric → KPI; high-card string → table.
 `score = fill_rate × cardinality_fit × type_fit`.
 
+### Chart data for accepted items (interim in-API egress)
+
+An accepted item renders as a real chart in the warehouse UI via
+`GET /api/dashboard-items/{id}/data` (any authenticated user; gated by `ENABLE_INAPI_EGRESS`
+like discovery/profiling — 503 when off). There is deliberately **no local row store to
+query yet** (typed landing tables are Milestone 6), so the endpoint reuses profiling's seam:
+resolve the item's role-tagged fields to its dataset (field-less row-count KPIs resolve via
+`source_suggestion_id -> suggestions.dataset_id`), fetch one sampled page
+(`{endpoint}/{set}?$top=200`), aggregate in Python (`count`/`sum`/`avg` grouped by the
+`dimension` — or `temporal`, sorted chronologically — field; no dimension = single-point KPI;
+`none` = 422 not chartable), and return `series: [{label, value}]` with
+`sample_size`/`buckets_total` provenance (top-20 buckets, `truncated` flagged; fetch
+failures are logged server-side and surface as a generic 422 — no upstream error text).
+When landing tables land, only the row source changes (SQL replaces the live sample).
+
+Governance is inherited, not re-invented:
+- **PII:** any referenced field with an ACTIVE flag (`flagged` or `confirmed`) withholds the
+  whole item (422) — a pending review reads as PII until decided, mirroring profiling's
+  detect-before-write withholding.
+- **RTBF:** suppressed subjects are dropped from the ENTIRE aggregation — unlike profiling,
+  which keeps non-personal counts full-sample, a chart's labels ARE row values, so counts and
+  totals exclude erased subjects too. `sample_size` is reported POST-suppression: the erased
+  subject is invisible, never visibly redacted (no pre/post pair that would telegraph how many
+  rows were erased), and the suppression list is read AFTER the live fetch so an erasure
+  committed mid-fetch still applies. Same fail-closed pepper contract as ingest/profiling:
+  hashing only runs when the dataset has suppression entries; a missing pepper then raises
+  rather than serving the erased subject (`test_dashboard_item_data.py` pins all of this).
+
+The SPA fills each item's chart after the dashboards render (`_fillCharts`), drawing inline
+SVG in-house (bar/line/KPI + a value-list fallback; no chart library) with a provenance
+footer, and shows the 503/422 reasons as notes instead of charts.
+
 ---
 
 ## 7. Verification corrections applied
