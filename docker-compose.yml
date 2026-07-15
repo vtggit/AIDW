@@ -71,6 +71,7 @@ services:
       AUTH_CLIENT_ID: ${AUTH_CLIENT_ID:-aidw-backend}
       AUTH_AUDIENCE: ${AUTH_AUDIENCE:-aidw-backend}
       AUTH_ALGORITHMS: ${AUTH_ALGORITHMS:-RS256}
+      AUTH_JWKS_URL: ${AUTH_JWKS_URL:-}
       AUTH_JWKS_CACHE_TTL: ${AUTH_JWKS_CACHE_TTL:-3600}
       AUTH_ROLE_CLAIMS: ${AUTH_ROLE_CLAIMS:-roles,realm_access.roles,resource_access.{client_id}.roles}
       AUTH_GROUP_CLAIMS: ${AUTH_GROUP_CLAIMS:-groups}

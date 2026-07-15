@@ -43,10 +43,12 @@ const Auth = {
         // so subsequent page loads don't lose it.
         this._migrateTokenFromHash();
 
-        // First, fetch public auth config to confirm auth is enabled
+        // First, fetch public auth config to confirm auth is enabled + cache it
+        // for login() (issuer/clientId drive the OIDC redirect).
         try {
             const configResult = await ApiClient.get('/auth/config');
             if (configResult.ok && configResult.data) {
+                this._publicConfig = configResult.data;
                 // Config.AUTH_ENABLED is a compile-time default; the
                 // backend's runtime value is authoritative.
                 if (configResult.data.authEnabled === false) {
@@ -61,6 +63,11 @@ const Auth = {
 
         // Attempt to resolve the current user
         this._setUserFromAuthResult(await ApiClient.get('/auth/me'));
+    },
+
+    /** Is the backend running real IdP (production) auth? Drives dev-token vs redirect. */
+    isProductionAuth() {
+        return (this._publicConfig || {}).authMode === 'production';
     },
 
     /**
@@ -197,6 +204,39 @@ const Auth = {
      * local auth state.  Works for both development tokens and real
      * IdP JWTs — the backend decides which validation path to use.
      */
+    /**
+     * Redirect the browser to the IdP's OIDC implicit-flow authorize endpoint.
+     * Comes back to this exact page with `#access_token=...`, which
+     * _migrateTokenFromHash() then adopts. Driven entirely by the backend's
+     * public /auth/config (issuer + clientId), so no per-app IdP config.
+     */
+    async login() {
+        let cfg = this._publicConfig;
+        if (!cfg) {
+            const res = await ApiClient.get('/auth/config');
+            cfg = (res.ok && res.data) || {};
+        }
+        if (!cfg.issuer || !cfg.clientId) {
+            console.error('Cannot start login — /auth/config lacks issuer/clientId', cfg);
+            return;
+        }
+        const redirect = window.location.origin + window.location.pathname;
+        const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        const url = cfg.issuer.replace(/\/+$/, '')
+            + '/protocol/openid-connect/auth'
+            + '?response_type=token'
+            + '&client_id=' + encodeURIComponent(cfg.clientId)
+            + '&redirect_uri=' + encodeURIComponent(redirect)
+            + '&scope=' + encodeURIComponent('openid profile email')
+            + '&nonce=' + encodeURIComponent(nonce);
+        window.location.assign(url);
+    },
+
+    /** True once init() has resolved a valid user. */
+    isAuthenticated() {
+        return !!this._user;
+    },
+
     async loginWithToken(token) {
         this._setToken(token);
         const meResult = await ApiClient.get('/auth/me');
