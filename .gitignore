@@ -47,3 +47,6 @@ yarn.lock
 
 # Playwright / E2E artifacts (per-run harness output)
 test-results/
+
+# Playwright junit artifact (generated per run)
+app/tests/report.xml

@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
+from app.config import ENABLE_INAPI_EGRESS
+from app.dashboard.data_service import ChartDataError, item_data
 from app.models.dashboard_items import (
     DashboardItemCreate,
     DashboardItemResponse,
@@ -57,6 +59,33 @@ def get_dashboard_item(
             detail=f"DashboardItem '{entity_id}' not found.",
         )
     return entity
+
+
+@router.get("/{entity_id}/data")
+def get_dashboard_item_data(
+    entity_id: str,
+    _user: AuthUser = Depends(require_authenticated_user),
+):
+    """Sampled, suppression-filtered chart series for one item (interim in-API egress).
+
+    Gated by ENABLE_INAPI_EGRESS like discovery/profiling; the endpoint fetched is the
+    admin-configured source connection, never caller input.
+    """
+    if not ENABLE_INAPI_EGRESS:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "live chart data is disabled (set ENABLE_INAPI_EGRESS=true to enable the "
+            "interim in-API egress path)",
+        )
+    try:
+        return item_data(entity_id)
+    except LookupError:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            f"DashboardItem '{entity_id}' not found.",
+        )
+    except ChartDataError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
 
 
 @router.put("/{entity_id}", response_model=DashboardItemResponse)

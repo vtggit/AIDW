@@ -3,7 +3,9 @@
  *
  * Renders the two halves of the differentiator loop and wires the accept/dismiss actions:
  *   • Inbox     — GET /suggestions, show the 'suggested' ones with Accept / Dismiss buttons.
- *   • Dashboards— GET /dashboards + /dashboard-items, show accepted items grouped by dashboard.
+ *   • Dashboards— GET /dashboards + /dashboard-items, show accepted items grouped by dashboard,
+ *                 then fill each item's chart from GET /dashboard-items/{id}/data (sampled,
+ *                 suppression-filtered series; SVG drawn in-house, no chart library).
  *
  * Talks to the backend only through ApiClient (never fetch() directly). Render helpers are pure
  * (data -> HTML string) so they can be unit-tested; init()/refresh() do the I/O + DOM wiring.
@@ -75,6 +77,39 @@ const Warehouse = {
             return;
         }
         el.innerHTML = this.renderDashboards(dRes.data || [], iRes.data || []);
+        await this._fillCharts(el, iRes.data || []);
+    },
+
+    /**
+     * Fetch each item's chart series and fill its placeholder. Runs after EVERY dashboards
+     * render (innerHTML replaces the nodes), so it must tolerate re-entry and nodes that were
+     * re-rendered underneath a slow response — a stale fill is simply dropped.
+     */
+    async _fillCharts(root, items) {
+        await Promise.all(items.map(async (i) => {
+            const res = await ApiClient.get(`/dashboard-items/${encodeURIComponent(i.id)}/data`);
+            const holder = Array.from(root.querySelectorAll('[data-testid="chart"]'))
+                .find((n) => n.getAttribute('data-id') === String(i.id));
+            if (!holder) return;
+            if (res.ok) {
+                holder.innerHTML = Warehouse.renderChart(res.data || {});
+            } else if (res.status === 503) {
+                holder.innerHTML = Warehouse._chartNote('Live data is off for this environment.');
+            } else if (res.status === 422) {
+                holder.innerHTML = Warehouse._chartNote(Warehouse._errText(res, 'Not chartable.'));
+            } else {
+                holder.innerHTML = Warehouse._chartNote('Could not load data.', true);
+            }
+        }));
+    },
+
+    /** Best-effort human text out of an ApiClient failure without assuming its error shape. */
+    _errText(res, fallback) {
+        const e = res && res.error;
+        if (typeof e === 'string' && e) return e;
+        if (e && typeof e.detail === 'string') return e.detail;
+        if (e && typeof e.message === 'string') return e.message;
+        return fallback;
     },
 
     // ---- pure render helpers (data -> HTML) ---------------------------------
@@ -131,7 +166,105 @@ const Warehouse = {
         return `<div class="wh-item" data-testid="dashboard-item" data-id="${Warehouse._attr(i.id)}">
       <span class="badge wh-chart">${Warehouse._chartLabel(i.item_type)}</span>
       <span class="wh-title">${Warehouse._esc(i.title || i.name || '')}</span>
+      <div class="wh-item-chart" data-testid="chart" data-id="${Warehouse._attr(i.id)}">${Warehouse._chartNote('Loading data…')}</div>
     </div>`;
+    },
+
+    // ---- chart rendering (pure; SVG built in-house, values escaped/coerced) --
+
+    /** Dispatch a /data payload to the item_type's renderer. */
+    renderChart(d) {
+        const series = Array.isArray(d.series) ? d.series : [];
+        if (!series.length) return Warehouse._chartNote('No data in the sample.');
+        const meta = Warehouse._chartMeta(d, series);
+        if (d.item_type === 'kpi' || !d.dimension) return Warehouse.renderKpi(series[0], meta);
+        if (d.item_type === 'line') return Warehouse.renderLineChart(series, meta);
+        if (d.item_type === 'bar' || d.item_type === 'pie') return Warehouse.renderBarChart(series, meta);
+        return Warehouse.renderValueList(series, meta);
+    },
+
+    renderBarChart(series, meta) {
+        const W = 320; const H = 140; const top = 14; const bottom = 24; const side = 4;
+        const plotW = W - side * 2;
+        const plotH = H - top - bottom;
+        const max = Math.max(0, ...series.map((p) => Number(p.value) || 0));
+        const n = series.length;
+        const slot = plotW / n;
+        const barW = Math.max(2, slot * 0.72);
+        const bars = series.map((p, idx) => {
+            const v = Math.max(0, Number(p.value) || 0);
+            const h = max > 0 ? (v / max) * plotH : 0;
+            const x = side + idx * slot + (slot - barW) / 2;
+            const y = top + plotH - h;
+            const cx = (x + barW / 2).toFixed(1);
+            const valText = n <= 12
+                ? `<text x="${cx}" y="${(y - 3).toFixed(1)}" text-anchor="middle" class="wh-svg-val">${Warehouse._esc(Warehouse._fmtNum(v))}</text>`
+                : '';
+            const axText = n <= 8
+                ? `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="wh-svg-label">${Warehouse._esc(Warehouse._trim(p.label, 10))}</text>`
+                : '';
+            return `<g><title>${Warehouse._esc(p.label)}: ${Warehouse._esc(Warehouse._fmtNum(v))}</title>`
+                + `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="2" class="wh-svg-bar" data-testid="chart-bar"></rect>`
+                + valText + axText + '</g>';
+        }).join('');
+        return `<svg viewBox="0 0 ${W} ${H}" role="img" data-testid="chart-svg">${bars}</svg>${meta}`;
+    },
+
+    renderLineChart(series, meta) {
+        const W = 320; const H = 140; const top = 14; const bottom = 24; const side = 8;
+        const plotW = W - side * 2;
+        const plotH = H - top - bottom;
+        const vals = series.map((p) => Number(p.value) || 0);
+        const max = Math.max(0, ...vals);
+        const step = series.length > 1 ? plotW / (series.length - 1) : 0;
+        const pt = (v, idx) => {
+            const x = series.length > 1 ? side + idx * step : W / 2;
+            const y = top + plotH - (max > 0 ? (Math.max(0, v) / max) * plotH : 0);
+            return [x, y];
+        };
+        const points = vals.map((v, idx) => pt(v, idx).map((c) => c.toFixed(1)).join(',')).join(' ');
+        const dots = vals.map((v, idx) => {
+            const [x, y] = pt(v, idx);
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" class="wh-svg-dot"><title>${Warehouse._esc(series[idx].label)}: ${Warehouse._esc(Warehouse._fmtNum(v))}</title></circle>`;
+        }).join('');
+        const first = series[0]; const last = series[series.length - 1];
+        const labels = `<text x="${side}" y="${H - 8}" text-anchor="start" class="wh-svg-label">${Warehouse._esc(Warehouse._trim(first.label, 14))}</text>`
+            + (series.length > 1 ? `<text x="${W - side}" y="${H - 8}" text-anchor="end" class="wh-svg-label">${Warehouse._esc(Warehouse._trim(last.label, 14))}</text>` : '');
+        return `<svg viewBox="0 0 ${W} ${H}" role="img" data-testid="chart-svg"><polyline points="${points}" class="wh-svg-line"></polyline>${dots}${labels}</svg>${meta}`;
+    },
+
+    renderKpi(point, meta) {
+        const v = Number(point.value);
+        return `<div class="wh-kpi" data-testid="chart-kpi">${Warehouse._esc(Warehouse._fmtNum(Number.isFinite(v) ? v : 0))}</div>${meta}`;
+    },
+
+    /** Fallback for table/unknown item types: a compact label -> value list. */
+    renderValueList(series, meta) {
+        const rows = series.map((p) => `<div class="wh-chart-row"><span>${Warehouse._esc(Warehouse._trim(p.label, 32))}</span><span>${Warehouse._esc(Warehouse._fmtNum(Number(p.value) || 0))}</span></div>`).join('');
+        return `${rows}${meta}`;
+    },
+
+    /** Provenance footer: what was aggregated and over how many sampled rows. */
+    _chartMeta(d, series) {
+        const what = `${d.aggregation || ''}(${d.measure || 'rows'})${d.dimension ? ` by ${d.dimension}` : ''}`;
+        const sampled = `${Number(d.sample_size) || 0} sampled rows`;
+        const cap = d.truncated ? ` · top ${series.length} of ${Number(d.buckets_total) || 0}` : '';
+        return `<div class="wh-chart-meta" data-testid="chart-meta">${Warehouse._esc(`${what} · ${sampled}${cap}`)}</div>`;
+    },
+
+    _chartNote(msg, isError) {
+        return `<span class="wh-chart-note${isError ? ' wh-err' : ''}" data-testid="chart-note">${Warehouse._esc(msg)}</span>`;
+    },
+
+    _fmtNum(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return '0';
+        return Number.isInteger(n) ? String(n) : n.toFixed(2);
+    },
+
+    _trim(s, n) {
+        const str = String(s == null ? '' : s);
+        return str.length > n ? `${str.slice(0, n - 1)}…` : str;
     },
 
     // ---- actions ------------------------------------------------------------
