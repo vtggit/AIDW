@@ -21,16 +21,15 @@ const Warehouse = {
     },
 
     /**
-     * Dev convenience: if auth is on and no token is present, sign in with the development admin
-     * token so the demo works out of the box. In any non-dev environment we only adopt an
-     * already-present token (set by a real login / OIDC redirect).
+     * Resolve auth. init() first (adopts a #access_token from an OIDC redirect and reads the
+     * backend's auth mode). If still unauthenticated: dev-token in development mode; in production
+     * (Keycloak) leave it to _renderAuth to show a Log in button that redirects to the IdP.
      */
     async _ensureAuth() {
         if (typeof Auth === 'undefined') return;
-        if (!Auth.getAuthorizationHeader() && Config.ENVIRONMENT === 'development') {
+        await Auth.init();
+        if (!Auth.isAuthenticated() && !Auth.isProductionAuth()) {
             await Auth.loginWithToken('dev-secret-token:admin');
-        } else {
-            await Auth.init();
         }
     },
 
@@ -38,7 +37,15 @@ const Warehouse = {
         const el = document.getElementById('auth-status');
         if (!el) return;
         const user = Auth.getCurrentUser && Auth.getCurrentUser();
-        el.textContent = user ? `Signed in · ${user.username || user.sub || 'admin'}` : 'Not signed in';
+        if (user) {
+            el.textContent = `Signed in · ${user.username || user.sub || 'user'}`;
+        } else if (Auth.isProductionAuth && Auth.isProductionAuth()) {
+            el.innerHTML = '<button class="btn btn-primary" id="wh-login">Log in</button>';
+            const b = document.getElementById('wh-login');
+            if (b) b.addEventListener('click', () => Auth.login());
+        } else {
+            el.textContent = 'Not signed in';
+        }
     },
 
     async refresh() {
