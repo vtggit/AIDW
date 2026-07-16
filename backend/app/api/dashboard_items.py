@@ -115,3 +115,30 @@ def delete_dashboard_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"DashboardItem '{entity_id}' not found.",
         )
+
+
+@router.get("/{entity_id}/series")
+def get_dashboard_item_series(
+    entity_id: str,
+    _user: AuthUser = Depends(require_authenticated_user),
+):
+    """Sampled, suppression-filtered series for one dashboard_item (computed-series
+    lane; interim in-API egress)."""
+    from app.config import ENABLE_INAPI_EGRESS
+    from app.series.dashboard_item_series import SeriesDataError, series_data
+
+    if not ENABLE_INAPI_EGRESS:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "live series data is disabled (set ENABLE_INAPI_EGRESS=true to "
+            "enable the interim in-API egress path)",
+        )
+    try:
+        return series_data(entity_id)
+    except LookupError:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            f"DashboardItem '{entity_id}' not found.",
+        )
+    except SeriesDataError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))

@@ -3580,6 +3580,63 @@
         }
       }
     },
+    "/api/dashboard-items/{entity_id}/series": {
+      "get": {
+        "tags": [
+          "dashboard-items"
+        ],
+        "summary": "Get Dashboard Item Series",
+        "description": "Sampled, suppression-filtered series for one dashboard_item (computed-series\nlane; interim in-API egress).",
+        "operationId": "get_dashboard_item_series_api_dashboard_items__entity_id__series_get",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dashboard-item-fields": {
       "get": {
         "tags": [
