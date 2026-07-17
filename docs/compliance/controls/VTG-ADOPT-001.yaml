@@ -1,0 +1,23 @@
+# VTG control record — compliance-gate corpus (company-authored adoption policy v1)
+id: VTG-ADOPT-001
+family: Adoption Policy
+title: Open-source tier only — the product must stand on its own
+source:
+  framework: company policy (operator-set 2026-07-16)
+  section: adoption
+  note: not derived from regulation — a standing company constraint
+cmmc_level: null
+statement: >
+  A third-party component must be fully usable in its open-source tier. No core
+  product function may depend on a paid or enterprise edition, an
+  enterprise-only feature, or an enterprise license key. If a needed capability
+  is enterprise-only, the adoption must either substitute an open-source
+  alternative for that capability or be declined. The component's actual
+  license (and the licenses of any companion tooling) must be verified, never
+  assumed.
+applicability_tags: [adoption]
+severity: high
+version: 1
+status: ratified
+ratified_by: operator (interim ratifier — theoretical-company phase)
+ratified_date: "2026-07-16"

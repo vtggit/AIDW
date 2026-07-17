@@ -1,0 +1,19 @@
+# VTG control record — compliance-gate corpus (controls-not-law; OSCAL-inspired v1)
+id: 800-171-3.13.11
+family: System & Communications Protection
+title: FIPS-validated cryptography for CUI confidentiality
+source:
+  framework: NIST SP 800-171 rev 2
+  section: "3.13.11"
+  note: citation only — the statement below is the company-ratified operative rule
+cmmc_level: 2
+statement: >
+  CUI confidentiality must be protected with FIPS-validated cryptography, at
+  rest and in transit. A component holding CUI in an unencrypted store, or a
+  CUI channel using non-validated cryptography, does not meet the bar.
+applicability_tags: [cui, adoption]
+severity: high
+version: 1
+status: ratified
+ratified_by: operator (interim ratifier — theoretical-company phase)
+ratified_date: "2026-07-16"

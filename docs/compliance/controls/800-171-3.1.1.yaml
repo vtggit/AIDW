@@ -1,0 +1,20 @@
+# VTG control record — compliance-gate corpus (controls-not-law; OSCAL-inspired v1)
+id: 800-171-3.1.1
+family: Access Control
+title: Limit CUI system access to authorized users
+source:
+  framework: NIST SP 800-171 rev 2
+  section: "3.1.1"
+  note: citation only — the statement below is the company-ratified operative rule
+cmmc_level: 2
+statement: >
+  Any surface that stores, processes, or exposes CUI must require authentication,
+  and access must be limited to users, processes, and devices explicitly
+  authorized for that CUI. No anonymous or default-open access to a CUI-bearing
+  endpoint, datastore, queue, or file share.
+applicability_tags: [cui]
+severity: high
+version: 1
+status: ratified
+ratified_by: operator (interim ratifier — theoretical-company phase)
+ratified_date: "2026-07-16"
