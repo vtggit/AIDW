@@ -1,0 +1,20 @@
+# VTG control record — compliance-gate corpus (controls-not-law; OSCAL-inspired v1)
+id: 800-171-3.8.3
+family: Media Protection
+title: Sanitize CUI media before disposal or reuse
+source:
+  framework: NIST SP 800-171 rev 2
+  section: "3.8.3"
+  note: citation only — the statement below is the company-ratified operative rule
+cmmc_level: 2
+statement: >
+  When a component, datastore, volume, or backup that held CUI is removed,
+  replaced, or repurposed, its CUI content must be sanitized or destroyed as
+  part of the decommission path. Adoptions must state their disposition story
+  up front: how is CUI removed from the component when the component goes away?
+applicability_tags: [cui, adoption]
+severity: high
+version: 1
+status: ratified
+ratified_by: operator (interim ratifier — theoretical-company phase)
+ratified_date: "2026-07-16"

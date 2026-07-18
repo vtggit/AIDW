@@ -1,0 +1,23 @@
+# VTG control record — compliance-gate corpus (controls-not-law; OSCAL-inspired v1)
+id: 800-171-3.1.3
+family: Access Control
+title: Control the flow of CUI
+source:
+  framework: NIST SP 800-171 rev 2
+  section: "3.1.3"
+  note: citation only — the statement below is the company-ratified operative rule
+cmmc_level: 2
+statement: >
+  CUI may only flow between systems, components, and datastores inside the
+  approved authorization boundary. Introducing a NEW component that will store
+  or process CUI (including workflow process variables, queues, caches, or
+  logs that may carry it) widens the boundary and requires explicit approval
+  of that component's placement, protection, and audit posture BEFORE CUI
+  reaches it. No CUI egress to uncontrolled destinations (public buckets,
+  third-party SaaS, personal email).
+applicability_tags: [cui, adoption]
+severity: high
+version: 1
+status: ratified
+ratified_by: operator (interim ratifier — theoretical-company phase)
+ratified_date: "2026-07-16"
