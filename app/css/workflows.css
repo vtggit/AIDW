@@ -1,0 +1,42 @@
+/* BPMN authoring panel (bpmn-js, vendored). The canvas is a fixed-height framed area;
+   the toolbar sits ABOVE it so nothing overlaps the bpmn.io watermark, which bpmn-js
+   renders at the canvas bottom-right (VTG-ADOPT-001 attribution — must stay visible). */
+
+.wf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.wf-toolbar .wf-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.wf-toolbar input[type="file"] {
+  font-size: 0.85rem;
+  max-width: 15rem;
+}
+
+.bpmn-canvas {
+  position: relative;
+  height: 30rem;
+  border: 1px solid var(--wh-border, #d9dee6);
+  border-radius: 8px;
+  background: #fdfdfd;
+  overflow: hidden;
+}
+
+/* bpmn-js injects its own SVG; make sure it fills the frame */
+.bpmn-canvas .djs-container,
+.bpmn-canvas svg {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* NEVER hide, move, resize, restyle, or overlap the bpmn.io watermark
+   (.bjs-powered-by, bottom-right). Leaving these rules absent by design —
+   this comment documents the deliberate non-action for the license review. */

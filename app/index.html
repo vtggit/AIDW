@@ -6,6 +6,10 @@
   <title>AIDW — AI Data Warehouse</title>
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/warehouse.css" />
+  <link rel="stylesheet" href="vendor/bpmn-js/assets/diagram-js.css" />
+  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-js.css" />
+  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-font/css/bpmn.css" />
+  <link rel="stylesheet" href="css/workflows.css" />
 </head>
 <body>
   <header class="wh-header">
@@ -59,6 +63,26 @@
       </div>
       <div id="pii-inbox" class="wh-pii-groups" data-testid="pii-inbox"></div>
     </section>
+
+    <section class="wh-panel">
+      <div class="wh-panel-head">
+        <h2>Workflow authoring <span class="badge">BPMN 2.0</span></h2>
+        <p class="wh-sub">Author business processes with the embedded bpmn.io editor —
+        the same BPMN 2.0 XML the Flowable open-source engine runs (never the
+        enterprise modeler). Start fresh, open a <code>.bpmn</code> file, or export
+        XML/SVG. Deploying a definition to the engine is a separate, governed step.</p>
+      </div>
+      <div class="wf-toolbar" data-testid="bpmn-toolbar">
+        <button id="bpmn-new" type="button" class="btn btn-secondary">New</button>
+        <label class="wf-open btn btn-secondary">Open .bpmn
+          <input id="bpmn-open" type="file"
+                 accept=".bpmn,.xml,application/xml,text/xml" hidden />
+        </label>
+        <button id="bpmn-download" type="button" class="btn btn-primary" data-testid="bpmn-download">Download BPMN</button>
+        <button id="bpmn-download-svg" type="button" class="btn btn-secondary">Download SVG</button>
+      </div>
+      <div id="bpmn-canvas" class="bpmn-canvas" data-testid="bpmn-canvas"></div>
+    </section>
   </main>
 
   <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
@@ -68,6 +92,8 @@
   <script src="js/api.js"></script>
   <script src="js/warehouse.js"></script>
   <script src="js/sources.js"></script>
-  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); });</script>
+  <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
+  <script src="js/workflows.js"></script>
+  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); Workflows.init(); });</script>
 </body>
 </html>

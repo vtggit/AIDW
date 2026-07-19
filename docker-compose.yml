@@ -87,6 +87,9 @@ services:
       # "worker" (API enqueues only; the worker service below claims and executes)
       INGEST_EXECUTOR: ${INGEST_EXECUTOR:-inline}
       ENABLE_INAPI_EGRESS: ${ENABLE_INAPI_EGRESS:-false}
+      FLOWABLE_BASE_URL: ${FLOWABLE_BASE_URL:-}
+      FLOWABLE_REST_USER: ${FLOWABLE_REST_USER:-}
+      FLOWABLE_REST_PASSWORD: ${FLOWABLE_REST_PASSWORD:-}
 
       # Right-to-be-forgotten suppression pepper (governance #76). The HMAC key that makes
       # erased-subject hashes non-attributable. Leave UNSET for deployments that never execute
