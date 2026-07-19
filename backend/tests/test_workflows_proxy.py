@@ -24,6 +24,14 @@ def test_workflows_proxy(client, admin_headers, monkeypatch):
     assert resp.json()["instance_id"] == "inst-0001"
 
 
+def test_workflows_start_requires_auth(client):
+    resp = client.post("/api/workflows/rtbf/start", json={"dsr_request_id": "ref-0"})
+    assert resp.status_code in (
+        401,
+        403,
+    ), "workflow-start must require authentication (AIDW#192)"
+
+
 def test_workflows_start_rejects_unknown_variable(client, admin_headers, monkeypatch):
     async def fake_start(process_key, variables):  # pragma: no cover — must not run
         raise AssertionError("allowlist must reject before the sidecar is called")
@@ -61,11 +69,17 @@ def test_workflows_start_maps_missing_config_to_503(client, admin_headers, monke
 def test_workflows_status_maps_found_and_missing(client, admin_headers, monkeypatch):
     async def fake_get(instance_id):
         if instance_id == "inst-0001":
-            return {"id": "inst-0001", "processDefinitionKey": "k", "endTime": None}
+            # real Flowable historic shape: key lives in processDefinitionId
+            return {
+                "id": "inst-0001",
+                "processDefinitionId": "aidwRtbf:1:abc",
+                "endTime": None,
+            }
         return None
 
     monkeypatch.setattr(_sidecar, "get_instance", fake_get)
     ok = client.get("/api/workflows/instances/inst-0001", headers=admin_headers)
     assert ok.status_code == 200 and ok.json()["ended"] is False
+    assert ok.json()["process_key"] == "aidwRtbf"  # derived from the id fallback
     missing = client.get("/api/workflows/instances/inst-gone", headers=admin_headers)
     assert missing.status_code == 404
