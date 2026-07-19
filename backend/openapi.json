@@ -7772,6 +7772,85 @@
         }
       }
     },
+    "/api/workflows/rtbf/start": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Post Rtbf Start",
+        "operationId": "post_rtbf_start_api_workflows_rtbf_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RtbfStartBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/instances/{instance_id}": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Get Instances",
+        "operationId": "get_instances_api_workflows_instances__instance_id__get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Root",
@@ -12235,6 +12314,23 @@
         "type": "object",
         "title": "RetentionRunUpdate",
         "description": "Request model for updating a retention_run (all fields optional)."
+      },
+      "RtbfStartBody": {
+        "properties": {
+          "dsr_request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Dsr Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dsr_request_id"
+        ],
+        "title": "RtbfStartBody",
+        "description": "Opaque references ONLY (AIDW#189 OQ-6). extra=\"forbid\" makes any\nunknown variable name a 422 at the boundary \u2014 the server-side allowlist."
       },
       "RunCreate": {
         "properties": {
