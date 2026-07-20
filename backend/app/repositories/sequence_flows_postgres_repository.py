@@ -37,7 +37,7 @@ class SequenceFlowPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO sequence_flows (id, name, flow_key, source_step, target_step, condition_expression, is_default, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO sequence_flows (id, name, flow_key, source_step, target_step, condition_expression, is_default, process_definition_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -46,6 +46,7 @@ class SequenceFlowPostgresRepository:
                     data.get("target_step"),
                     data.get("condition_expression"),
                     data.get("is_default"),
+                    data.get("process_definition_id"),
                     now,
                     now,
                 ),
@@ -60,6 +61,7 @@ class SequenceFlowPostgresRepository:
             "target_step",
             "condition_expression",
             "is_default",
+            "process_definition_id",
         )
         fields = [k for k in updatable if k in data]
         if not fields:

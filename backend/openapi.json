@@ -14096,6 +14096,17 @@
       },
       "SequenceFlowCreate": {
         "properties": {
+          "process_definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Definition Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -14166,6 +14177,17 @@
       },
       "SequenceFlowResponse": {
         "properties": {
+          "process_definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Definition Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -14250,6 +14272,17 @@
       },
       "SequenceFlowUpdate": {
         "properties": {
+          "process_definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Definition Id"
+          },
           "name": {
             "anyOf": [
               {
