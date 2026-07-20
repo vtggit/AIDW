@@ -12815,6 +12815,17 @@
       },
       "ProcessStepCreate": {
         "properties": {
+          "process_definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Definition Id"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -12907,6 +12918,17 @@
       },
       "ProcessStepResponse": {
         "properties": {
+          "process_definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Definition Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -13013,6 +13035,17 @@
       },
       "ProcessStepUpdate": {
         "properties": {
+          "process_definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process Definition Id"
+          },
           "name": {
             "anyOf": [
               {

@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class ProcessStepCreate(BaseModel):
     """Request model for creating a process_step."""
 
+    process_definition_id: str | None = Field(default=None)
+
     name: str = Field(..., min_length=1)
     step_key: str | None = Field(default=None)
     ordinal: int | None = Field(default=None)
@@ -19,6 +21,8 @@ class ProcessStepCreate(BaseModel):
 class ProcessStepUpdate(BaseModel):
     """Request model for updating a process_step (all fields optional)."""
 
+    process_definition_id: str | None = Field(default=None)
+
     name: str | None = Field(default=None)
     step_key: str | None = Field(default=None)
     ordinal: int | None = Field(default=None)
@@ -31,6 +35,8 @@ class ProcessStepUpdate(BaseModel):
 
 class ProcessStepResponse(BaseModel):
     """Response model for a process_step record."""
+
+    process_definition_id: str | None = None
 
     id: str
     name: str
