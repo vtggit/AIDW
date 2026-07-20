@@ -1,0 +1,1 @@
+"""BPMN intermediate-representation package."""
