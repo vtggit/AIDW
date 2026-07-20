@@ -2,8 +2,8 @@
 
 from alembic import op
 
-revision = "0065_add_sequence_flows"
-down_revision = "0064_add_process_definitions"
+revision = "0066_add_sequence_flows"
+down_revision = "0065_add_process_steps"
 branch_labels = None
 depends_on = None
 
