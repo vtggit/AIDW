@@ -37,7 +37,7 @@ class ProcessStepPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO process_steps (id, name, step_key, ordinal, step_type, service_impl, candidate_groups, form_key, timer_duration, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO process_steps (id, name, step_key, ordinal, step_type, service_impl, candidate_groups, form_key, timer_duration, process_definition_id, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -48,6 +48,7 @@ class ProcessStepPostgresRepository:
                     data.get("candidate_groups"),
                     data.get("form_key"),
                     data.get("timer_duration"),
+                    data.get("process_definition_id"),
                     now,
                     now,
                 ),
@@ -64,6 +65,7 @@ class ProcessStepPostgresRepository:
             "candidate_groups",
             "form_key",
             "timer_duration",
+            "process_definition_id",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
