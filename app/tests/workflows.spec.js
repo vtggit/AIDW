@@ -18,11 +18,31 @@ test('bpmn-js authoring editor renders with palette + visible watermark', async 
     // the starter diagram's start event is on the canvas
     await expect(canvas.locator('.djs-element').first()).toBeVisible();
 
-    // VTG-ADOPT-001: the bpmn.io watermark must be present and visible, not hidden/overlapped
+    // VTG-ADOPT-001: the bpmn.io watermark must be present, visible, still linked to bpmn.io,
+    // and rendered UNALTERED at its intrinsic size (currently 53x21, from the logo's own
+    // width/height attributes in the vendored bundle).
+    //
+    // A non-zero box is NOT sufficient: a stretched or clipped mark also has a non-zero box, so
+    // the previous assertion could not catch the regression we actually care about. The canvas
+    // fill rule (.bpmn-canvas svg { 100% !important }) matches the mark's own <svg>, and
+    // workflows.css restores it explicitly — this pins that guarantee.
     const mark = canvas.locator('.bjs-powered-by');
     await expect(mark).toBeVisible();
-    const box = await mark.boundingBox();
-    expect(box && box.width > 0 && box.height > 0).toBeTruthy();
+    await expect(mark).toHaveAttribute('href', /bpmn\.io/);
+
+    const logo = mark.locator('svg');
+    // Compare against the element's OWN declared size, so a future bpmn-js logo change does not
+    // false-fail — what must never change is that we render it unaltered.
+    const intrinsic = await logo.evaluate((el) => ({
+        w: parseFloat(el.getAttribute('width')),
+        h: parseFloat(el.getAttribute('height')),
+    }));
+    expect(Number.isFinite(intrinsic.w) && Number.isFinite(intrinsic.h)).toBeTruthy();
+
+    const box = await logo.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Math.round(box.width)).toBe(Math.round(intrinsic.w));
+    expect(Math.round(box.height)).toBe(Math.round(intrinsic.h));
 });
 
 test('Download BPMN exports a .bpmn file', async ({ page }) => {

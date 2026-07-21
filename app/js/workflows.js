@@ -10,8 +10,11 @@
  * and lands later through CodeAgent + a trust-surface ratification.
  *
  * VTG-ADOPT-001 attribution: the bpmn.io watermark bpmn-js renders (bottom-right, links
- * to bpmn.io) MUST stay fully visible and unaltered — workflows.css keeps the canvas and
- * toolbar clear of it. See app/vendor/bpmn-js/LICENSE.
+ * to bpmn.io) MUST stay fully visible and unaltered. workflows.css keeps the toolbar clear of it
+ * AND carries an explicit rule restoring the mark's intrinsic 53x21, because the canvas fill rule
+ * is a descendant selector that also matches the mark's own <svg>. workflows.spec.js pins the
+ * rendered size against that intrinsic size so a stretch/clip regression is caught rather than
+ * shipping silently. See app/vendor/bpmn-js/LICENSE.
  *
  * House conventions (mirrors sources.js / warehouse.js): pure helpers, everything
  * escaped, toast feedback, module.exports guard for Playwright.

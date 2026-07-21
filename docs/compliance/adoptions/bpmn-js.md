@@ -27,10 +27,27 @@ reposition, restyle, or visually overlap it, and do not modify the source that d
 Retain the vendored `LICENSE` + `Copyright (c) 2014-present Camunda Services GmbH` notice (and the
 MIT notices for the siblings) in shipped bundles.
 
-- **Enforcement:** `app/css/workflows.css` deliberately adds no rule that touches `.bjs-powered-by`;
-  the toolbar sits above the canvas so nothing overlaps the bottom-right logo.
-- **Verified live:** `app/tests/workflows.spec.js` asserts `.bjs-powered-by` is visible with a
-  non-zero bounding box on the deployed frontend (passed).
+- **Enforcement:** `app/css/workflows.css` carries an **explicit protective rule** —
+  `.bpmn-canvas .bjs-powered-by svg { height: auto !important; width: auto !important; }` — which
+  restores the mark to its intrinsic `width="53" height="21"`. This is required because the canvas
+  fill rule (`.bpmn-canvas svg { height/width: 100% !important }`) is a *descendant* selector and
+  therefore also matches the watermark's own `<svg>`. The toolbar sits above the canvas so nothing
+  overlaps the bottom-right logo.
+  > **Correction (supersedes the earlier wording).** This record previously stated that the CSS
+  > "deliberately adds no rule that touches `.bjs-powered-by`". That was **false as written**: the
+  > fill rule matched the mark's `<svg>`. A measured review confirmed the mark nevertheless rendered
+  > correctly — natural 53×21, fully visible, unobstructed at three hit-tested points, still linked
+  > to bpmn.io — because the anchor is absolutely positioned and shrink-to-fit, so the percentages
+  > resolved back to the intrinsic size. So this was **latent fragility plus a documentation defect,
+  > not a live breach**: compliance rested on an accident of the vendored bundle's layout, and an
+  > auditor grepping `.bjs-powered-by` got a false negative. The explicit rule above closes both.
+- **Verified live:** `app/tests/workflows.spec.js` asserts `.bjs-powered-by` is visible, still
+  hyperlinked to bpmn.io, and that the logo's **rendered box equals its intrinsic size** — not
+  merely that the box is non-zero. (A stretched or clipped mark also has a non-zero box, so the
+  previous assertion could not have caught the regression this rule guards against.)
+  **Caveat:** the Playwright suite runs in `codeagent-merge-gate.yml` under proof-family detection,
+  **not** in the six standard CI checks — so this assertion does not blanket-block an unrelated CSS
+  change. Treat it as a regression guard for frontend-proof work, not a universal gate.
 
 ## Scope boundary (governed follow-up)
 

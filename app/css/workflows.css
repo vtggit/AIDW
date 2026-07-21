@@ -30,13 +30,29 @@
   overflow: hidden;
 }
 
-/* bpmn-js injects its own SVG; make sure it fills the frame */
+/* bpmn-js injects its own SVG; make sure it fills the frame.
+   CAUTION: this is a DESCENDANT selector, so it also matches the bpmn.io watermark's own
+   <svg> inside .bjs-powered-by. The rule directly below restores that one. */
 .bpmn-canvas .djs-container,
 .bpmn-canvas svg {
   height: 100% !important;
   width: 100% !important;
 }
 
-/* NEVER hide, move, resize, restyle, or overlap the bpmn.io watermark
-   (.bjs-powered-by, bottom-right). Leaving these rules absent by design —
-   this comment documents the deliberate non-action for the license review. */
+/* VTG-ADOPT-001 — NEVER hide, move, resize, restyle, or overlap the bpmn.io watermark
+   (.bjs-powered-by, bottom-right); see app/vendor/bpmn-js/LICENSE.
+   The fill rule above MATCHES the mark's <svg>, so this rule explicitly restores its intrinsic
+   size. `auto` resolves to the logo's own width="53" height="21" attributes, and bpmn-js itself
+   sets no dimensions on that element (only vertical-align), so this returns the mark to exactly
+   the vendor's intended rendering rather than imposing ours.
+   Why this rule exists even though the mark renders correctly without it: the anchor is
+   absolutely positioned and shrink-to-fit, so the percentages happen to resolve back to the
+   intrinsic size. That is an accident of the vendored bundle's layout — a bpmn-js upgrade that
+   changes the anchor's positioning would silently start stretching the logo. This makes the
+   guarantee ENFORCED rather than incidental, and gives a licence auditor grepping
+   `.bjs-powered-by` a protective rule instead of a false negative.
+   Specificity: (0,2,1) here beats (0,1,1) above, both !important. */
+.bpmn-canvas .bjs-powered-by svg {
+  height: auto !important;
+  width: auto !important;
+}
