@@ -1,1 +1,5 @@
-"""BPMN 2.0 element generation utilities for Flowable process definitions."""
+"""BPMN layout engine for process visualization."""
+
+from app.bpmn.layout import EdgeRoute, LayoutModel, ShapeBox, layout
+
+__all__ = ["EdgeRoute", "LayoutModel", "ShapeBox", "layout"]
