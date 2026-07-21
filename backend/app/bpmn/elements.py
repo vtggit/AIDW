@@ -50,38 +50,39 @@ def _attr(name: str, value: str) -> str:
 
 def emit_start(id: str) -> str:
     """Emit a ``<bpmn:startEvent>`` element."""
-    return f'<bpmn:startEvent {_attr("id", id)}/>'
+    return f"<bpmn:startEvent {_attr('id', id)}/>"
 
 
 def emit_end(id: str) -> str:
     """Emit a ``<bpmn:endEvent>`` element."""
-    return f'<bpmn:endEvent {_attr("id", id)}/>'
+    return f"<bpmn:endEvent {_attr('id', id)}/>"
 
 
 def emit_user_task(
     id: str,
-    name: str,
-    candidate_groups: list[str],
+    name: str | None,
+    candidate_groups: list[str] | None,
     form_key: str | None = None,
 ) -> str:
     """Emit a ``<bpmn:userTask>`` element.
 
-    * ``flowable:candidateGroups`` is always present (groups joined by commas).
-    * ``flowable:formKey`` is emitted only when *form_key* is not ``None``.
+    ``name``, ``flowable:candidateGroups`` and ``flowable:formKey`` are all OPTIONAL — the real
+    ``app.bpmn.ir`` contract declares them ``| None`` and no invariant fills them — so each is
+    omitted entirely rather than emitted empty (or crashing) when absent.
     """
-    attrs = [
-        _attr("id", id),
-        _attr("name", name),
-        _attr("flowable:candidateGroups", ",".join(candidate_groups)),
-    ]
+    attrs = [_attr("id", id)]
+    if name is not None:
+        attrs.append(_attr("name", name))
+    if candidate_groups:
+        attrs.append(_attr("flowable:candidateGroups", ",".join(candidate_groups)))
     if form_key is not None:
         attrs.append(_attr("flowable:formKey", form_key))
-    return f'<bpmn:userTask {" ".join(attrs)}/>'
+    return f"<bpmn:userTask {' '.join(attrs)}/>"
 
 
 def emit_service_task(
     id: str,
-    name: str,
+    name: str | None,
     service_impl: str,
 ) -> str:
     """Emit a ``<bpmn:serviceTask>`` element.
@@ -95,26 +96,24 @@ def emit_service_task(
     else:
         impl_attr = _attr("flowable:class", impl_value)
 
-    attrs = [
-        _attr("id", id),
-        _attr("name", name),
-        impl_attr,
-    ]
-    return f'<bpmn:serviceTask {" ".join(attrs)}/>'
+    attrs = [_attr("id", id)]
+    if name is not None:
+        attrs.append(_attr("name", name))
+    attrs.append(impl_attr)
+    return f"<bpmn:serviceTask {' '.join(attrs)}/>"
 
 
 def emit_gateway(
     id: str,
-    name: str,
+    name: str | None,
     default_flow_id: str,
 ) -> str:
     """Emit a ``<bpmn:exclusiveGateway>`` element with its *default* flow."""
-    attrs = [
-        _attr("id", id),
-        _attr("name", name),
-        _attr("default", default_flow_id),
-    ]
-    return f'<bpmn:exclusiveGateway {" ".join(attrs)}/>'
+    attrs = [_attr("id", id)]
+    if name is not None:
+        attrs.append(_attr("name", name))
+    attrs.append(_attr("default", default_flow_id))
+    return f"<bpmn:exclusiveGateway {' '.join(attrs)}/>"
 
 
 def emit_sequence_flow(
@@ -141,8 +140,6 @@ def emit_sequence_flow(
             f'<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">'
             f"{escaped_condition}</bpmn:conditionExpression>"
         )
-        return (
-            f'<bpmn:sequenceFlow {" ".join(attrs)}>' f"{inner}" f"</bpmn:sequenceFlow>"
-        )
+        return f"<bpmn:sequenceFlow {' '.join(attrs)}>{inner}</bpmn:sequenceFlow>"
 
-    return f'<bpmn:sequenceFlow {" ".join(attrs)}/>'
+    return f"<bpmn:sequenceFlow {' '.join(attrs)}/>"
