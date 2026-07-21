@@ -1,268 +1,222 @@
-"""Deterministic integer-coordinate layout engine for BPMN process IR.
+"""BPMN process layout engine.
 
-Produces a ``LayoutModel`` (shapes + edges + viewbox) from a validated
-process object whose ``steps`` and ``flows`` tuples describe the graph.
+Reads a ``ProcessIR`` (from :mod:`app.bpmn.ir`) and computes a deterministic
+visual layout — one ``ShapeBox`` per step, one ``EdgeRoute`` per flow.
 
 Algorithm summary
 -----------------
-1. Sort steps by ``(ordinal, step_key)``; sort each step's outgoing flows
-   by ``(is_default first, then flow_key)`` so output is independent of
-   input order.
-2. Assign every step a **rank** equal to the longest forward path length
-   from the single start step (start at rank 0).
-3. Place shapes left-to-right by rank; keep the main path on a center row
-   and fan gateway branch targets onto adjacent rows.
-4. Size each shape by kind (event 36×36, task 100×80, gateway 50×50).
-5. Route every sequence with straight or right-angled integer waypoints
-   from the source shape's east edge to the target shape's west edge.
-6. Compute a viewbox enclosing all shapes and waypoints with a small margin.
+1. **Longest-path rank assignment** — topological ranks are computed from the
+   DAG of steps/flows so that every target has a strictly higher rank than its
+   source(s).  Disconnected (in-degree-0) nodes receive rank ``0``.
+2. **Lane placement** — steps sharing the same rank are distributed across
+   horizontal lanes; ranks flow left-to-right.
+3. **Edge routing** — each flow becomes a polyline from the right edge of its
+   source shape to the left edge of its target shape, with an optional mid-point
+   bend for readability.
 
-Every coordinate is an ``int``.
+Determinism
+-----------
+All internal sort keys are based on ``step_key`` / ``flow_key`` strings so that
+the output is byte-identical regardless of input ordering or repeated calls.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import dataclasses
+from collections import defaultdict
+
+from app.bpmn.ir import FlowIR, ProcessIR, StepIR
 
 # ---------------------------------------------------------------------------
-# Public data types (frozen for immutability / hashability)
+# Public data model
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ShapeBox:
-    """A positioned shape in the layout."""
+    """Axis-aligned rectangle for a single BPMN step."""
 
-    id: str
+    step_key: str
     x: int
     y: int
     w: int
     h: int
-    label: str
-    kind: str
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class EdgeRoute:
-    """A routed edge between two shapes."""
+    """Polyline connecting two shapes (or the same shape for self-loops)."""
 
-    id: str
+    flow_key: str
     waypoints: tuple[tuple[int, int], ...]
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class LayoutModel:
-    """Complete layout model with shapes, edges, and viewbox.
-
-    Attributes
-    ----------
-    shapes : tuple of ShapeBox
-        One shape per step in the process IR.
-    edges : tuple of EdgeRoute
-        One edge per sequence flow in the process IR.
-    viewbox : (min_x, min_y, width, height)
-        Integer rectangle enclosing every shape and waypoint with margin.
-    """
+    """Complete visual layout for a process."""
 
     shapes: tuple[ShapeBox, ...]
     edges: tuple[EdgeRoute, ...]
-    viewbox: tuple[int, int, int, int]
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# Constants — shape geometry
 # ---------------------------------------------------------------------------
 
-#: Shape dimensions ``(width, height)`` keyed by step kind.
-SHAPE_DIMS: dict[str, tuple[int, int]] = {
-    "start_event": (36, 36),
-    "end_event": (36, 36),
-    "task": (100, 80),
-    "exclusive_gateway": (50, 50),
-}
-
-#: Horizontal spacing between rank columns.
-_RANK_SPACING: int = 140
-
-#: Vertical spacing between lanes (rows).
-_LANE_SPACING: int = 120
-
-#: Margin added around the bounding box for the viewbox.
-_MARGIN: int = 20
+SHAPE_W = 80
+SHAPE_H = 40
+LANE_GAP_X = 120  # horizontal gap between ranks
+LANE_GAP_Y = 60  # vertical gap between lanes at the same rank
 
 
 # ---------------------------------------------------------------------------
-# Core layout function
+# Core algorithm
 # ---------------------------------------------------------------------------
 
 
-def layout(process_ir) -> LayoutModel:
-    """Compute a deterministic integer-coordinate layout for a process IR.
+def _compute_ranks(
+    steps: tuple[StepIR, ...],
+    flows: tuple[FlowIR, ...],
+) -> dict[str, int]:
+    """Longest-path rank assignment.
 
-    Parameters
-    ----------
-    process_ir : object
-        Must expose ``steps`` (tuple) and ``flows`` (tuple).  Each step
-        carries ``step_key``, ``ordinal``, ``kind``, and ``label``.  Each
-        flow carries ``flow_key``, ``source_step_key``, ``target_step_key``,
-        and ``is_default`` (bool).
-
-    Returns
-    -------
-    LayoutModel
+    Returns a mapping ``step_key -> rank`` where every flow target has a
+    strictly higher rank than its source.  Disconnected nodes get rank 0.
     """
-    # 1. Deterministic ordering ------------------------------------------------
-    sorted_steps = sorted(process_ir.steps, key=lambda s: (s.ordinal, s.step_key))
-    step_map: dict[str, object] = {s.step_key: s for s in sorted_steps}
+    step_keys = {s.step_key for s in steps}
+    ranks: dict[str, int] = {k: 0 for k in step_keys}
 
-    # Adjacency structures
-    outgoing: dict[str, list[object]] = {}  # step_key -> [flows]
-    incoming: dict[str, list[object]] = {}  # step_key -> [flows]
+    # Build adjacency + in-degree
+    successors: dict[str, list[str]] = defaultdict(list)
+    in_degree: dict[str, int] = {k: 0 for k in step_keys}
 
-    for flow in process_ir.flows:
-        src = flow.source_step_key
-        tgt = flow.target_step_key
-        outgoing.setdefault(src, []).append(flow)
-        incoming.setdefault(tgt, []).append(flow)
+    for f in flows:
+        if f.source_step in step_keys and f.target_step in step_keys:
+            successors[f.source_step].append(f.target_step)
+            in_degree[f.target_step] += 1
 
-    # Sort outgoing flows: is_default=True first, then by flow_key
-    for src in outgoing:
-        outgoing[src].sort(key=lambda f: (not f.is_default, f.flow_key))
-
-    # Identify the single start step
-    start_step = next(s for s in sorted_steps if s.kind == "start_event")
-
-    # 2. Rank assignment via longest forward path from start -------------------
-    in_degree: dict[str, int] = {
-        s.step_key: len(incoming.get(s.step_key, [])) for s in sorted_steps
-    }
-    ranks: dict[str, int] = {}
-
-    if in_degree[start_step.step_key] == 0:
-        ranks[start_step.step_key] = 0
-
-    queue: list[str] = [start_step.step_key] if start_step.step_key in ranks else []
-    topo_order: list[str] = []
-
+    # Kahn's algorithm with longest-path relaxation
+    queue = sorted(k for k, d in in_degree.items() if d == 0)
     while queue:
-        # Deterministic tie-breaking when multiple nodes are ready
-        queue.sort(key=lambda k: (ranks.get(k, 0), step_map[k].ordinal, k))
-        current = queue.pop(0)
-        topo_order.append(current)
+        node = queue.pop(0)
+        for succ in successors[node]:
+            ranks[succ] = max(ranks[succ], ranks[node] + 1)
+            in_degree[succ] -= 1
+            if in_degree[succ] == 0:
+                # Insert in sorted order to keep determinism
+                queue.append(succ)
+        queue.sort()
 
-        for flow in outgoing.get(current, []):
-            tgt = flow.target_step_key
-            new_rank = ranks[current] + 1
-            if tgt not in ranks or new_rank > ranks[tgt]:
-                ranks[tgt] = new_rank
-            in_degree[tgt] -= 1
-            if in_degree[tgt] == 0:
-                queue.append(tgt)
+    return ranks
 
-    # 3. Lane (row) assignment -------------------------------------------------
-    lanes: dict[str, int] = {}
-    next_lane_id: list[int] = [1]  # mutable counter for branch lanes
 
-    for step_key in topo_order:
-        if step_key == start_step.step_key:
-            lanes[step_key] = 0
-            continue
+def _assign_positions(
+    steps: tuple[StepIR, ...],
+    ranks: dict[str, int],
+) -> dict[str, tuple[int, int]]:
+    """Map each step_key to (x, y) based on rank and lane.
 
-        inc_flows = sorted(
-            incoming.get(step_key, []),
-            key=lambda f: (not f.is_default, f.flow_key),
+    Steps at the same rank are stacked vertically with LANE_GAP_Y spacing.
+    Ranks flow left-to-right with LANE_GAP_X spacing.
+    """
+    # Group by rank, sort keys within each rank for determinism
+    rank_groups: dict[int, list[str]] = defaultdict(list)
+    for s in steps:
+        rank_groups[ranks[s.step_key]].append(s.step_key)
+
+    positions: dict[str, tuple[int, int]] = {}
+    for rank in sorted(rank_groups):
+        keys = sorted(rank_groups[rank])  # deterministic order
+        for lane_idx, key in enumerate(keys):
+            x = rank * LANE_GAP_X
+            y = lane_idx * LANE_GAP_Y
+            positions[key] = (x, y)
+
+    return positions
+
+
+def _build_shapes(
+    steps: tuple[StepIR, ...],
+    positions: dict[str, tuple[int, int]],
+) -> list[ShapeBox]:
+    """Create one ShapeBox per step."""
+    shapes: list[ShapeBox] = []
+    for s in sorted(steps, key=lambda st: st.step_key):
+        x, y = positions[s.step_key]
+        shapes.append(
+            ShapeBox(
+                step_key=s.step_key,
+                x=x,
+                y=y,
+                w=SHAPE_W,
+                h=SHAPE_H,
+            )
         )
+    return shapes
 
-        # A node is a branch target when it receives a non-default flow from
-        # a source that has multiple outgoing flows (i.e. an exclusive gateway).
-        is_branch_target = False
-        for flow in inc_flows:
-            src_outgoing = outgoing.get(flow.source_step_key, [])
-            if len(src_outgoing) > 1 and not flow.is_default:
-                is_branch_target = True
-                break
 
-        if is_branch_target:
-            lanes[step_key] = next_lane_id[0]
-            next_lane_id[0] += 1
+def _build_edges(
+    flows: tuple[FlowIR, ...],
+    positions: dict[str, tuple[int, int]],
+) -> list[EdgeRoute]:
+    """Create one EdgeRoute per flow.
+
+    The route goes from the right edge of the source shape to the left edge
+    of the target shape with a mid-point bend for readability.
+    """
+    edges: list[EdgeRoute] = []
+    for f in sorted(flows, key=lambda fl: fl.flow_key):
+        sx, sy = positions[f.source_step]
+        tx, ty = positions[f.target_step]
+
+        # Source right edge -> mid-point -> target left edge
+        src_right = (sx + SHAPE_W, sy + SHAPE_H // 2)
+        tgt_left = (tx, ty + SHAPE_H // 2)
+
+        if sx == tx:
+            # Same rank — vertical connection with a small horizontal offset
+            mid_x = max(sx, tx) + LANE_GAP_X // 4
+            waypoints = (
+                src_right,
+                (mid_x, src_right[1]),
+                (mid_x, tgt_left[1]),
+                tgt_left,
+            )
         else:
-            # Inherit lane from the first (default) incoming source.
-            src_key = inc_flows[0].source_step_key
-            lanes[step_key] = lanes[src_key]
+            # Normal left-to-right connection with a bend at the midpoint x
+            mid_x = (sx + SHAPE_W + tx) // 2
+            waypoints = (
+                src_right,
+                (mid_x, src_right[1]),
+                (mid_x, tgt_left[1]),
+                tgt_left,
+            )
 
-    # 4. Place shapes on grid by rank and lane ---------------------------------
-    shape_map: dict[str, ShapeBox] = {}
-    for step in sorted_steps:
-        w, h = SHAPE_DIMS.get(step.kind, (100, 80))
-        x = ranks[step.step_key] * _RANK_SPACING + (_RANK_SPACING - w) // 2
-        y = lanes[step.step_key] * _LANE_SPACING + (_LANE_SPACING - h) // 2
-        shape_map[step.step_key] = ShapeBox(
-            id=step.step_key,
-            x=x,
-            y=y,
-            w=w,
-            h=h,
-            label=step.label,
-            kind=step.kind,
+        edges.append(
+            EdgeRoute(
+                flow_key=f.flow_key,
+                waypoints=waypoints,
+            )
         )
+    return edges
 
-    # 5. Route edges -----------------------------------------------------------
-    edge_routes: list[EdgeRoute] = []
-    for step_key in topo_order:
-        for flow in outgoing.get(step_key, []):
-            src_box = shape_map[flow.source_step_key]
-            tgt_box = shape_map[flow.target_step_key]
 
-            src_east_x = src_box.x + src_box.w
-            src_mid_y = src_box.y + src_box.h // 2
-            tgt_west_x = tgt_box.x
-            tgt_mid_y = tgt_box.y + tgt_box.h // 2
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
-            if src_mid_y == tgt_mid_y:
-                # Straight horizontal line (same lane)
-                waypoints: tuple[tuple[int, int], ...] = (
-                    (src_east_x, src_mid_y),
-                    (tgt_west_x, tgt_mid_y),
-                )
-            else:
-                # Right-angled path via midpoint x
-                mid_x = (src_east_x + tgt_west_x) // 2
-                waypoints = (
-                    (src_east_x, src_mid_y),
-                    (mid_x, src_mid_y),
-                    (mid_x, tgt_mid_y),
-                    (tgt_west_x, tgt_mid_y),
-                )
 
-            edge_routes.append(EdgeRoute(id=flow.flow_key, waypoints=waypoints))
+def layout(process_ir: ProcessIR) -> LayoutModel:
+    """Compute a deterministic visual layout for *process_ir*.
 
-    # 6. Compute viewbox -------------------------------------------------------
-    min_x = float("inf")
-    min_y = float("inf")
-    max_x = float("-inf")
-    max_y = float("-inf")
+    Returns a ``LayoutModel`` containing one ``ShapeBox`` per step and one
+    ``EdgeRoute`` per flow.  All coordinates are integers.  The output is
+    byte-identical regardless of input ordering or repeated calls.
+    """
+    ranks = _compute_ranks(process_ir.steps, process_ir.flows)
+    positions = _assign_positions(process_ir.steps, ranks)
 
-    for shape in shape_map.values():
-        min_x = min(min_x, shape.x)
-        min_y = min(min_y, shape.y)
-        max_x = max(max_x, shape.x + shape.w)
-        max_y = max(max_y, shape.y + shape.h)
+    shapes = tuple(_build_shapes(process_ir.steps, positions))
+    edges = tuple(_build_edges(process_ir.flows, positions))
 
-    for edge in edge_routes:
-        for wx, wy in edge.waypoints:
-            min_x = min(min_x, wx)
-            min_y = min(min_y, wy)
-            max_x = max(max_x, wx)
-            max_y = max(max_y, wy)
-
-    viewbox: tuple[int, int, int, int] = (
-        int(min_x - _MARGIN),
-        int(min_y - _MARGIN),
-        int(max_x - min_x + 2 * _MARGIN),
-        int(max_y - min_y + 2 * _MARGIN),
-    )
-
-    # Build final shapes tuple in deterministic order (sorted by ordinal, key)
-    shapes = tuple(shape_map[s.step_key] for s in sorted_steps)
-
-    return LayoutModel(shapes=shapes, edges=tuple(edge_routes), viewbox=viewbox)
+    return LayoutModel(shapes=shapes, edges=edges)
