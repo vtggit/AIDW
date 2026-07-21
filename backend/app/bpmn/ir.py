@@ -24,7 +24,7 @@ class IRError(Exception):
 # ---------------------------------------------------------------------------
 
 _STEP_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
-_JAVA_CLASS_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*$")
+_JAVA_CLASS_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_$]*\.)*[A-Za-z_][A-Za-z0-9_$]*$")
 _DELEGATE_EXPR_RE = re.compile(r"^\$\{.+\}$")
 
 
@@ -98,7 +98,7 @@ def build_ir(
             raise IRError(f"Step {step_key!r} has non-integer ordinal: {ordinal!r}")
 
         # Invariant 5 — step_key must match the allowed pattern
-        if not _STEP_KEY_RE.match(step_key):
+        if not _STEP_KEY_RE.fullmatch(step_key):
             raise IRError(f"Invalid step_key: {step_key!r}")
 
         # Invariant 6 — unique step_key within the process
@@ -152,11 +152,11 @@ def build_ir(
         # Invariant 3 — both endpoints must reference existing step_keys
         if source_step not in step_keys:
             raise IRError(
-                f"Flow {flow_key!r} references unknown source_step: " f"{source_step!r}"
+                f"Flow {flow_key!r} references unknown source_step: {source_step!r}"
             )
         if target_step not in step_keys:
             raise IRError(
-                f"Flow {flow_key!r} references unknown target_step: " f"{target_step!r}"
+                f"Flow {flow_key!r} references unknown target_step: {target_step!r}"
             )
 
         is_default = bool(row.get("is_default", False))
@@ -195,10 +195,11 @@ def build_ir(
                 raise IRError(
                     f"Service step {step.step_key!r} has null/empty service_impl"
                 )
-            if not (_DELEGATE_EXPR_RE.match(impl) or _JAVA_CLASS_RE.match(impl)):
+            if not (
+                _DELEGATE_EXPR_RE.fullmatch(impl) or _JAVA_CLASS_RE.fullmatch(impl)
+            ):
                 raise IRError(
-                    f"Service step {step.step_key!r} has invalid "
-                    f"service_impl: {impl!r}"
+                    f"Service step {step.step_key!r} has invalid service_impl: {impl!r}"
                 )
 
     # ---- Sort and return ---------------------------------------------------
