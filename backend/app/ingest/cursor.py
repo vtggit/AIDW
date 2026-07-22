@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.governance.hashing import subject_key_hash
+from app.ingest.landing import upsert_payloads
 from app.ingest.mapper import business_key, normalize_cursor_value
 
 logger = logging.getLogger(__name__)
@@ -157,6 +158,10 @@ def apply_rows(
                 inserts += 1
             else:
                 updates += 1
+            # Landing write-through (#258): the same guarded branch as the op-log, so a
+            # suppressed subject's PAYLOAD is never stored either. Charts aggregate this
+            # table in SQL (full data, no live sample).
+            upsert_payloads(cur, dataset_id, [{"business_key": key, "payload": row}])
         if cursor_field:
             value = normalize_cursor_value(row.get(cursor_field))
             if value is not None and _acceptable(value, cursor_kind):

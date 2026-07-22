@@ -184,6 +184,19 @@ const Warehouse = {
         const series = Array.isArray(d.series) ? d.series : [];
         if (!series.length) return Warehouse._chartNote('No data in the sample.');
         const meta = Warehouse._chartMeta(d, series);
+        // v2 (#259): bar-shaped items delegate to the labeled full-size renderer when
+        // charts.js is loaded. The rows/freshness caption is passed ONLY for the landed
+        // path (#258) — a live-sample card must never present its cap as a total.
+        if (typeof Charts !== 'undefined' && d.dimension
+                && (d.item_type === 'bar' || d.item_type === 'pie')) {
+            const landed = d.source === 'landed';
+            return Charts.renderBar(series.map((s) => [s.label, s.value]), {
+                title: d.title || '',
+                measure_label: `${d.aggregation || ''}${d.dimension ? ' by ' + d.dimension : ''}`,
+                total_rows: landed ? d.total_rows : null,
+                refreshed_at: landed ? d.refreshed_at : null,
+            });
+        }
         if (d.item_type === 'kpi' || !d.dimension) return Warehouse.renderKpi(series[0], meta);
         if (d.item_type === 'line') return Warehouse.renderLineChart(series, meta);
         if (d.item_type === 'bar' || d.item_type === 'pie') return Warehouse.renderBarChart(series, meta);
