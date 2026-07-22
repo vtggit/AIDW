@@ -83,6 +83,64 @@
       </div>
       <div id="bpmn-canvas" class="bpmn-canvas" data-testid="bpmn-canvas"></div>
     </section>
+
+    <section class="wh-panel">
+      <div class="wh-panel-head">
+        <h2>Process wizard <span class="badge">Path B</span></h2>
+        <p class="wh-sub">Author a process as rows — definition, steps, flows — and generate
+        its BPMN 2.0 XML and diagram server-side. No canvas required: the rows are the
+        diffable source of truth and the generated artifacts are byte-stable.</p>
+      </div>
+      <div id="wizard-notice" class="wh-sub" hidden></div>
+      <div id="wizard-toast" hidden></div>
+
+      <div class="wz-block">
+        <h3>Definitions</h3>
+        <input id="wizard-def-name" type="text" placeholder="Definition name" />
+        <input id="wizard-def-key" type="text" placeholder="process_key (optional)" />
+        <button id="wizard-create-def-btn" type="button" class="btn btn-primary">Create definition</button>
+        <div id="wizard-definitions" data-testid="wizard-definitions" class="wh-cards"></div>
+      </div>
+
+      <div class="wz-block">
+        <h3>Steps</h3>
+        <input id="wizard-step-name" type="text" placeholder="Step name" />
+        <input id="wizard-step-key" type="text" placeholder="step_key" />
+        <input id="wizard-step-ordinal" type="number" placeholder="Ordinal" />
+        <select id="wizard-step-type" title="Step type">
+          <option value="start">Start</option>
+          <option value="end">End</option>
+          <option value="user">User task</option>
+          <option value="service">Service task</option>
+          <option value="gateway">Gateway</option>
+        </select>
+        <input id="wizard-step-service-impl" type="text" placeholder="service_impl (service steps)" />
+        <input id="wizard-step-groups" type="text" placeholder="candidate_groups (user steps)" />
+        <input id="wizard-step-form-key" type="text" placeholder="form_key (user steps)" />
+        <button id="wizard-create-step-btn" type="button" class="btn btn-primary">Add step</button>
+        <div id="wizard-steps" data-testid="wizard-steps"></div>
+      </div>
+
+      <div class="wz-block">
+        <h3>Flows</h3>
+        <input id="wizard-flow-name" type="text" placeholder="Flow name" />
+        <input id="wizard-flow-key" type="text" placeholder="flow_key" />
+        <select id="wizard-flow-source" title="Source step"></select>
+        <select id="wizard-flow-target" title="Target step"></select>
+        <input id="wizard-flow-condition" type="text" placeholder="condition_expression (optional)" />
+        <label class="wz-default"><input id="wizard-flow-default" type="checkbox" /> Default flow</label>
+        <button id="wizard-create-flow-btn" type="button" class="btn btn-primary">Add flow</button>
+        <div id="wizard-flows" data-testid="wizard-flows"></div>
+      </div>
+
+      <div class="wz-block">
+        <h3>Generate</h3>
+        <button id="wizard-generate" type="button" class="btn btn-primary" data-testid="wizard-generate">Generate diagram</button>
+        <button id="wizard-download-xml" type="button" class="btn btn-secondary" disabled>Download BPMN</button>
+        <button id="wizard-download-svg" type="button" class="btn btn-secondary" disabled>Download SVG</button>
+        <div id="wizard-svg" data-testid="wizard-svg" class="wz-svg"></div>
+      </div>
+    </section>
   </main>
 
   <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
@@ -94,6 +152,7 @@
   <script src="js/sources.js"></script>
   <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
   <script src="js/workflows.js"></script>
-  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); Workflows.init(); });</script>
+  <script src="js/wizard.js"></script>
+  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); Workflows.init(); Wizard.init(); });</script>
 </body>
 </html>
