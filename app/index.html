@@ -6,10 +6,6 @@
   <title>AIDW — AI Data Warehouse</title>
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/warehouse.css" />
-  <link rel="stylesheet" href="vendor/bpmn-js/assets/diagram-js.css" />
-  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-js.css" />
-  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-font/css/bpmn.css" />
-  <link rel="stylesheet" href="css/workflows.css" />
 </head>
 <body>
   <header class="wh-header">
@@ -66,30 +62,12 @@
 
     <section class="wh-panel">
       <div class="wh-panel-head">
-        <h2>Workflow authoring <span class="badge">BPMN 2.0</span></h2>
-        <p class="wh-sub">Author business processes with the embedded bpmn.io editor —
-        the same BPMN 2.0 XML the Flowable open-source engine runs (never the
-        enterprise modeler). Start fresh, open a <code>.bpmn</code> file, or export
-        XML/SVG. Deploying a definition to the engine is a separate, governed step.</p>
-      </div>
-      <div class="wf-toolbar" data-testid="bpmn-toolbar">
-        <button id="bpmn-new" type="button" class="btn btn-secondary">New</button>
-        <label class="wf-open btn btn-secondary">Open .bpmn
-          <input id="bpmn-open" type="file"
-                 accept=".bpmn,.xml,application/xml,text/xml" hidden />
-        </label>
-        <button id="bpmn-download" type="button" class="btn btn-primary" data-testid="bpmn-download">Download BPMN</button>
-        <button id="bpmn-download-svg" type="button" class="btn btn-secondary">Download SVG</button>
-      </div>
-      <div id="bpmn-canvas" class="bpmn-canvas" data-testid="bpmn-canvas"></div>
-    </section>
-
-    <section class="wh-panel">
-      <div class="wh-panel-head">
-        <h2>Process wizard <span class="badge">Path B</span></h2>
+        <h2>Process wizard <span class="badge">BPMN 2.0</span></h2>
         <p class="wh-sub">Author a process as rows — definition, steps, flows — and generate
-        its BPMN 2.0 XML and diagram server-side. No canvas required: the rows are the
-        diffable source of truth and the generated artifacts are byte-stable.</p>
+        its BPMN 2.0 XML and diagram server-side. The rows are the diffable source of truth,
+        the generated artifacts are byte-stable, and the XML is the same standard BPMN 2.0
+        the Flowable open-source engine runs. Deploying a definition to the engine is a
+        separate, governed step.</p>
       </div>
       <div id="wizard-notice" class="wh-sub" hidden></div>
       <div id="wizard-toast" hidden></div>
@@ -150,9 +128,7 @@
   <script src="js/api.js"></script>
   <script src="js/warehouse.js"></script>
   <script src="js/sources.js"></script>
-  <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
-  <script src="js/workflows.js"></script>
   <script src="js/wizard.js"></script>
-  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); Workflows.init(); Wizard.init(); });</script>
+  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); Wizard.init(); });</script>
 </body>
 </html>
