@@ -14,8 +14,7 @@ depends_on = None
 
 
 def upgrade():
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE ingested_payloads (
             id VARCHAR(64) PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
@@ -27,8 +26,7 @@ def upgrade():
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_ingested_payloads_dataset_business_key UNIQUE (dataset_id, business_key)
         )
-        """
-    )
+        """)
     op.execute(
         "CREATE INDEX idx_ingested_payloads_dataset_id ON ingested_payloads(dataset_id)"
     )

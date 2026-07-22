@@ -35,7 +35,10 @@ def test_issue258_freeform(monkeypatch: pytest.MonkeyPatch) -> None:
         {"business_key": "subject2", "payload": {"category": "B", "score": 20}},
         {"business_key": "subject3", "payload": {"category": "A", "score": 30}},
         {"business_key": "subject4", "payload": {"category": "", "score": 5}},
-        {"business_key": "subject5", "payload": {"category": "C", "score": "not-a-number"}},
+        {
+            "business_key": "subject5",
+            "payload": {"category": "C", "score": "not-a-number"},
+        },
     ]
 
     with get_cursor() as cur:
@@ -45,7 +48,19 @@ def test_issue258_freeform(monkeypatch: pytest.MonkeyPatch) -> None:
     # Re-upsert subject1 — should NOT duplicate (idempotent update in place)
     # ------------------------------------------------------------------
     with get_cursor() as cur:
-        assert upsert_payloads(cur, "ds-258", [{"business_key": "subject1", "payload": {"category": "A", "score": 99}}]) == 1
+        assert (
+            upsert_payloads(
+                cur,
+                "ds-258",
+                [
+                    {
+                        "business_key": "subject1",
+                        "payload": {"category": "A", "score": 99},
+                    }
+                ],
+            )
+            == 1
+        )
 
         # Verify exactly 5 rows exist (no duplicate)
         cur.execute(
