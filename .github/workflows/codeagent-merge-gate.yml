@@ -69,10 +69,28 @@ jobs:
           gh pr view "$PR" --repo "${{ github.repository }}" --json body -q .body > "${RUNNER_TEMP}/pr_body.md"
           gh pr diff "$PR" --repo "${{ github.repository }}" --name-only > "${RUNNER_TEMP}/changed.txt"
 
-      - name: Detect proof family (backend pytest vs frontend Playwright)
+      - name: Detect proof family (contract nodeids first; changed files fallback)
         id: fam
         run: |
-          if grep -qE '^app/tests/.*\.spec\.js$' "${RUNNER_TEMP}/changed.txt"; then
+          # The CONTRACT is the authority on how a PR is proven. A scoped-write frontend
+          # deliverable can ship alongside a PYTEST proof (AIDW#250: the wizard wiring PR
+          # carries app/tests/250_ac_1.spec.js as a deliverable while its proving test is
+          # backend/tests/test_issue250_freeform.py) — the old changed-files grep routed
+          # such a PR's proof through a Playwright junit that cannot contain the contract's
+          # pytest nodeids, failing an honestly green build with "not collected". Nodeid
+          # TYPE decides when a contract exists; the grep stays as the fallback for
+          # contract-less (hand-built) PRs.
+          NODES=$(python scripts/ca_gate/list_proof_nodeids.py \
+            --pr-body-file "${RUNNER_TEMP}/pr_body.md" 2>/dev/null || true)
+          if [ -n "$NODES" ]; then
+            if printf '%s\n' "$NODES" | grep -q '\.spec\.js'; then FAM=frontend; else FAM=backend; fi
+            echo "family from contract nodeids: $FAM"
+          elif grep -qE '^app/tests/.*\.spec\.js$' "${RUNNER_TEMP}/changed.txt"; then
+            FAM=frontend; echo "family from changed files: frontend"
+          else
+            FAM=backend; echo "family from changed files: backend"
+          fi
+          if [ "$FAM" = "frontend" ]; then
             echo "family=frontend" >> "$GITHUB_OUTPUT"
             echo "repo_root=app"   >> "$GITHUB_OUTPUT"
           else
