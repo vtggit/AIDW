@@ -12678,6 +12678,17 @@
       },
       "ProcessDefinitionCreate": {
         "properties": {
+          "review_cycle_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Cycle Days"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -12737,6 +12748,17 @@
       },
       "ProcessDefinitionResponse": {
         "properties": {
+          "review_cycle_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Cycle Days"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -12810,6 +12832,17 @@
       },
       "ProcessDefinitionUpdate": {
         "properties": {
+          "review_cycle_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Cycle Days"
+          },
           "name": {
             "anyOf": [
               {
