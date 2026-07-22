@@ -26,7 +26,7 @@ Ground truth for the panel/auto-operator. `[OPERATOR: fill in]` marks unknowns.
 ## Storage / compute posture (decided)
 
 - **PostgreSQL is the storage engine now** — operational store AND warehouse substrate. Decided:
-  a dedicated OLAP/column engine (ClickHouse/DuckDB/Snowflake) is a scale-triggered target, not
+  a dedicated OLAP/column engine is a scale-triggered target, not
   built until dataset scan/aggregate volume demands it. Tracked as its own issue when it does.
 - Ingestion/connector runtimes (OData sync, CDC pollers) will be **separate worker services**,
   not the API process — decided target, not yet built.
