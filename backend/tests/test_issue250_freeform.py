@@ -19,13 +19,11 @@ def test_issue250_freeform():
     # ------------------------------------------------------------------
     # Must-retain stylesheet hrefs (six)
     # ------------------------------------------------------------------
+    # bpmn-js retired (VTG-ADOPT-001 follow-through): the canvas, its vendored assets,
+    # and workflows.css are gone; the wizard is the only authoring surface.
     for href in [
         "css/styles.css",
         "css/warehouse.css",
-        "vendor/bpmn-js/assets/diagram-js.css",
-        "vendor/bpmn-js/assets/bpmn-js.css",
-        "vendor/bpmn-js/assets/bpmn-font/css/bpmn.css",
-        "css/workflows.css",
     ]:
         assert href in html, f"Missing stylesheet href: {href}"
 
@@ -49,11 +47,6 @@ def test_issue250_freeform():
         "dashboards",
         "pii-count",
         "pii-inbox",
-        "bpmn-new",
-        "bpmn-open",
-        "bpmn-download",
-        "bpmn-download-svg",
-        "bpmn-canvas",
     ]:
         assert f'id="{ctrl_id}"' in html, f"Missing control id: {ctrl_id}"
 
@@ -71,8 +64,6 @@ def test_issue250_freeform():
         "js/api.js",
         "js/warehouse.js",
         "js/sources.js",
-        "vendor/bpmn-js/bpmn-modeler.production.min.js",
-        "js/workflows.js",
         "js/wizard.js",
     ]
 
@@ -144,11 +135,8 @@ def test_issue250_freeform():
     # ------------------------------------------------------------------
     # vendor/bpmn-js occurs at least five times (stylesheets + modeler script)
     # ------------------------------------------------------------------
-    # The real file carries vendor/bpmn-js exactly 4 times (3 stylesheets + the modeler
-    # script). The AC said five — a counting slip that made the lane build INVENT a phantom
-    # bpmn-embedded.css stylesheet to satisfy it. Assert the true count.
-    bpmn_count = html.count("vendor/bpmn-js")
-    assert bpmn_count >= 4, f"vendor/bpmn-js found {bpmn_count} times, expected >= 4"
+    # bpmn-js retired: no vendor reference may remain anywhere in the page.
+    assert "vendor/bpmn-js" not in html, "retired vendor/bpmn-js still referenced"
 
     # ------------------------------------------------------------------
     # Spec file contains required tokens

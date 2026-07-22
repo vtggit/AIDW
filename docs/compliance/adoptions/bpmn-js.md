@@ -2,7 +2,7 @@
 
 - **Component:** `bpmn-js` 18.21.0 (+ bundled `diagram-js`, `bpmn-moddle`) — bpmn.io / Camunda Services GmbH
 - **Use:** in-product BPMN 2.0 authoring in AIDW's own UI (vendored prebuilt browser bundle, no bundler), per the ratified Flowable adoption ADR ([AIDW#189](https://github.com/vtggit/AIDW/issues/189)) — **never** the Flowable/Camunda enterprise modeler.
-- **Tier:** open-source. **Status:** adopted-with-conditions. **Ratified by:** operator (interim ratifier — theoretical-company phase), 2026-07-19.
+- **Tier:** open-source. **Status:** **DEPENDENCY REMOVED 2026-07-22** (was adopted-with-conditions, ratified by operator 2026-07-19). See the retirement record at the end of this file.
 
 ## Licence (VTG-ADOPT-001 — verified, not assumed)
 
@@ -58,3 +58,25 @@ external URLs that execute in the engine — a materially larger trust surface t
 opaque-reference allowlist. That seam lands later through CodeAgent (a `deploy_definition` op +
 deploy endpoint on the sidecar-proxy lane) gated on a trust-surface ratification (admin-only? body
 size cap? BPMN schema validation / script-task policy?).
+
+## Retirement record (2026-07-22)
+
+**bpmn-js no longer ships.** Path B replaced canvas authoring with the Process wizard: rows in
+`process_definitions` / `process_steps` / `sequence_flows` are the source of truth, and the
+server-side generator (`backend/app/bpmn/`) emits the BPMN 2.0 XML + SVG deterministically. The
+wizard UI (PR 249 + PR 253, both merged, real-browser proven) made the canvas redundant.
+
+Removed in this change: `app/vendor/bpmn-js/` (the vendored bundle, its assets, and its LICENSE
+copy), `app/js/workflows.js` (the canvas module), `app/css/workflows.css` (the canvas +
+watermark-protection rules), `app/tests/workflows.spec.js` (the watermark regression spec), and
+every reference in `app/index.html`.
+
+**Obligation status: ENDED, honoured to the last shipped build.** The watermark clause binds only
+while the software is used in the product; the mark stayed fully visible and unaltered in every
+build that carried bpmn-js (enforced by the workflows.spec.js assertions and the protective CSS
+documented above). With the dependency gone, no attribution obligation remains. The generator and
+the wizard contain no bpmn.io / Camunda code: `diagram-js` and `bpmn-moddle` never shipped
+separately, and the emitted XML/SVG are house string templates.
+
+The **scope boundary** above (deploy-to-engine is a separate governed seam) is unaffected and
+remains the standing rule for the wizard-authored definitions.
