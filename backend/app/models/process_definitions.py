@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class ProcessDefinitionCreate(BaseModel):
     """Request model for creating a process_definition."""
 
+    review_cycle_days: int | None = Field(default=None)
+
     name: str = Field(..., min_length=1)
     process_key: str | None = Field(default=None)
     version: str | None = Field(default=None)
@@ -16,6 +18,8 @@ class ProcessDefinitionCreate(BaseModel):
 class ProcessDefinitionUpdate(BaseModel):
     """Request model for updating a process_definition (all fields optional)."""
 
+    review_cycle_days: int | None = Field(default=None)
+
     name: str | None = Field(default=None)
     process_key: str | None = Field(default=None)
     version: str | None = Field(default=None)
@@ -25,6 +29,8 @@ class ProcessDefinitionUpdate(BaseModel):
 
 class ProcessDefinitionResponse(BaseModel):
     """Response model for a process_definition record."""
+
+    review_cycle_days: int | None = None
 
     id: str
     name: str

@@ -37,7 +37,7 @@ class ProcessDefinitionPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO process_definitions (id, name, process_key, version, description, status, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO process_definitions (id, name, process_key, version, description, status, review_cycle_days, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -45,6 +45,7 @@ class ProcessDefinitionPostgresRepository:
                     data.get("version"),
                     data.get("description"),
                     data.get("status"),
+                    data.get("review_cycle_days"),
                     now,
                     now,
                 ),
@@ -58,6 +59,7 @@ class ProcessDefinitionPostgresRepository:
             "version",
             "description",
             "status",
+            "review_cycle_days",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
