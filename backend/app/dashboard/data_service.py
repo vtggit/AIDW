@@ -29,6 +29,7 @@ import urllib.request
 
 from app.db.connection import get_cursor
 from app.governance.hashing import subject_key_hash
+from app.ingest.landing import aggregate_series
 from app.ingest.mapper import business_key, parse_rows
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,47 @@ def item_data(item_id: str) -> dict:
     measure = next((f for f in fields if f["field_role"] == "measure"), None)
     if agg in ("sum", "avg") and measure is None:
         raise ChartDataError(f"aggregation '{agg}' needs a measure field")
+
+    # LANDED path (#258): when the warehouse HOLDS this dataset's payloads, aggregate the
+    # FULL landed data in SQL — no live sample, no fetch. Suppression exclusion happens
+    # inside aggregate_series (same key_hash + dataset_id rule, same fail-closed pepper).
+    # KPI items (no dimension) stay on the live-sample path for now; datasets never
+    # ingested (no landed rows) fall through to it unchanged.
+    if dimension is not None:
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT EXISTS(SELECT 1 FROM ingested_payloads WHERE dataset_id = %s) AS has_rows",
+                (dataset_id,),
+            )
+            has_landed = cur.fetchone()["has_rows"]
+            if has_landed:
+                agg_result = aggregate_series(
+                    cur,
+                    dataset_id,
+                    dimension["name"],
+                    agg,
+                    measure["name"] if measure else None,
+                    top_n=_MAX_BUCKETS,
+                )
+                series = [
+                    {"label": lbl, "value": val} for lbl, val in agg_result["series"]
+                ]
+                return {
+                    "item_id": item["id"],
+                    "title": item.get("title"),
+                    "item_type": item.get("item_type"),
+                    "aggregation": agg,
+                    "dimension": dimension["name"],
+                    "measure": measure["name"] if measure else None,
+                    # post-suppression by design (same no-telegraph rule as the sample path)
+                    "sample_size": agg_result["total_rows"],
+                    "series": series,
+                    "buckets_total": agg_result["buckets_total"],
+                    "truncated": agg_result["buckets_total"] > len(series),
+                    "total_rows": agg_result["total_rows"],
+                    "refreshed_at": agg_result["refreshed_at"],
+                    "source": "landed",
+                }
 
     if conn is None or not (conn.get("endpoint") or "").strip():
         raise ChartDataError("source has no source_connections endpoint to fetch from")

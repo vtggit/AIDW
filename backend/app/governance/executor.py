@@ -104,6 +104,16 @@ def execute_deletion(
             )
             records_deleted = cur.rowcount
 
+            # The landing store (#258) carries the subject's PAYLOAD — erasure must purge
+            # it in the same transaction as the op-log row, or the erased subject's data
+            # would survive in chart aggregation storage (reads already exclude it, but
+            # RTBF is about retention, not just visibility).
+            cur.execute(
+                "DELETE FROM ingested_payloads WHERE dataset_id = %s AND business_key = %s",
+                (dataset_id, business_key),
+            )
+            records_deleted += cur.rowcount
+
             cur.execute(
                 "UPDATE field_profiles SET min_value = NULL, max_value = NULL, "
                 "most_common_value = NULL, updated_at = NOW() "

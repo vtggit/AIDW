@@ -93,6 +93,13 @@ def test_deletions_once_executes_end_to_end(client, admin_headers, monkeypatch):
             "VALUES (%s, %s, %s, %s, 'insert')",
             (uuid.uuid4().hex, "rec:w-subj", ds, "w-subj"),
         )
+    with get_cursor() as cur:
+        # the landing store (#258) carries the payload — erasure must purge it too
+        cur.execute(
+            "INSERT INTO ingested_payloads (id, name, dataset_id, business_key, payload, "
+            "ingested_at) VALUES (%s, %s, %s, %s, %s, NOW())",
+            (uuid.uuid4().hex, "pay:w-subj", ds, "w-subj", "{}"),
+        )
     rid = _mk_verified_request(ds, "w-subj")
 
     assert deletions_once() is True
@@ -105,6 +112,12 @@ def test_deletions_once_executes_end_to_end(client, admin_headers, monkeypatch):
             (ds,),
         )
         assert cur.fetchone()["n"] == 0  # the worker path really erases
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM ingested_payloads "
+            "WHERE dataset_id = %s AND business_key = %s",
+            (ds, "w-subj"),
+        )
+        assert cur.fetchone()["n"] == 0  # the landed payload is purged too
     assert deletions_once() is False  # queue drained
 
 

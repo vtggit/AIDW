@@ -292,3 +292,6 @@
     padding: 0.1rem 0;
     color: var(--text-primary);
 }
+
+/* v2 charts (640x360 SVG) scale to the card slot; viewBox keeps the aspect */
+[data-testid="chart"] svg { max-width: 100%; height: auto; }
