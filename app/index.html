@@ -1,99 +1,118 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AIDW — AI Data Warehouse</title>
-  <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/warehouse.css" />
-  <link rel="stylesheet" href="vendor/bpmn-js/assets/diagram-js.css" />
-  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-js.css" />
-  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-font/css/bpmn.css" />
-  <link rel="stylesheet" href="css/workflows.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AICRM</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/warehouse.css">
+    <link rel="stylesheet" href="vendor/bpmn-js/assets/diagram-js.css">
+    <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-js.css">
+    <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-font/css/bpmn.css">
+    <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-font/css/bpmn-embedded.css">
+    <link rel="stylesheet" href="css/workflows.css">
 </head>
 <body>
-  <header class="wh-header">
-    <div class="wh-brand">AIDW <span>· AI Data Warehouse</span></div>
-    <div class="wh-auth" id="auth-status" data-testid="auth-status">…</div>
-  </header>
+    <header id="auth-status"></header>
 
-  <main class="wh-main">
+    <section class="wh-panel" id="source-form">
+        <h2>Data Sources</h2>
+        <input type="text" id="src-name" placeholder="Source name">
+        <input type="text" id="src-endpoint" placeholder="Endpoint URL">
+        <input type="text" id="src-version" placeholder="Version">
+        <button id="src-submit">Add Source</button>
+    </section>
+
+    <section class="wh-panel" id="sources"></section>
+
+    <section class="wh-panel" id="inbox-count"></section>
+    <section class="wh-panel" id="inbox"></section>
+
+    <section class="wh-panel" id="dashboards"></section>
+
+    <section class="wh-panel" id="pii-count"></section>
+    <section class="wh-panel" id="pii-inbox"></section>
+
+    <div id="toast"></div>
+
     <section class="wh-panel">
-      <div class="wh-panel-head">
-        <h2>Data sources <span class="badge wh-count" id="sources-count" data-testid="sources-count">0</span></h2>
-        <p class="wh-sub">Register a server and discover its schema — datasets, fields,
-        dashboard suggestions, and PII flags all flow from here. Anonymous-auth OData
-        servers in this version; credentialed sources are configured via the API.</p>
-      </div>
-      <form id="source-form" class="src-form" data-testid="source-form">
-        <input id="src-name" type="text" placeholder="Name (e.g. ERP production)" required />
-        <input id="src-endpoint" type="url" placeholder="https://host/odata/Service.svc" required />
-        <select id="src-version" title="OData protocol version">
-          <option value="v4">OData v4</option>
-          <option value="v2">OData v2</option>
-        </select>
-        <button id="src-submit" type="submit" class="btn btn-primary">Add &amp; discover</button>
-      </form>
-      <div id="sources" class="src-list" data-testid="sources"></div>
+        <h2>Workflow Authoring</h2>
+        <button id="bpmn-new">New Diagram</button>
+        <button id="bpmn-open">Open Diagram</button>
+        <button id="bpmn-download">Download XML</button>
+        <button id="bpmn-download-svg">Download SVG</button>
+        <div id="bpmn-canvas"></div>
     </section>
 
     <section class="wh-panel">
-      <div class="wh-panel-head">
-        <h2>Suggested dashboard items <span class="badge wh-count" id="inbox-count" data-testid="inbox-count">0</span></h2>
-        <p class="wh-sub">Generated automatically from your discovered schema — no rows required.
-        Accept the useful ones; dismiss the noise.</p>
-      </div>
-      <div id="inbox" class="wh-cards" data-testid="inbox"></div>
+        <h2>Process wizard</h2>
+
+        <div id="wizard-notice" style="display:none;"></div>
+        <div id="wizard-toast" style="display:none;"></div>
+
+        <fieldset>
+            <legend>Definitions</legend>
+            <input type="text" id="wizard-def-name" placeholder="Definition name">
+            <input type="text" id="wizard-def-key" placeholder="Definition key">
+            <button id="wizard-create-def-btn">Create Definition</button>
+            <div id="wizard-definitions" data-testid="wizard-definitions"></div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Steps</legend>
+            <input type="text" id="wizard-step-name" placeholder="Step name">
+            <input type="text" id="wizard-step-key" placeholder="Step key">
+            <input type="number" id="wizard-step-ordinal" placeholder="Ordinal">
+            <select id="wizard-step-type">
+                <option value="start">Start</option>
+                <option value="end">End</option>
+                <option value="user">User Task</option>
+                <option value="service">Service Task</option>
+                <option value="gateway">Gateway</option>
+            </select>
+            <input type="text" id="wizard-step-service-impl" placeholder="Service implementation">
+            <input type="text" id="wizard-step-groups" placeholder="Candidate groups">
+            <input type="text" id="wizard-step-form-key" placeholder="Form key">
+            <button id="wizard-create-step-btn">Create Step</button>
+            <div id="wizard-steps" data-testid="wizard-steps"></div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Flows</legend>
+            <input type="text" id="wizard-flow-name" placeholder="Flow name">
+            <input type="text" id="wizard-flow-key" placeholder="Flow key">
+            <select id="wizard-flow-source"></select>
+            <select id="wizard-flow-target"></select>
+            <input type="text" id="wizard-flow-condition" placeholder="Condition expression">
+            <label><input type="checkbox" id="wizard-flow-default"> Default flow</label>
+            <button id="wizard-create-flow-btn">Create Flow</button>
+            <div id="wizard-flows" data-testid="wizard-flows"></div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Generate</legend>
+            <button id="wizard-generate">Generate Diagram</button>
+            <button id="wizard-download-xml" disabled>Download XML</button>
+            <button id="wizard-download-svg" disabled>Download SVG</button>
+            <div id="wizard-svg" data-testid="wizard-svg"></div>
+        </fieldset>
     </section>
 
-    <section class="wh-panel">
-      <div class="wh-panel-head">
-        <h2>Dashboards</h2>
-        <p class="wh-sub">Accepted suggestions land here as dashboard items.</p>
-      </div>
-      <div id="dashboards" class="wh-dashboards" data-testid="dashboards"></div>
-    </section>
-
-    <section class="wh-panel">
-      <div class="wh-panel-head">
-        <h2>PII flags <span class="badge wh-count" id="pii-count" data-testid="pii-count">0</span></h2>
-        <p class="wh-sub">Fields the watchdog flagged as personal data, grouped by dataset.
-        Confirm the real ones; dismiss false positives. Confirmed fields keep their example
-        values suppressed.</p>
-      </div>
-      <div id="pii-inbox" class="wh-pii-groups" data-testid="pii-inbox"></div>
-    </section>
-
-    <section class="wh-panel">
-      <div class="wh-panel-head">
-        <h2>Workflow authoring <span class="badge">BPMN 2.0</span></h2>
-        <p class="wh-sub">Author business processes with the embedded bpmn.io editor —
-        the same BPMN 2.0 XML the Flowable open-source engine runs (never the
-        enterprise modeler). Start fresh, open a <code>.bpmn</code> file, or export
-        XML/SVG. Deploying a definition to the engine is a separate, governed step.</p>
-      </div>
-      <div class="wf-toolbar" data-testid="bpmn-toolbar">
-        <button id="bpmn-new" type="button" class="btn btn-secondary">New</button>
-        <label class="wf-open btn btn-secondary">Open .bpmn
-          <input id="bpmn-open" type="file"
-                 accept=".bpmn,.xml,application/xml,text/xml" hidden />
-        </label>
-        <button id="bpmn-download" type="button" class="btn btn-primary" data-testid="bpmn-download">Download BPMN</button>
-        <button id="bpmn-download-svg" type="button" class="btn btn-secondary">Download SVG</button>
-      </div>
-      <div id="bpmn-canvas" class="bpmn-canvas" data-testid="bpmn-canvas"></div>
-    </section>
-  </main>
-
-  <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
-
-  <script src="js/config.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/warehouse.js"></script>
-  <script src="js/sources.js"></script>
-  <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
-  <script src="js/workflows.js"></script>
-  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init().then(function () { Sources.init(); }); Workflows.init(); });</script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/warehouse.js"></script>
+    <script src="js/sources.js"></script>
+    <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
+    <script src="js/workflows.js"></script>
+    <script src="js/wizard.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            Warehouse.init();
+            Sources.init();
+            Workflows.init();
+            Wizard.init();
+        });
+    </script>
 </body>
 </html>
