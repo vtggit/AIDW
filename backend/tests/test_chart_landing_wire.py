@@ -39,9 +39,7 @@ def test_item_data_prefers_landed_aggregates(client, admin_headers, monkeypatch)
             ds,
             [
                 {"business_key": f"k{i}", "payload": {"ShipCountry": c}}
-                for i, c in enumerate(
-                    ["Germany"] * 3 + ["France"] * 2 + ["Brazil"]
-                )
+                for i, c in enumerate(["Germany"] * 3 + ["France"] * 2 + ["Brazil"])
             ],
         )
 
