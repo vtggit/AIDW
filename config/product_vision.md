@@ -52,7 +52,7 @@ lineage) · `pipelines`/`runs` (ingestion jobs + executions) · `delta_cursors`/
 - **Migrations:** Alembic head-chained, revision ids ≤ 32 chars, succeed on dirty data.
 - **Storage engine:** **PostgreSQL now** (the operational + warehouse substrate; recipes speak
   it). Answer per-scale questions with the benchmark method: a dedicated OLAP/column engine
-  (ClickHouse/DuckDB/Snowflake) is a DECIDED-LATER, scale-triggered target — recorded as its own
+  is a DECIDED-LATER, scale-triggered target — recorded as its own
   issue when dataset scan/aggregate volume demands it; nothing in today's shape blocks that
   migration. Heavy connector/ingestion runtimes (e.g. an OData sync worker) are separate
   services, not in the API process.
@@ -66,9 +66,11 @@ lineage) · `pipelines`/`runs` (ingestion jobs + executions) · `delta_cursors`/
 
 ## The benchmark method (operator-set policy)
 
-Questions with no recorded fact/decision are answered by benchmark — **what would a frontier
-data platform (Snowflake, Databricks, Fivetran/Airbyte for connectivity+CDC) do** — scaled to
-our stage, stated as the DECIDED TARGET (name the tracking issue if infra doesn't exist yet).
+Questions with no recorded fact/decision are answered by benchmark — **what would a mature
+enterprise data platform do**, judged on capability (connectivity breadth, change tracking,
+lineage, governance, API-contract discipline) rather than on any particular vendor's feature
+list — scaled to our stage, stated as the DECIDED TARGET (name the tracking issue if infra
+doesn't exist yet).
 Only environmental identifiers (a domain, a purchased credential) are irreducibly
 operator-assigned.
 
