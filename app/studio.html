@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AIDW — Studio</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/warehouse.css">
+</head>
+<body>
+    <wh-header>
+        <div class="wh-brand">AIDW <span>· Studio</span></div>
+        <a class="wh-nav" href="index.html" data-testid="nav-dashboard">← Dashboard</a>
+        <div class="wh-auth" id="auth-status" data-testid="auth-status"></div>
+    </wh-header>
+
+    <wh-main>
+        <!-- Panel 1: Data sources -->
+        <section class="wh-panel">
+            <div class="wh-panel-head">
+                <h2>Data sources</h2>
+                <p class="wh-sub">Manage OData source connections and versions.</p>
+            </div>
+            <span id="sources-count" class="wh-badge">0</span>
+            <form id="source-form" class="src-form" data-testid="source-form">
+                <input type="text" id="src-name" placeholder="Source name" required>
+                <input type="url" id="src-endpoint" placeholder="Service endpoint URL" required>
+                <select id="src-version">
+                    <option value="v4">OData v4</option>
+                    <option value="v2">OData v2</option>
+                </select>
+                <button type="submit" id="src-submit">Add source</button>
+            </form>
+            <div id="sources" class="src-list" data-testid="sources"></div>
+        </section>
+
+        <!-- Panel 2: Suggested dashboard items -->
+        <section class="wh-panel">
+            <div class="wh-panel-head">
+                <h2>Suggested dashboard items</h2>
+                <p class="wh-sub">Review AI-suggested visualizations for your data.</p>
+            </div>
+            <span id="inbox-count" class="wh-badge">0</span>
+            <div id="inbox" class="wh-cards" data-testid="inbox"></div>
+        </section>
+
+        <!-- Panel 3: PII flags -->
+        <section class="wh-panel">
+            <div class="wh-panel-head">
+                <h2>PII flags</h2>
+                <p class="wh-sub">Fields flagged for personally identifiable information.</p>
+            </div>
+            <span id="pii-count" class="wh-badge">0</span>
+            <div id="pii-inbox" class="wh-pii-groups" data-testid="pii-inbox"></div>
+        </section>
+
+        <!-- Panel 4: Process wizard -->
+        <section class="wh-panel">
+            <div class="wh-panel-head">
+                <h2>Process wizard</h2>
+                <p class="wh-sub">Define, connect, and generate BPMN process models.</p>
+            </div>
+
+            <div id="wizard-notice" class="wizard-notice" hidden></div>
+            <div id="wizard-toast" class="wizard-toast" hidden></div>
+
+            <!-- Definitions block -->
+            <div class="wz-block">
+                <h3>Definitions</h3>
+                <input type="text" id="wizard-def-name" placeholder="Definition name">
+                <input type="text" id="wizard-def-key" placeholder="Definition key">
+                <button id="wizard-create-def-btn">Create definition</button>
+                <div id="wizard-definitions" data-testid="wizard-definitions"></div>
+            </div>
+
+            <!-- Steps block -->
+            <div class="wz-block">
+                <h3>Steps</h3>
+                <input type="text" id="wizard-step-name" placeholder="Step name">
+                <input type="text" id="wizard-step-key" placeholder="Step key">
+                <input type="number" id="wizard-step-ordinal" placeholder="Ordinal" min="0">
+                <select id="wizard-step-type">
+                    <option value="start">Start</option>
+                    <option value="end">End</option>
+                    <option value="user">User Task</option>
+                    <option value="service">Service Task</option>
+                    <option value="gateway">Gateway</option>
+                </select>
+                <input type="text" id="wizard-step-service-impl" placeholder="Service implementation">
+                <input type="text" id="wizard-step-groups" placeholder="Candidate groups">
+                <input type="text" id="wizard-step-form-key" placeholder="Form key">
+                <button id="wizard-create-step-btn">Create step</button>
+                <div id="wizard-steps" data-testid="wizard-steps"></div>
+            </div>
+
+            <!-- Flows block -->
+            <div class="wz-block">
+                <h3>Flows</h3>
+                <input type="text" id="wizard-flow-name" placeholder="Flow name">
+                <input type="text" id="wizard-flow-key" placeholder="Flow key">
+                <select id="wizard-flow-source"><option value="">Source step…</option></select>
+                <select id="wizard-flow-target"><option value="">Target step…</option></select>
+                <input type="text" id="wizard-flow-condition" placeholder="Condition expression">
+                <label><input type="checkbox" id="wizard-flow-default"> Default flow</label>
+                <button id="wizard-create-flow-btn">Create flow</button>
+                <div id="wizard-flows" data-testid="wizard-flows"></div>
+            </div>
+
+            <!-- Generate block -->
+            <div class="wz-block">
+                <h3>Generate</h3>
+                <div id="wizard-generate" data-testid="wizard-generate"></div>
+                <button id="wizard-download-xml" disabled>Download XML</button>
+                <button id="wizard-download-svg" disabled>Download SVG</button>
+                <div id="wizard-svg" data-testid="wizard-svg"></div>
+            </div>
+        </section>
+    </wh-main>
+
+    <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/warehouse.js"></script>
+    <script src="js/sources.js"></script>
+    <script src="js/wizard.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            Warehouse.init().then(function () { Sources.init(); });
+            Wizard.init();
+        });
+    </script>
+</body>
+</html>
