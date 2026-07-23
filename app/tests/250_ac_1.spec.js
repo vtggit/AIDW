@@ -11,7 +11,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:8080';
 const MARK = `wz${Date.now()}`; // unique per run so assertions never collide with existing rows
 
 test('250_ac_1_data_source', async ({ page }) => {
-    await page.goto(BASE + '/');
+    await page.goto(BASE + '/studio.html');  // wizard moved to the Studio (AIDW#264/#269)
 
     // The wizard section rendered and the module bound (containers exist; empties are
     // zero-height, so presence is asserted via attachment and the controls via visibility).
