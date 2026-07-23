@@ -68,10 +68,18 @@ def _full_vocabulary_process():
         {"flow_key": "f1", "source_step": "start_1", "target_step": "review_1"},
         {"flow_key": "f2", "source_step": "review_1", "target_step": "svc_1"},
         {"flow_key": "f3", "source_step": "svc_1", "target_step": "gw_1"},
-        {"flow_key": "f4", "source_step": "gw_1", "target_step": "end_a",
-         "is_default": True},
-        {"flow_key": "f5", "source_step": "gw_1", "target_step": "end_b",
-         "condition_expression": "${rejected}"},
+        {
+            "flow_key": "f4",
+            "source_step": "gw_1",
+            "target_step": "end_a",
+            "is_default": True,
+        },
+        {
+            "flow_key": "f5",
+            "source_step": "gw_1",
+            "target_step": "end_b",
+            "condition_expression": "${rejected}",
+        },
     ]
     return build_ir(process, steps, flows)
 
@@ -91,8 +99,8 @@ def test_every_step_type_becomes_a_process_element():
         return len([n for n in proc.getElementsByTagName(tag)])
 
     assert _count("bpmn:startEvent") == 1
-    assert _count("bpmn:userTask") == 1          # was 0 before the fix
-    assert _count("bpmn:serviceTask") == 1       # was 0 before the fix
+    assert _count("bpmn:userTask") == 1  # was 0 before the fix
+    assert _count("bpmn:serviceTask") == 1  # was 0 before the fix
     assert _count("bpmn:exclusiveGateway") == 1  # was 0 before the fix
     assert _count("bpmn:endEvent") == 2
 
@@ -123,8 +131,12 @@ def test_no_sequence_flow_references_a_missing_node():
     for flow in flows:
         src = flow.getAttribute("sourceRef")
         tgt = flow.getAttribute("targetRef")
-        assert src in emitted_ids, f"dangling sourceRef {src!r} in flow {flow.getAttribute('id')!r}"
-        assert tgt in emitted_ids, f"dangling targetRef {tgt!r} in flow {flow.getAttribute('id')!r}"
+        assert (
+            src in emitted_ids
+        ), f"dangling sourceRef {src!r} in flow {flow.getAttribute('id')!r}"
+        assert (
+            tgt in emitted_ids
+        ), f"dangling targetRef {tgt!r} in flow {flow.getAttribute('id')!r}"
 
 
 def test_di_shapes_reference_only_real_process_elements():

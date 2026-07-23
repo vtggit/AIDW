@@ -92,9 +92,7 @@ def emit_bpmn(process_ir: ProcessIR, layout_model: LayoutModel) -> str:
             # let the *_task/exclusive_gateway drift ship malformed BPMN — the DI
             # section and sequence flows still reference the dropped node, leaving
             # dangling sourceRef/targetRef. Raise so the drift can never be silent.
-            raise IRError(
-                f"Step {step.step_key!r} has unsupported step_type {stype!r}"
-            )
+            raise IRError(f"Step {step.step_key!r} has unsupported step_type {stype!r}")
 
         for line in frag.split("\n"):
             stripped = line.strip()
