@@ -12,7 +12,7 @@ from app.bpmn.elements import (
     emit_start,
     emit_user_task,
 )
-from app.bpmn.ir import ProcessIR
+from app.bpmn.ir import IRError, ProcessIR
 from app.bpmn.layout import LayoutModel
 
 
@@ -60,31 +60,39 @@ def emit_bpmn(process_ir: ProcessIR, layout_model: LayoutModel) -> str:
 
     for step in sorted_steps:
         stype = step.step_type
+        # NOTE: these step_type values are the canonical vocabulary shared by
+        # app.bpmn.ir, app.bpmn.svg_emit and the wizard. They are NOT the BPMN
+        # element names (userTask/serviceTask/exclusiveGateway) — mapping them
+        # here is what emit_*() does. Keep them in lock-step with ir.py/svg_emit.
         if stype == "start":
             frag = emit_start(step.step_key)
         elif stype == "end":
             frag = emit_end(step.step_key)
-        elif stype == "user_task":
+        elif stype == "user":
             frag = emit_user_task(
                 id=step.step_key,
                 name=_escape(step.name),
                 candidate_groups=step.candidate_groups or [],
                 form_key=step.form_key,
             )
-        elif stype == "service_task":
+        elif stype == "service":
             frag = emit_service_task(
                 id=step.step_key,
                 name=_escape(step.name),
                 service_impl=step.service_impl or "",
             )
-        elif stype == "exclusive_gateway":
+        elif stype == "gateway":
             frag = emit_gateway(
                 id=step.step_key,
                 name=_escape(step.name),
                 default_flow_id=default_flow_id,
             )
         else:
-            continue
+            # Fail closed: silently skipping an unknown step_type is exactly what
+            # let the *_task/exclusive_gateway drift ship malformed BPMN — the DI
+            # section and sequence flows still reference the dropped node, leaving
+            # dangling sourceRef/targetRef. Raise so the drift can never be silent.
+            raise IRError(f"Step {step.step_key!r} has unsupported step_type {stype!r}")
 
         for line in frag.split("\n"):
             stripped = line.strip()

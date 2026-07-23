@@ -25,7 +25,7 @@ def test_issue238_freeform() -> None:
         {
             "step_key": "task-1",
             "ordinal": 1,
-            "step_type": "service_task",
+            "step_type": "service",
             "name": "Service Task",
             "service_impl": "${my_service.execute()}",
         },
