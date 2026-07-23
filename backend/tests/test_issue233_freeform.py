@@ -43,7 +43,7 @@ def _make_canonical_steps() -> list[dict]:
         {
             "step_key": "user_task",
             "ordinal": 1,
-            "step_type": "user_task",
+            "step_type": "user",
             "name": "Review Request",
         },
         {

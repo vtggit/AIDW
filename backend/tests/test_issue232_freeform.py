@@ -21,14 +21,14 @@ def test_issue232_freeform():
         {
             "step_key": "service_1",
             "ordinal": 1,
-            "step_type": "service_task",
+            "step_type": "service",
             "name": "Service Task",
             "service_impl": "${myService}",
         },
         {
             "step_key": "gateway_1",
             "ordinal": 2,
-            "step_type": "exclusive_gateway",
+            "step_type": "gateway",
             "name": "Decision",
         },
         {"step_key": "end_yes", "ordinal": 3, "step_type": "end", "name": "End Yes"},
