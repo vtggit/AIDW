@@ -100,11 +100,13 @@ def emit_bpmn(process_ir: ProcessIR, layout_model: LayoutModel) -> str:
                 lines.append(f"    {stripped}")
 
     for flow in sorted_flows:
+        has_condition = not flow.is_default and flow.condition_expression
+        cond = _escape(flow.condition_expression) if has_condition else None
         frag = emit_sequence_flow(
             id=flow.flow_key,
             source_ref=flow.source_step,
             target_ref=flow.target_step,
-            condition=_escape(flow.condition_expression),
+            condition=cond,
         )
         for line in frag.split("\n"):
             stripped = line.strip()
