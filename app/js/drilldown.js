@@ -78,7 +78,7 @@ const Drilldown = {
     const body = document.getElementById('drilldown-body');
     body.innerHTML = 'Loading...';
 
-    ApiClient.get(`/dashboard-items/${id}/data`)
+    ApiClient.get(`/dashboard-items/${encodeURIComponent(id)}/data`)
       .then((res) => {
         if (!res.ok) {
           body.innerHTML = this._fail(res.error || 'Request failed');
