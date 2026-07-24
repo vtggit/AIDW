@@ -38,6 +38,10 @@
   <script src="js/charts.js"></script>
   <script src="js/warehouse.js"></script>
   <script src="js/drilldown.js"></script>
+  <!-- AI assistant panel (Phase 1). Served same-origin under /assistant/ by nginx (see nginx.conf),
+       so this is a relative path with no host/topology baked in. When the assistant service is not
+       deployed (e.g. local dev), this 404s harmlessly and no panel is shown. -->
+  <script src="/assistant/panel.js" defer></script>
   <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init(); Drilldown.init(); });</script>
 </body>
 </html>
