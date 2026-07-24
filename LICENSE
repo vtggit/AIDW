@@ -1,0 +1,47 @@
+AIDW Software License
+
+Copyright (c) 2026 Virtual Technology Group. All rights reserved.
+
+This is a proprietary license. It is NOT an open-source license and does not
+grant the rights described by the Open Source Definition (such as the right to
+redistribute or to create and distribute modified versions).
+
+1. Definitions.
+   "Software" means the AIDW software made available in this repository,
+   including its source code, documentation, and associated files.
+   "Licensor" means Virtual Technology Group, the copyright holder.
+   "You" means the individual or entity exercising the permissions granted by
+   this License.
+
+2. Grant of License.
+   Subject to Your compliance with this License, the Licensor grants You a
+   worldwide, royalty-free, non-exclusive, non-transferable license to download,
+   install, and use the Software, free of charge, for Your own use.
+
+3. Restrictions.
+   You may NOT, in whole or in part, directly or indirectly:
+   (a) distribute, publish, sublicense, sell, rent, lease, lend, host for others,
+       or otherwise make the Software available to any third party;
+   (b) modify, adapt, translate, or create derivative works of the Software; or
+   (c) remove, alter, or obscure any copyright, license, or proprietary notice.
+
+4. Reservation of Rights.
+   All rights not expressly granted in this License are reserved by the Licensor.
+   No rights are granted by implication, estoppel, or otherwise. This License
+   grants no rights in the Licensor's trademarks, service marks, or trade names.
+
+5. Termination.
+   This License terminates automatically if You breach any of its terms. Upon
+   termination, You must cease all use of the Software and destroy all copies in
+   Your possession or control.
+
+6. Disclaimer of Warranty.
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. Limitation of Liability.
+   IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+   OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
