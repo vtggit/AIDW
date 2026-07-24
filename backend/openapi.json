@@ -12905,6 +12905,17 @@
       },
       "ProcessStepCreate": {
         "properties": {
+          "retry_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Limit"
+          },
           "process_definition_id": {
             "anyOf": [
               {
@@ -13008,6 +13019,17 @@
       },
       "ProcessStepResponse": {
         "properties": {
+          "retry_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Limit"
+          },
           "process_definition_id": {
             "anyOf": [
               {
@@ -13125,6 +13147,17 @@
       },
       "ProcessStepUpdate": {
         "properties": {
+          "retry_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Limit"
+          },
           "process_definition_id": {
             "anyOf": [
               {
