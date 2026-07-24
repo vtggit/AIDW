@@ -15,7 +15,7 @@
 </header>
 
 <main class="wh-main">
-    <section class="wh-panel">
+    <section class="wh-panel" data-panel="sources">
         <div class="wh-panel-head">
             <h2>Data sources <span class="badge wh-count" id="sources-count">0</span></h2>
             <p class="wh-sub">Manage external data connections and versions.</p>
@@ -32,7 +32,7 @@
         <div id="sources" class="src-list" data-testid="sources"></div>
     </section>
 
-    <section class="wh-panel">
+    <section class="wh-panel" data-panel="suggestions">
         <div class="wh-panel-head">
             <h2>Suggested dashboard items <span class="badge wh-count" id="inbox-count">0</span></h2>
             <p class="wh-sub">Review and promote AI-suggested metrics.</p>
@@ -40,7 +40,7 @@
         <div id="inbox" class="wh-cards" data-testid="inbox"></div>
     </section>
 
-    <section class="wh-panel">
+    <section class="wh-panel" data-panel="pii">
         <div class="wh-panel-head">
             <h2>PII flags <span class="badge wh-count" id="pii-count">0</span></h2>
             <p class="wh-sub">Triage detected personally identifiable information.</p>
@@ -48,7 +48,7 @@
         <div id="pii-inbox" class="wh-pii-groups" data-testid="pii-inbox"></div>
     </section>
 
-    <section class="wh-panel">
+    <section class="wh-panel" data-panel="wizard">
         <div class="wh-panel-head">
             <h2>Process wizard</h2>
             <p class="wh-sub">Define, connect, and generate BPMN diagrams.</p>
@@ -113,11 +113,14 @@
 <script src="js/warehouse.js"></script>
 <script src="js/sources.js"></script>
 <script src="js/wizard.js"></script>
+<!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
+<script src="/assistant/panel.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     Warehouse.init().then(function () { Sources.init(); });
     Wizard.init();
 });
 </script>
+<script src="js/deeplink.js"></script>
 </body>
 </html>
