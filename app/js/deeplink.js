@@ -10,12 +10,29 @@
 (function () {
   "use strict";
 
+  function openItem(item) {
+    if (typeof Drilldown === "undefined" || !Drilldown.open) return;
+    Drilldown.open(item);
+    var dd = document.getElementById("drilldown");
+    if (dd) dd.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function focusFromUrl() {
     var params = new URLSearchParams(window.location.search);
 
     var item = params.get("item");
-    if (item && typeof Drilldown !== "undefined" && Drilldown.open) {
-      Drilldown.open(item);
+    if (item) {
+      // The app stores its auth token asynchronously on load; opening the drilldown
+      // immediately would fire its fetch before the token exists and 401 on a cold
+      // (shared/bookmarked) link. Poll briefly for auth, then open regardless so
+      // auth-disabled deployments still work.
+      var tries = 0;
+      (function waitForAuth() {
+        var authed = window.Auth && Auth.getAuthorizationHeader && Auth.getAuthorizationHeader();
+        if (authed || tries >= 20) { openItem(item); return; }
+        tries++;
+        setTimeout(waitForAuth, 100);
+      })();
       return;
     }
 
