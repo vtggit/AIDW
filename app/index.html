@@ -43,5 +43,7 @@
        deployed (e.g. local dev), this 404s harmlessly and no panel is shown. -->
   <script src="/assistant/panel.js" defer></script>
   <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init(); Drilldown.init(); });</script>
+  <!-- Deep-link handler: focuses a view from ?item= / ?panel= on load (assistant navigation). -->
+  <script src="js/deeplink.js"></script>
 </body>
 </html>
