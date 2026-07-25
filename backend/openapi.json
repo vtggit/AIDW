@@ -9573,6 +9573,17 @@
       },
       "DashboardItemCreate": {
         "properties": {
+          "grid_col_span": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Span"
+          },
           "dashboard_id": {
             "anyOf": [
               {
@@ -9815,6 +9826,17 @@
       },
       "DashboardItemResponse": {
         "properties": {
+          "grid_col_span": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Span"
+          },
           "dashboard_id": {
             "anyOf": [
               {
@@ -9910,6 +9932,17 @@
       },
       "DashboardItemUpdate": {
         "properties": {
+          "grid_col_span": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Span"
+          },
           "dashboard_id": {
             "anyOf": [
               {
