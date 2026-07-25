@@ -9573,6 +9573,17 @@
       },
       "DashboardItemCreate": {
         "properties": {
+          "grid_col_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Start"
+          },
           "grid_col_span": {
             "anyOf": [
               {
@@ -9826,6 +9837,17 @@
       },
       "DashboardItemResponse": {
         "properties": {
+          "grid_col_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Start"
+          },
           "grid_col_span": {
             "anyOf": [
               {
@@ -9932,6 +9954,17 @@
       },
       "DashboardItemUpdate": {
         "properties": {
+          "grid_col_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Start"
+          },
           "grid_col_span": {
             "anyOf": [
               {

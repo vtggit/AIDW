@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class DashboardItemCreate(BaseModel):
     """Request model for creating a dashboard_item."""
 
+    grid_col_start: int | None = Field(default=None)
+
     grid_col_span: int | None = Field(default=None)
 
     dashboard_id: str | None = Field(default=None)
@@ -21,6 +23,8 @@ class DashboardItemCreate(BaseModel):
 class DashboardItemUpdate(BaseModel):
     """Request model for updating a dashboard_item (all fields optional)."""
 
+    grid_col_start: int | None = Field(default=None)
+
     grid_col_span: int | None = Field(default=None)
 
     dashboard_id: str | None = Field(default=None)
@@ -35,6 +39,8 @@ class DashboardItemUpdate(BaseModel):
 
 class DashboardItemResponse(BaseModel):
     """Response model for a dashboard_item record."""
+
+    grid_col_start: int | None = None
 
     grid_col_span: int | None = None
 
