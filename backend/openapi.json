@@ -8791,6 +8791,73 @@
         }
       }
     },
+    "/api/process-definitions/{definition_id}/validate": {
+      "post": {
+        "tags": [
+          "process-validate"
+        ],
+        "summary": "Validate Process Delta",
+        "description": "Validate a proposed delta against the current process-definition rows.\n\nNothing is persisted \u2014 only SELECT queries are issued.  On success the full\nBPMN XML and SVG are returned; on validation failure a 422 envelope with the\nIRError messages is sent back.",
+        "operationId": "validate_process_delta_api_process_definitions__definition_id__validate_post",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Definition Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Root",
@@ -11652,6 +11719,45 @@
         "type": "object",
         "title": "FieldProfileUpdate",
         "description": "Request model for updating a field_profile (all fields optional)."
+      },
+      "FlowDelta": {
+        "properties": {
+          "flow_key": {
+            "type": "string",
+            "title": "Flow Key"
+          },
+          "source_step": {
+            "type": "string",
+            "title": "Source Step"
+          },
+          "target_step": {
+            "type": "string",
+            "title": "Target Step"
+          },
+          "condition_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Expression"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "flow_key",
+          "source_step",
+          "target_step"
+        ],
+        "title": "FlowDelta"
       },
       "HTTPValidationError": {
         "properties": {
@@ -15026,6 +15132,76 @@
         "title": "SourceUpdate",
         "description": "Request model for updating a source (all fields optional)."
       },
+      "StepDelta": {
+        "properties": {
+          "step_key": {
+            "type": "string",
+            "title": "Step Key"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ordinal": {
+            "type": "integer",
+            "title": "Ordinal"
+          },
+          "step_type": {
+            "type": "string",
+            "title": "Step Type"
+          },
+          "service_impl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Impl"
+          },
+          "candidate_groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Groups"
+          },
+          "form_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_key",
+          "ordinal",
+          "step_type"
+        ],
+        "title": "StepDelta"
+      },
       "SuggestionCreate": {
         "properties": {
           "dataset_id": {
@@ -15706,6 +15882,40 @@
         "type": "object",
         "title": "SuppressionEntryUpdate",
         "description": "Request model for updating a suppression_entry (all fields optional)."
+      },
+      "ValidateRequest": {
+        "properties": {
+          "add_steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepDelta"
+            },
+            "type": "array",
+            "title": "Add Steps"
+          },
+          "add_flows": {
+            "items": {
+              "$ref": "#/components/schemas/FlowDelta"
+            },
+            "type": "array",
+            "title": "Add Flows"
+          },
+          "remove_step_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Remove Step Keys"
+          },
+          "remove_flow_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Remove Flow Keys"
+          }
+        },
+        "type": "object",
+        "title": "ValidateRequest"
       },
       "ValidationError": {
         "properties": {
