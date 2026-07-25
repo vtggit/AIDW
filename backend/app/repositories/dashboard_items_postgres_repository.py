@@ -33,7 +33,11 @@ class DashboardItemPostgresRepository:
 
     def list_all(self) -> list[dict]:
         with get_cursor() as cur:
-            cur.execute("SELECT * FROM dashboard_items ORDER BY created_at DESC")
+            query = (
+                "SELECT * FROM dashboard_items "
+                "ORDER BY position ASC NULLS LAST, created_at DESC"
+            )
+            cur.execute(query)
             return [_row_to_dict(r) for r in cur.fetchall()]
 
     def get_by_id(self, entity_id: str) -> dict | None:
