@@ -8864,6 +8864,7 @@
           "dashboard-item-layouts"
         ],
         "summary": "List Dashboard Item Layouts",
+        "description": "List layouts owned by the authenticated caller.",
         "operationId": "list_dashboard_item_layouts_api_dashboard_item_layouts_get",
         "parameters": [
           {
@@ -8915,6 +8916,7 @@
           "dashboard-item-layouts"
         ],
         "summary": "Create Dashboard Item Layout",
+        "description": "Create a layout for the authenticated caller.\n\nuser_id is derived from the token subject; it must not be supplied in the\nrequest body (the Pydantic model rejects it).",
         "operationId": "create_dashboard_item_layout_api_dashboard_item_layouts_post",
         "parameters": [
           {
@@ -8974,6 +8976,7 @@
           "dashboard-item-layouts"
         ],
         "summary": "Get Dashboard Item Layout",
+        "description": "Fetch a layout \u2014 only if it belongs to the authenticated caller.",
         "operationId": "get_dashboard_item_layout_api_dashboard_item_layouts__entity_id__get",
         "parameters": [
           {
@@ -9030,6 +9033,7 @@
           "dashboard-item-layouts"
         ],
         "summary": "Update Dashboard Item Layout",
+        "description": "Update a layout \u2014 only if it belongs to the authenticated caller.\n\nAny user_id in the payload is ignored; ownership comes from the token.",
         "operationId": "update_dashboard_item_layout_api_dashboard_item_layouts__entity_id__put",
         "parameters": [
           {
@@ -9096,6 +9100,7 @@
           "dashboard-item-layouts"
         ],
         "summary": "Delete Dashboard Item Layout",
+        "description": "Delete a layout \u2014 only if it belongs to the authenticated caller.",
         "operationId": "delete_dashboard_item_layout_api_dashboard_item_layouts__entity_id__delete",
         "parameters": [
           {
@@ -10145,7 +10150,9 @@
           "grid_row_span": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -10156,7 +10163,8 @@
           "grid_col_start": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "exclusiveMinimum": 0.0
               },
               {
                 "type": "null"
@@ -10167,7 +10175,9 @@
           "grid_col_span": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 12.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -10179,17 +10189,6 @@
             "type": "string",
             "minLength": 1,
             "title": "Name"
-          },
-          "user_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Id"
           },
           "dashboard_item_id": {
             "anyOf": [
@@ -10208,7 +10207,7 @@
           "name"
         ],
         "title": "DashboardItemLayoutCreate",
-        "description": "Request model for creating a dashboard_item_layout."
+        "description": "Request model for creating a dashboard_item_layout.\n\nuser_id is intentionally absent \u2014 it is derived from the caller's\nauthentication token and must never be supplied by the client."
       },
       "DashboardItemLayoutResponse": {
         "properties": {
@@ -10299,7 +10298,9 @@
           "grid_row_span": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -10310,7 +10311,8 @@
           "grid_col_start": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "exclusiveMinimum": 0.0
               },
               {
                 "type": "null"
@@ -10321,7 +10323,9 @@
           "grid_col_span": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "integer",
+                "maximum": 12.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -10365,7 +10369,7 @@
         },
         "type": "object",
         "title": "DashboardItemLayoutUpdate",
-        "description": "Request model for updating a dashboard_item_layout (all fields optional)."
+        "description": "Request model for updating a dashboard_item_layout (all fields optional).\n\nuser_id is kept as an accepted-but-ignored field so that clients sending it\ndo not receive a 422; the service layer strips it before persistence."
       },
       "DashboardItemResponse": {
         "properties": {

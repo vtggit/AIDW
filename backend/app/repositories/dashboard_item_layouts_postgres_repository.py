@@ -10,31 +10,39 @@ def _generate_id() -> str:
     return str(uuid4())
 
 
-def _row_to_dict(row) -> dict:
-    d = dict(row)
+def _row_to_dict(row_record) -> dict:
+    record_dict = dict(row_record)
     for key in ("created_at", "updated_at"):
-        if d.get(key) and isinstance(d[key], datetime):
-            d[key] = d[key].isoformat()
-    return d
+        if record_dict.get(key) and isinstance(record_dict[key], datetime):
+            record_dict[key] = record_dict[key].isoformat()
+    return record_dict
 
 
 class DashboardItemLayoutPostgresRepository:
-    """PostgreSQL repository for the dashboard_item_layouts table."""
+    """PostgreSQL repository for the dashboard_item_layouts table.
 
-    def list_all(self) -> list[dict]:
-        with get_cursor() as cur:
-            cur.execute("SELECT * FROM dashboard_item_layouts ORDER BY created_at DESC")
-            return [_row_to_dict(r) for r in cur.fetchall()]
+    All write operations are scoped to a specific user_id so that callers
+    can only manage their own rows.  Read operations also filter by owner.
+    """
 
-    def get_by_id(self, entity_id: str) -> dict | None:
+    def list_by_user(self, caller_user_id: str) -> list[dict]:
         with get_cursor() as cur:
             cur.execute(
-                "SELECT * FROM dashboard_item_layouts WHERE id = %s", (entity_id,)
+                "SELECT * FROM dashboard_item_layouts WHERE user_id = %s ORDER BY created_at DESC",
+                (caller_user_id,),
             )
-            row = cur.fetchone()
-            return _row_to_dict(row) if row else None
+            return [_row_to_dict(row_record) for row_record in cur.fetchall()]
 
-    def create(self, data: dict) -> dict:
+    def get_by_id_and_owner(self, entity_id: str, owner_user_id: str) -> dict | None:
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT * FROM dashboard_item_layouts WHERE id = %s AND user_id = %s",
+                (entity_id, owner_user_id),
+            )
+            row_record = cur.fetchone()
+            return _row_to_dict(row_record) if row_record else None
+
+    def create_for_user(self, data: dict, owner_user_id: str) -> dict:
         new_id = data.get("id", _generate_id())
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
@@ -43,7 +51,7 @@ class DashboardItemLayoutPostgresRepository:
                 (
                     new_id,
                     data.get("name"),
-                    data.get("user_id"),
+                    owner_user_id,
                     data.get("dashboard_item_id"),
                     data.get("grid_col_span"),
                     data.get("grid_col_start"),
@@ -52,34 +60,44 @@ class DashboardItemLayoutPostgresRepository:
                     now,
                 ),
             )
-        return self.get_by_id(new_id)
+        return self.get_by_id_and_owner(new_id, owner_user_id)
 
-    def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = (
+    def update_for_owner(
+        self, entity_id: str, data: dict, owner_user_id: str
+    ) -> dict | None:
+        existing_record = self.get_by_id_and_owner(entity_id, owner_user_id)
+        if existing_record is None:
+            return None
+
+        updatable_fields = (
             "name",
-            "user_id",
             "dashboard_item_id",
             "grid_col_span",
             "grid_col_start",
             "grid_row_span",
         )
-        fields = [k for k in updatable if k in data]
-        if not fields:
-            return self.get_by_id(entity_id)
-        set_clauses = [f"{f} = %s" for f in fields]
-        set_clauses.append("updated_at = %s")
-        values = [data[f] for f in fields]
-        values.append(datetime.now(timezone.utc))
-        with get_cursor() as cur:
-            cur.execute(
-                f"UPDATE dashboard_item_layouts SET {', '.join(set_clauses)} WHERE id = %s",
-                values + [entity_id],
-            )
-        return self.get_by_id(entity_id)
+        fields_to_update = [
+            field_name for field_name in updatable_fields if field_name in data
+        ]
+        if not fields_to_update:
+            return existing_record
 
-    def delete(self, entity_id: str) -> bool:
+        set_clauses = [f"{field_name} = %s" for field_name in fields_to_update]
+        set_clauses.append("updated_at = %s")
+        values_list = [data[field_name] for field_name in fields_to_update]
+        values_list.append(datetime.now(timezone.utc))
+
         with get_cursor() as cur:
             cur.execute(
-                "DELETE FROM dashboard_item_layouts WHERE id = %s", (entity_id,)
+                f"UPDATE dashboard_item_layouts SET {', '.join(set_clauses)} WHERE id = %s AND user_id = %s",
+                values_list + [entity_id, owner_user_id],
+            )
+        return self.get_by_id_and_owner(entity_id, owner_user_id)
+
+    def delete_for_owner(self, entity_id: str, owner_user_id: str) -> bool:
+        with get_cursor() as cur:
+            cur.execute(
+                "DELETE FROM dashboard_item_layouts WHERE id = %s AND user_id = %s",
+                (entity_id, owner_user_id),
             )
             return cur.rowcount > 0
