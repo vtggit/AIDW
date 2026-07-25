@@ -141,6 +141,10 @@ def build_ir(
     for row in flows:
         flow_key = row["flow_key"]
 
+        # Invariant 5 — flow_key must match the allowed pattern
+        if not _STEP_KEY_RE.fullmatch(flow_key):
+            raise IRError(f"Invalid flow_key: {flow_key!r}")
+
         # Invariant 6 — unique flow_key within the process
         if flow_key in flow_keys:
             raise IRError(f"Duplicate flow_key: {flow_key!r}")
