@@ -249,6 +249,7 @@ def create_app() -> FastAPI:
     from app.api.auth import router as auth_router
     from app.api.connection_tests import router as connection_tests_router
     from app.api.dashboard_item_fields import router as dashboard_item_fields_router
+    from app.api.dashboard_item_layouts import router as dashboard_item_layouts_router
     from app.api.dashboard_items import router as dashboard_items_router
     from app.api.dashboards import router as dashboards_router
     from app.api.datasets import router as datasets_router
@@ -324,6 +325,7 @@ def create_app() -> FastAPI:
     application.include_router(sequence_flows_router)
     application.include_router(process_generate_router)
     application.include_router(process_validate_router)
+    application.include_router(dashboard_item_layouts_router)
 
     @application.on_event("startup")
     def on_startup():
