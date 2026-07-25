@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.models.dashboard_item_layouts import (
@@ -29,10 +28,11 @@ def get_service() -> DashboardItemLayoutService:
 
 @router.get("", response_model=list[DashboardItemLayoutResponse])
 def list_dashboard_item_layouts(
-    _user: AuthUser = Depends(require_authenticated_user),
+    caller: AuthUser = Depends(require_authenticated_user),
     service: DashboardItemLayoutService = Depends(get_service),
 ):
-    return service.list_dashboard_item_layouts()
+    """List layouts owned by the authenticated caller."""
+    return service.list_dashboard_item_layouts(caller.sub)
 
 
 @router.post(
@@ -40,19 +40,25 @@ def list_dashboard_item_layouts(
 )
 def create_dashboard_item_layout(
     payload: DashboardItemLayoutCreate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    caller: AuthUser = Depends(require_authenticated_user),
     service: DashboardItemLayoutService = Depends(get_service),
 ):
-    return service.create_dashboard_item_layout(payload)
+    """Create a layout for the authenticated caller.
+
+    user_id is derived from the token subject; it must not be supplied in the
+    request body (the Pydantic model rejects it).
+    """
+    return service.create_dashboard_item_layout(payload, caller.sub)
 
 
 @router.get("/{entity_id}", response_model=DashboardItemLayoutResponse)
 def get_dashboard_item_layout(
     entity_id: str,
-    _user: AuthUser = Depends(require_authenticated_user),
+    caller: AuthUser = Depends(require_authenticated_user),
     service: DashboardItemLayoutService = Depends(get_service),
 ):
-    entity = service.get_dashboard_item_layout(entity_id)
+    """Fetch a layout — only if it belongs to the authenticated caller."""
+    entity = service.get_dashboard_item_layout(entity_id, caller.sub)
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -65,10 +71,14 @@ def get_dashboard_item_layout(
 def update_dashboard_item_layout(
     entity_id: str,
     payload: DashboardItemLayoutUpdate,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    caller: AuthUser = Depends(require_authenticated_user),
     service: DashboardItemLayoutService = Depends(get_service),
 ):
-    entity = service.update_dashboard_item_layout(entity_id, payload)
+    """Update a layout — only if it belongs to the authenticated caller.
+
+    Any user_id in the payload is ignored; ownership comes from the token.
+    """
+    entity = service.update_dashboard_item_layout(entity_id, payload, caller.sub)
     if entity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -80,10 +90,11 @@ def update_dashboard_item_layout(
 @router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_dashboard_item_layout(
     entity_id: str,
-    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    caller: AuthUser = Depends(require_authenticated_user),
     service: DashboardItemLayoutService = Depends(get_service),
 ):
-    if not service.delete_dashboard_item_layout(entity_id):
+    """Delete a layout — only if it belongs to the authenticated caller."""
+    if not service.delete_dashboard_item_layout(entity_id, caller.sub):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"DashboardItemLayout '{entity_id}' not found.",
