@@ -52,8 +52,8 @@ class DashboardItemPostgresRepository:
         with get_cursor() as cur:
             cur.execute(
                 "INSERT INTO dashboard_items (id, name, dashboard_id, source_suggestion_id, "
-                "title, item_type, aggregation, position, grid_col_span, grid_col_start, created_at, updated_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "title, item_type, aggregation, position, grid_col_span, grid_col_start, grid_row_span, created_at, updated_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -65,6 +65,7 @@ class DashboardItemPostgresRepository:
                     data.get("position"),
                     data.get("grid_col_span"),
                     data.get("grid_col_start"),
+                    data.get("grid_row_span"),
                     now,
                     now,
                 ),
