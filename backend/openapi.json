@@ -9547,6 +9547,17 @@
       },
       "DashboardCreate": {
         "properties": {
+          "grid_columns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Columns"
+          },
           "description": {
             "anyOf": [
               {
@@ -10093,6 +10104,17 @@
       },
       "DashboardResponse": {
         "properties": {
+          "grid_columns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Columns"
+          },
           "description": {
             "anyOf": [
               {
@@ -10133,6 +10155,17 @@
       },
       "DashboardUpdate": {
         "properties": {
+          "grid_columns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Columns"
+          },
           "description": {
             "anyOf": [
               {

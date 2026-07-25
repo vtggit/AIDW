@@ -39,9 +39,16 @@ class DashboardPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO dashboards (id, name, description, created_at, updated_at) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (new_id, data.get("name"), data.get("description"), now, now),
+                "INSERT INTO dashboards (id, name, description, grid_columns, created_at, updated_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (
+                    new_id,
+                    data.get("name"),
+                    data.get("description"),
+                    data.get("grid_columns"),
+                    now,
+                    now,
+                ),
             )
         return self.get_by_id(new_id)
 
