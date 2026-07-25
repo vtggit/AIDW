@@ -39,7 +39,7 @@ class DashboardItemLayoutPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO dashboard_item_layouts (id, name, user_id, dashboard_item_id, grid_col_span, grid_col_start, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO dashboard_item_layouts (id, name, user_id, dashboard_item_id, grid_col_span, grid_col_start, grid_row_span, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -47,6 +47,7 @@ class DashboardItemLayoutPostgresRepository:
                     data.get("dashboard_item_id"),
                     data.get("grid_col_span"),
                     data.get("grid_col_start"),
+                    data.get("grid_row_span"),
                     now,
                     now,
                 ),
@@ -60,6 +61,7 @@ class DashboardItemLayoutPostgresRepository:
             "dashboard_item_id",
             "grid_col_span",
             "grid_col_start",
+            "grid_row_span",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
