@@ -10142,6 +10142,17 @@
       },
       "DashboardItemLayoutCreate": {
         "properties": {
+          "grid_col_span": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Span"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -10179,6 +10190,17 @@
       },
       "DashboardItemLayoutResponse": {
         "properties": {
+          "grid_col_span": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Span"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -10230,6 +10252,17 @@
       },
       "DashboardItemLayoutUpdate": {
         "properties": {
+          "grid_col_span": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Col Span"
+          },
           "name": {
             "anyOf": [
               {
