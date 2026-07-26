@@ -138,10 +138,28 @@ jobs:
       - name: Run frontend Playwright suite -> junitxml
         if: steps.fam.outputs.family == 'frontend'
         run: |
+          # Serve the static frontend for the suite (AIDW#306): before this, NOTHING
+          # listened while the specs ran, every navigating spec died on ECONNREFUSED,
+          # and `|| true` swallowed it — a frontend PR could not be honestly proven.
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory app > /tmp/static.log 2>&1 &
+          for i in $(seq 1 50); do curl -sf -o /dev/null http://127.0.0.1:8080/ && break; sleep 0.2; done
+          curl -sf -o /dev/null http://127.0.0.1:8080/ || {
+            echo "::error::static server never became ready at http://127.0.0.1:8080 — infrastructure failure, no spec ran"
+            cat /tmp/static.log; exit 1; }
           cd app/tests
           npm i @playwright/test@1.57.0 --no-save --no-audit --no-fund
           npx playwright install --with-deps chromium
-          npx playwright test || true
+          # rc is CAPTURED, not swallowed: the contract gate is the arbiter of the PROOF
+          # nodeids in the junit, so unrelated live-stack specs (they assume a real
+          # backend and fail 501 against a static server) may be red here without
+          # failing the job — but the infra classes below fail it LOUDLY, named.
+          BASE_URL=http://127.0.0.1:8080 npx playwright test && rc=0 || rc=$?
+          [ -f report.xml ] || {
+            echo "::error::playwright produced no junit (rc=$rc) — an npx/container failure, not a spec verdict"; exit 1; }
+          if grep -E 'net::ERR_CONNECTION_|net::ERR_EMPTY_RESPONSE|ECONNREFUSED' report.xml | grep -q '127.0.0.1:8080'; then
+            echo "::error::spec(s) could not reach the served app at http://127.0.0.1:8080 — infrastructure failure, not an assertion"
+            exit 1; fi
+          echo "playwright exited rc=$rc — proof verdicts are enforced by the contract gate"
           # playwright.config.js writes ./report.xml (junit reporter); mirror the
           # local builder's fixup: add the repo-relative `file` attr per testcase
           # so the checker's changed-files binding + --repo-root stripping align.
