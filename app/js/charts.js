@@ -26,15 +26,15 @@ const Charts = {
     return parts.join(' \u00b7 ');
   },
 
-  renderBar(series, meta) {
-    const W = 640;
-    const H = 360;
+  renderBar(series, meta, chartWidth, chartHeight) {
+    const W = chartWidth !== undefined && chartWidth !== null ? Number(chartWidth) : 640;
+    const H = chartHeight !== undefined && chartHeight !== null ? Number(chartHeight) : 360;
     const padTop = 50;
     const padRight = 20;
     const padBottom = 80;
     const padLeft = 70;
-    const chartW = W - padLeft - padRight;
-    const chartH = H - padTop - padBottom;
+    const plotWidth = W - padLeft - padRight;
+    const plotHeight = H - padTop - padBottom;
 
     let maxVal = 0;
     for (let i = 0; i < series.length; i++) {
@@ -52,21 +52,21 @@ const Charts = {
 
     for (let i = 0; i < yTicks.length; i++) {
       const val = yTicks[i];
-      const y = padTop + chartH - (val / maxVal) * chartH;
+      const y = padTop + plotHeight - (val / maxVal) * plotHeight;
       svg += `<line x1="${padLeft}" y1="${y}" x2="${W - padRight}" y2="${y}" stroke="#e0e0e0" stroke-width="1"/>`;
       svg += `<text x="${padLeft - 8}" y="${y + 4}" text-anchor="end" font-size="11">${this._fmt(val)}</text>`;
     }
 
     const barCount = series.length || 1;
     const gap = 8;
-    const barW = Math.max(2, (chartW - gap * (barCount + 1)) / barCount);
+    const barW = Math.max(2, (plotWidth - gap * (barCount + 1)) / barCount);
 
     for (let i = 0; i < series.length; i++) {
       const label = String(series[i][0]);
       const value = Number(series[i][1]) || 0;
       const x = padLeft + gap + i * (barW + gap);
-      const barH = (value / maxVal) * chartH;
-      const y = padTop + chartH - barH;
+      const barH = (value / maxVal) * plotHeight;
+      const y = padTop + plotHeight - barH;
 
       let fill = '#4a90d9';
       if (label === 'Other') {
@@ -81,7 +81,7 @@ const Charts = {
       svg += `<text x="${x + barW / 2}" y="${valY}" text-anchor="middle" font-size="10">${this._fmt(value)}</text>`;
 
       const truncated = label.length > 12 ? label.slice(0, 12) : label;
-      svg += `<text x="${x + barW / 2}" y="${padTop + chartH + 16}" text-anchor="middle" font-size="11">${this._esc(truncated)}</text>`;
+      svg += `<text x="${x + barW / 2}" y="${padTop + plotHeight + 16}" text-anchor="middle" font-size="11">${this._esc(truncated)}</text>`;
     }
 
     const footer = this._footer(meta);
