@@ -1,3 +1,18 @@
+# Build-context exclusions. Whatever survives here can be picked up by a COPY
+# and land in the PUBLIC web root, so keep non-runtime paths out of the context.
+
 # Docker build artifacts
 Dockerfile
 .dockerignore
+
+# Playwright suite — dev-only. It runs from the repo checkout (the merge gate
+# serves app/ with python -m http.server and runs `npx playwright test` in
+# app/tests), never from the image. Shipping it published every spec, plus
+# package.json and playwright.config.js, under /tests/ on the served app —
+# naming API routes, testids and the dev auth-token pattern for no runtime gain.
+tests/
+node_modules/
+
+# Docs / editor / OS noise
+*.md
+.DS_Store
