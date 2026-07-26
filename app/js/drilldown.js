@@ -38,7 +38,13 @@ const Drilldown = {
         total_rows: d.source === 'landed' ? d.total_rows : null,
         refreshed_at: d.source === 'landed' ? d.refreshed_at : null,
       };
-      html += Charts.renderBar(seriesPairs, meta);
+
+      let chartWidth = undefined;
+      if (d.grid_col_span != null && Number(d.grid_col_span) > 0) {
+        chartWidth = Math.round(640 * d.grid_col_span);
+      }
+
+      html += Charts.renderBar(seriesPairs, meta, chartWidth);
     }
 
     html += '<table class="dd-table" data-testid="drilldown-table">';
