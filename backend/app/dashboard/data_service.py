@@ -228,6 +228,8 @@ def item_data(item_id: str) -> dict:
                     "total_rows": agg_result["total_rows"],
                     "refreshed_at": agg_result["refreshed_at"],
                     "source": "landed",
+                    "grid_col_span": item.get("grid_col_span"),
+                    "grid_row_span": item.get("grid_row_span"),
                 }
 
     if conn is None or not (conn.get("endpoint") or "").strip():
@@ -284,4 +286,6 @@ def item_data(item_id: str) -> dict:
         "series": series,
         "buckets_total": buckets_total,
         "truncated": buckets_total > len(series),
+        "grid_col_span": item.get("grid_col_span"),
+        "grid_row_span": item.get("grid_row_span"),
     }
