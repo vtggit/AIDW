@@ -38,7 +38,16 @@ const Drilldown = {
         total_rows: d.source === 'landed' ? d.total_rows : null,
         refreshed_at: d.source === 'landed' ? d.refreshed_at : null,
       };
-      html += Charts.renderBar(seriesPairs, meta);
+
+      // 160 pixels per column; clamped to [640, 1280] so a 1-col tile still gets 640
+      // and a 12-col tile caps at 1280 rather than overflowing the modal.
+      let chartWidth;
+      if (d.grid_col_span != null) {
+        const raw = d.grid_col_span * 160;
+        chartWidth = Math.max(640, Math.min(1280, raw));
+      }
+
+      html += Charts.renderBar(seriesPairs, meta, chartWidth);
     }
 
     html += '<table class="dd-table" data-testid="drilldown-table">';
