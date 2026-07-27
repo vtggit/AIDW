@@ -50,3 +50,14 @@ test-results/
 
 # Playwright junit artifact (generated per run)
 app/tests/report.xml
+
+# Internal working docs — strategy / topology / customer detail (NEVER commit to the public repo)
+# Add any new internal scoping/handover doc here.
+/HANDOVER.md
+/RTBF-UI-SCOPE.md
+/ASSISTANT-ARCHITECTURE.md
+/ASSISTANT-PHASE1.md
+/ASSISTANT-PHASE2.md
+/ASSISTANT-PHASE3.md
+/ASSISTANT-PHASE4.md
+/DEMO-RUNBOOK.md
