@@ -156,21 +156,31 @@ const Warehouse = {
             (byDash[it.dashboard_id] = byDash[it.dashboard_id] || []).push(it);
         }
         return dashboards.map((d) => {
+            const C = (typeof d.grid_columns === 'number' && Number.isInteger(d.grid_columns) && d.grid_columns >= 1 && d.grid_columns <= 12) ? d.grid_columns : 12;
             const its = (byDash[d.id] || []).slice().sort(
                 (a, b) => (a.position || 0) - (b.position || 0)
             );
             const body = its.length
-                ? its.map(Warehouse.renderDashboardItem).join('')
-                : '<div class="wh-empty">Empty</div>';
+                ? its.map((it) => Warehouse.renderDashboardItem(it, C)).join('')
+                : '<div class="wh-empty" style="grid-column: 1 / -1">Empty</div>';
             return `<div class="dashboard-card" data-testid="dashboard" data-id="${Warehouse._attr(d.id)}">
         <h3>${Warehouse._esc(d.name || '')}</h3>
-        <div class="wh-items">${body}</div>
+        <div class="wh-items" style="display:grid; grid-template-columns: repeat(${C}, minmax(0,1fr))">${body}</div>
       </div>`;
         }).join('');
     },
 
-    renderDashboardItem(i) {
-        return `<div class="wh-item" data-testid="dashboard-item" data-id="${Warehouse._attr(i.id)}">
+    renderDashboardItem(i, C) {
+        const isPosInt = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1;
+        let W = isPosInt(i.grid_col_span) ? Math.min(C, Math.max(1, i.grid_col_span)) : C;
+        let S = 'auto';
+        if (isPosInt(i.grid_col_start)) {
+            const maxStart = C - W + 1;
+            S = Math.min(maxStart, Math.max(1, i.grid_col_start));
+        }
+        let R = isPosInt(i.grid_row_span) ? Math.min(6, Math.max(1, i.grid_row_span)) : 1;
+        const style = `grid-column: ${S} / span ${W}; grid-row: span ${R}`;
+        return `<div class="wh-item" data-testid="dashboard-item" data-id="${Warehouse._attr(i.id)}" style="${style}">
       <span class="badge wh-chart">${Warehouse._chartLabel(i.item_type)}</span>
       <span class="wh-title">${Warehouse._esc(i.title || i.name || '')}</span>
       <div class="wh-item-chart" data-testid="chart" data-id="${Warehouse._attr(i.id)}">${Warehouse._chartNote('Loading data…')}</div>
