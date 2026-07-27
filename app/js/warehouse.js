@@ -75,15 +75,17 @@ const Warehouse = {
     async loadDashboards() {
         const el = document.getElementById('dashboards');
         if (!el) return;
-        const [dRes, iRes] = await Promise.all([
+        const [dRes, iRes, lRes] = await Promise.all([
             ApiClient.get('/dashboards'),
             ApiClient.get('/dashboard-items'),
+            ApiClient.get('/dashboard-item-layouts'),
         ]);
         if (!dRes.ok || !iRes.ok) {
             el.innerHTML = this._notice('Could not load dashboards.', true);
             return;
         }
-        el.innerHTML = this.renderDashboards(dRes.data || [], iRes.data || []);
+        const layouts = (lRes && lRes.ok ? (lRes.data || []) : []);
+        el.innerHTML = this.renderDashboards(dRes.data || [], iRes.data || [], layouts);
         await this._fillCharts(el, iRes.data || []);
     },
 
@@ -147,9 +149,15 @@ const Warehouse = {
         return { label: 'Low', cls: 'wh-conf-low', value };
     },
 
-    renderDashboards(dashboards, items) {
+    renderDashboards(dashboards, items, layouts = []) {
         if (!dashboards.length) {
             return Warehouse._notice('No dashboards yet. Accept a suggestion to start one.');
+        }
+        const overlayIdx = {};
+        for (const lo of layouts) {
+            if (lo.dashboard_item_id && !overlayIdx[lo.dashboard_item_id]) {
+                overlayIdx[lo.dashboard_item_id] = lo;
+            }
         }
         const byDash = {};
         for (const it of items) {
@@ -161,7 +169,18 @@ const Warehouse = {
                 (a, b) => (a.position || 0) - (b.position || 0)
             );
             const body = its.length
-                ? its.map((it) => Warehouse.renderDashboardItem(it, C)).join('')
+                ? its.map((it) => {
+                    const lo = overlayIdx[it.id];
+                    let merged = Object.assign({}, it);
+                    if (lo) {
+                        ['grid_col_start', 'grid_col_span', 'grid_row_span'].forEach(k => {
+                            if (typeof lo[k] === 'number' && Number.isInteger(lo[k]) && lo[k] >= 1) {
+                                merged[k] = lo[k];
+                            }
+                        });
+                    }
+                    return Warehouse.renderDashboardItem(merged, C);
+                }).join('')
                 : '<div class="wh-empty" style="grid-column: 1 / -1">Empty</div>';
             return `<div class="dashboard-card" data-testid="dashboard" data-id="${Warehouse._attr(d.id)}">
         <h3>${Warehouse._esc(d.name || '')}</h3>
