@@ -9,8 +9,10 @@ Ground truth for the panel/auto-operator. `[OPERATOR: fill in]` marks unknowns.
 
 ## Hosting & infrastructure
 
-- **Self-hosted, on-premises** — same host as the AICRM instance (10.1.1.233), but a **separate
-  user, separate workspace, separate private repo** (`vtggit/AIDW`).
+- **Self-hosted, on-premises** — co-located with the AICRM instance on a private-network host,
+  but a **separate user, separate workspace, separate repo** (`vtggit/AIDW`).
+- **This repository is PUBLIC.** Never write host addresses, credentials, customer names or
+  internal strategy into tracked files; internal working docs are gitignored at the repo root.
 - Orchestration: **docker-compose**. No Kubernetes/ECS.
 - PostgreSQL: a **Docker container (postgres:15)** on the same host. Not managed/RDS.
 - CI: GitHub Actions (the CodeAgent gate + backend CI the skeleton was bootstrapped with).
@@ -21,7 +23,10 @@ Ground truth for the panel/auto-operator. `[OPERATOR: fill in]` marks unknowns.
   warehouse-infra skeleton (health/auth/audit + audit_log baseline; the CRM domain of the
   bootstrap seed was stripped). Domain grows via CodeAgent.
 - Frontend: framework-free vanilla JS (ApiClient shell; dashboard items render here).
-- Auth today: AUTH_MODE=development / AUTH_DEV_TOKEN; no IdP/OIDC provisioned.
+- Auth: **OIDC/Keycloak is provisioned and live** on the persistent stack — `AUTH_MODE=production`
+  against the `vtg` realm. The dev-token path (`AUTH_MODE=development` / `AUTH_DEV_TOKEN`) still
+  exists for local and CI runs, but is REJECTED at runtime there (a dev token returns 401), so a
+  browser login is required to reach live data.
 
 ## Storage / compute posture (decided)
 
