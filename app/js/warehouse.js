@@ -84,9 +84,12 @@ const Warehouse = {
             el.innerHTML = this._notice('Could not load dashboards.', true);
             return;
         }
+        const dashboards = dRes.data || [];
+        const items = iRes.data || [];
         const layouts = (lRes && lRes.ok ? (lRes.data || []) : []);
-        el.innerHTML = this.renderDashboards(dRes.data || [], iRes.data || [], layouts);
-        await this._fillCharts(el, iRes.data || []);
+        el.innerHTML = this.renderDashboards(dashboards, items, layouts);
+        Warehouse.bindLayoutEditor(el, dashboards, items, layouts);
+        await this._fillCharts(el, items);
     },
 
     /**
@@ -326,6 +329,29 @@ const Warehouse = {
     _trim(s, n) {
         const str = String(s == null ? '' : s);
         return str.length > n ? `${str.slice(0, n - 1)}…` : str;
+    },
+
+    bindLayoutEditor(container, dashboards, items, layouts) {
+        if (container._boundLayoutEditor) return;
+        container._boundLayoutEditor = true;
+        const handler = (e) => {
+            const btn = e.target.closest('[data-action]');
+            const inEditor = e.target.closest('.wh-layout-editor');
+            if (btn) {
+                const action = btn.getAttribute('data-action');
+                if (['edit-layout', 'save-layout', 'cancel-layout'].includes(action)) {
+                    e.stopPropagation();
+                    if (action === 'edit-layout') {
+                        container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, btn.closest('.wh-item').dataset.id);
+                    } else if (action === 'cancel-layout') {
+                        container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, null);
+                    }
+                }
+            } else if (inEditor) {
+                e.stopPropagation();
+            }
+        };
+        container.addEventListener('click', handler, true);
     },
 
     // ---- actions ------------------------------------------------------------
