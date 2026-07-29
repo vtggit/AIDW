@@ -149,7 +149,7 @@ const Warehouse = {
         return { label: 'Low', cls: 'wh-conf-low', value };
     },
 
-    renderDashboards(dashboards, items, layouts = []) {
+    renderDashboards(dashboards, items, layouts = [], editingId = null) {
         if (!dashboards.length) {
             return Warehouse._notice('No dashboards yet. Accept a suggestion to start one.');
         }
@@ -179,7 +179,7 @@ const Warehouse = {
                             }
                         });
                     }
-                    return Warehouse.renderDashboardItem(merged, C);
+                    return Warehouse.renderDashboardItem(merged, C, editingId);
                 }).join('')
                 : '<div class="wh-empty" style="grid-column: 1 / -1">Empty</div>';
             return `<div class="dashboard-card" data-testid="dashboard" data-id="${Warehouse._attr(d.id)}">
@@ -189,7 +189,7 @@ const Warehouse = {
         }).join('');
     },
 
-    renderDashboardItem(i, C) {
+    renderDashboardItem(i, C, editingId = null) {
         const isPosInt = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1;
         let W = isPosInt(i.grid_col_span) ? Math.min(C, Math.max(1, i.grid_col_span)) : C;
         let S = 'auto';
@@ -199,10 +199,22 @@ const Warehouse = {
         }
         let R = isPosInt(i.grid_row_span) ? Math.min(6, Math.max(1, i.grid_row_span)) : 1;
         const style = `grid-column: ${S} / span ${W}; grid-row: span ${R}`;
+        const effStart = (S === 'auto') ? 1 : S;
+        const editorHtml = (i.id === editingId)
+            ? `<div class="wh-layout-editor">
+      <input type="number" data-testid="layout-col-start" min="1" max="${C}" value="${effStart}">
+      <input type="number" data-testid="layout-col-span" min="1" max="${C}" value="${W}">
+      <input type="number" data-testid="layout-row-span" min="1" max="6" value="${R}">
+      <button type="button" class="btn btn-sm" data-action="save-layout">Save</button>
+      <button type="button" class="btn btn-sm" data-action="cancel-layout">Cancel</button>
+    </div>`
+            : '';
         return `<div class="wh-item" data-testid="dashboard-item" data-id="${Warehouse._attr(i.id)}" style="${style}">
       <span class="badge wh-chart">${Warehouse._chartLabel(i.item_type)}</span>
       <span class="wh-title">${Warehouse._esc(i.title || i.name || '')}</span>
       <div class="wh-item-chart" data-testid="chart" data-id="${Warehouse._attr(i.id)}">${Warehouse._chartNote('Loading data…')}</div>
+      ${editorHtml}
+      <button type="button" class="btn btn-sm" data-action="edit-layout">Edit layout</button>
     </div>`;
     },
 
