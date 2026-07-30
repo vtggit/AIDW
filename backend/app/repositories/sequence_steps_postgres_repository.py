@@ -37,13 +37,14 @@ class SequenceStepPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO sequence_steps (id, name, sequence_id, pipeline_id, label, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO sequence_steps (id, name, sequence_id, pipeline_id, label, order_index, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("sequence_id"),
                     data.get("pipeline_id"),
                     data.get("label"),
+                    data.get("order_index"),
                     now,
                     now,
                 ),
@@ -51,12 +52,7 @@ class SequenceStepPostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = (
-            "name",
-            "sequence_id",
-            "pipeline_id",
-            "label",
-        )
+        updatable = ("name", "sequence_id", "pipeline_id", "label", "order_index")
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)

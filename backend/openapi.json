@@ -15892,6 +15892,17 @@
       },
       "SequenceStepCreate": {
         "properties": {
+          "order_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Index"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -15940,6 +15951,17 @@
       },
       "SequenceStepResponse": {
         "properties": {
+          "order_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Index"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -16002,6 +16024,17 @@
       },
       "SequenceStepUpdate": {
         "properties": {
+          "order_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Index"
+          },
           "name": {
             "anyOf": [
               {
