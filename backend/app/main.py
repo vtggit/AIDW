@@ -278,6 +278,7 @@ def create_app() -> FastAPI:
     from app.api.retention_sweeps import router as retention_sweeps_router
     from app.api.runs import router as runs_router
     from app.api.sequence_flows import router as sequence_flows_router
+    from app.api.sequence_steps import router as sequence_steps_router
     from app.api.source_connections import router as source_connections_router
     from app.api.source_credentials import router as source_credentials_router
     from app.api.sources import router as sources_router
@@ -328,6 +329,7 @@ def create_app() -> FastAPI:
     application.include_router(process_validate_router)
     application.include_router(dashboard_item_layouts_router)
     application.include_router(load_sequences_router)
+    application.include_router(sequence_steps_router)
 
     @application.on_event("startup")
     def on_startup():
