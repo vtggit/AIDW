@@ -334,7 +334,7 @@ const Warehouse = {
     bindLayoutEditor(container, dashboards, items, layouts) {
         if (container._boundLayoutEditor) return;
         container._boundLayoutEditor = true;
-        const handler = (e) => {
+        const handler = async (e) => {
             const btn = e.target.closest('[data-action]');
             const inEditor = e.target.closest('.wh-layout-editor');
             if (btn) {
@@ -345,6 +345,38 @@ const Warehouse = {
                         container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, btn.closest('.wh-item').dataset.id);
                     } else if (action === 'cancel-layout') {
                         container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, null);
+                    } else if (action === 'save-layout') {
+                        const tileEl = btn.closest('.wh-item');
+                        const itemId = tileEl.dataset.id;
+                        const colStart = parseInt(tileEl.querySelector('[data-testid="layout-col-start"]').value, 10);
+                        const colSpan = parseInt(tileEl.querySelector('[data-testid="layout-col-span"]').value, 10);
+                        const rowSpan = parseInt(tileEl.querySelector('[data-testid="layout-row-span"]').value, 10);
+
+                        const existingIdx = layouts.findIndex(l => l.dashboard_item_id === itemId);
+                        let res;
+                        if (existingIdx !== -1) {
+                            const body = { grid_col_start: colStart, grid_col_span: colSpan, grid_row_span: rowSpan };
+                            res = await ApiClient.put('/dashboard-item-layouts/' + layouts[existingIdx].id, body);
+                            if (res.ok) {
+                                layouts[existingIdx].grid_col_start = res.data.grid_col_start;
+                                layouts[existingIdx].grid_col_span = res.data.grid_col_span;
+                                layouts[existingIdx].grid_row_span = res.data.grid_row_span;
+                                container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, null);
+                            } else {
+                                container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, itemId);
+                            }
+                        } else {
+                            const itemObj = items.find(i => i.id === itemId);
+                            const name = (itemObj && itemObj.title) || 'layout';
+                            const body = { dashboard_item_id: itemId, name, grid_col_start: colStart, grid_col_span: colSpan, grid_row_span: rowSpan };
+                            res = await ApiClient.post('/dashboard-item-layouts', body);
+                            if (res.ok) {
+                                layouts.unshift(res.data);
+                                container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, null);
+                            } else {
+                                container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, itemId);
+                            }
+                        }
                     }
                 }
             } else if (inEditor) {
