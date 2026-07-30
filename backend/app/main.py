@@ -262,6 +262,7 @@ def create_app() -> FastAPI:
     from app.api.health import router as health_router
     from app.api.ingest import router as ingest_router
     from app.api.ingested_records import router as ingested_records_router
+    from app.api.load_sequences import router as load_sequences_router
     from app.api.odata_service_configs import router as odata_service_configs_router
     from app.api.pii_decisions import flags_router as pii_decisions_router
     from app.api.pii_decisions import scan_router as pii_scan_router
@@ -326,6 +327,7 @@ def create_app() -> FastAPI:
     application.include_router(process_generate_router)
     application.include_router(process_validate_router)
     application.include_router(dashboard_item_layouts_router)
+    application.include_router(load_sequences_router)
 
     @application.on_event("startup")
     def on_startup():
