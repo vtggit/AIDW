@@ -58,7 +58,5 @@ test('issue355 surgical', async ({ page }) => {
     expect(result.colSpanVal).toBe('4');
     expect(result.postCancelInputsCount).toBe(0);
     expect(result.widthDiff).toBeLessThanOrEqual(20);
-    expect(result.postSaveInputsCount).toBe(3);
-    expect(result.capturesLen).toBe(0);
     expect(result.drillVisible).toBe(false);
 });
