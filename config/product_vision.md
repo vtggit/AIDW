@@ -86,11 +86,29 @@ the codebase; do not answer as though it exists.
 
 ## The benchmark method (operator-set policy)
 
-Questions with no recorded fact/decision are answered by benchmark — **what would a mature
-enterprise data platform do**, judged on capability (connectivity breadth, change tracking,
-lineage, governance, API-contract discipline) rather than on any particular vendor's feature
-list — scaled to our stage, stated as the DECIDED TARGET (name the tracking issue if infra
-doesn't exist yet).
+Open feature-design questions are evaluated using customer needs, established industry
+practices, interoperability requirements, and comparative analysis of publicly documented
+capabilities across multiple products.
+
+- SAP Business Warehouse (SAP BW / SAP BW/4HANA) may be considered as one **nonexclusive**
+  source of domain and market information where relevant. No individual vendor or product
+  serves as product-design ground truth.
+- Competitive research identifies user needs, expected capabilities, and established domain
+  concepts. AIDW's implementation, user experience, terminology, defaults, data models,
+  documentation, and technical behavior must be developed **independently**, based on AIDW's
+  own requirements and architecture.
+- Research must use lawfully obtained information and comply with applicable licenses,
+  access terms, confidentiality obligations, and intellectual-property restrictions.
+  Proprietary source code, confidential information, restricted materials, vendor assets,
+  and copied documentation are outside the benchmark scope.
+- Competitive analysis does not determine security, compliance, data-protection, or
+  architecture posture. Those areas remain governed by `product_facts.md` and the standing
+  decisions above.
+- New capability should be incorporated into AIDW's EXISTING product structure
+  (sources/connectors, datasets, pipelines/CDC, dashboards, BPMN process authoring,
+  governance subsystems) rather than creating unnecessary parallel structure.
+
+State answers as the DECIDED TARGET (name the tracking issue if infra doesn't exist yet).
 Only environmental identifiers (a domain, a purchased credential) are irreducibly
 operator-assigned.
 
