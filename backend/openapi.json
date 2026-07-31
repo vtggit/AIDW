@@ -9995,6 +9995,63 @@
         }
       }
     },
+    "/api/sequence-runs/{run_id}/execute": {
+      "post": {
+        "tags": [
+          "sequence-runs"
+        ],
+        "summary": "Execute Run",
+        "description": "Execute a pending sequence run.\n\nProcesses steps in order, recording per-step state. Returns 200 with the\nfinal run state even if steps failed. Returns 409 if the run is not pending.",
+        "operationId": "execute_run_api_sequence_runs__run_id__execute_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequence-run-steps": {
       "get": {
         "tags": [
