@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
+from app.bpmn.ir import IRError
 from app.models.load_sequences import (
     LoadSequenceCreate,
     LoadSequenceResponse,
@@ -86,3 +87,32 @@ def delete_load_sequence(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"LoadSequence '{entity_id}' not found.",
         )
+
+
+@router.get("/{sequence_id}/bpmn")
+def generate_load_sequence_bpmn(
+    sequence_id: str,
+    _user: AuthUser = Depends(require_authenticated_user),
+):
+    """Project a load sequence's ordered steps as a BPMN diagram.
+
+    Returns the server-generated BPMN XML and SVG for the sequence's
+    current step ordering.  Uses the same generation pipeline as
+    process-definitions/generate (build_ir -> layout -> emit_bpmn / emit_svg).
+    """
+    from app.services.load_sequence_bpmn_service import project_load_sequence_to_bpmn
+
+    try:
+        result = project_load_sequence_to_bpmn(sequence_id)
+    except IRError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Cannot project sequence to BPMN: {exc}",
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"LoadSequence '{sequence_id}' not found.",
+        )
+    return result
