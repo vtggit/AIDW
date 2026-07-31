@@ -13,6 +13,7 @@ from app.models.sequence_runs import (
 from app.repositories.sequence_runs_postgres_repository import (
     SequenceRunPostgresRepository,
 )
+from app.services.sequence_execution_service import execute_sequence_run
 from app.services.sequence_runs_service import SequenceRunService
 
 router = APIRouter(prefix="/api/sequence-runs", tags=["sequence-runs"])
@@ -85,4 +86,26 @@ def delete_sequence_run(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"SequenceRun '{entity_id}' not found.",
+        )
+
+
+@router.post("/{run_id}/execute")
+def execute_run(
+    run_id: str,
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+):
+    """Execute a pending sequence run.
+
+    Processes steps in order, recording per-step state. Returns 200 with the
+    final run state even if steps failed. Returns 409 if the run is not pending.
+    """
+    try:
+        return execute_sequence_run(run_id)
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        # Should not happen, but catch any unexpected errors
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error executing run: {str(exc)}",
         )
