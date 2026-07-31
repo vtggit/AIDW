@@ -9429,6 +9429,63 @@
         }
       }
     },
+    "/api/load-sequences/{sequence_id}/bpmn": {
+      "get": {
+        "tags": [
+          "load-sequences"
+        ],
+        "summary": "Generate Load Sequence Bpmn",
+        "description": "Project a load sequence's ordered steps as a BPMN diagram.\n\nReturns the server-generated BPMN XML and SVG for the sequence's\ncurrent step ordering.  Uses the same generation pipeline as\nprocess-definitions/generate (build_ir -> layout -> emit_bpmn / emit_svg).",
+        "operationId": "generate_load_sequence_bpmn_api_load_sequences__sequence_id__bpmn_get",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequence-steps": {
       "get": {
         "tags": [
