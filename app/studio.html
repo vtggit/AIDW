@@ -112,6 +112,14 @@
         <div data-panel="sequences" data-testid="sequences"></div>
     </section>
 
+    <section class="wh-panel">
+        <div class="wh-panel-head">
+            <h2>Run history</h2>
+            <p class="wh-sub">Execute sequences and inspect per-step run state.</p>
+        </div>
+        <div data-panel="sequence-runs" data-testid="sequence-runs"></div>
+    </section>
+
     <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
 </main>
 
@@ -122,6 +130,7 @@
 <script src="js/sources.js"></script>
 <script src="js/wizard.js"></script>
 <script src="js/sequences.js"></script>
+<script src="js/sequence_runs.js"></script>
 <!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
 <script src="/assistant/panel.js" defer></script>
 <script>
@@ -129,6 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
     Warehouse.init().then(function () { Sources.init(); });
     Wizard.init();
     Sequences.init();
+    SequenceRuns.init();
 });
 </script>
 <script src="js/deeplink.js"></script>
