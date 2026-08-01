@@ -13944,6 +13944,17 @@
       },
       "LoadSequenceCreate": {
         "properties": {
+          "last_fired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fired At"
+          },
           "schedule_enabled": {
             "anyOf": [
               {
@@ -13992,6 +14003,17 @@
       },
       "LoadSequenceResponse": {
         "properties": {
+          "last_fired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fired At"
+          },
           "schedule_enabled": {
             "anyOf": [
               {
@@ -14054,6 +14076,17 @@
       },
       "LoadSequenceUpdate": {
         "properties": {
+          "last_fired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fired At"
+          },
           "schedule_enabled": {
             "anyOf": [
               {
