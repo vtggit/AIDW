@@ -13944,6 +13944,17 @@
       },
       "LoadSequenceCreate": {
         "properties": {
+          "schedule_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Enabled"
+          },
           "schedule_cadence": {
             "anyOf": [
               {
@@ -13981,6 +13992,17 @@
       },
       "LoadSequenceResponse": {
         "properties": {
+          "schedule_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Enabled"
+          },
           "schedule_cadence": {
             "anyOf": [
               {
@@ -14032,6 +14054,17 @@
       },
       "LoadSequenceUpdate": {
         "properties": {
+          "schedule_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Enabled"
+          },
           "schedule_cadence": {
             "anyOf": [
               {
