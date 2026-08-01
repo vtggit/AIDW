@@ -1,11 +1,14 @@
 """LoadSequence API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.bpmn.ir import IRError
+from app.db.connection import get_cursor
 from app.models.load_sequences import (
     LoadSequenceCreate,
     LoadSequenceResponse,
@@ -43,6 +46,63 @@ def create_load_sequence(
     service: LoadSequenceService = Depends(get_service),
 ):
     return service.create_load_sequence(payload)
+
+
+@router.get("/due")
+def get_due_load_sequences(
+    not_fired_since: str = Query(..., description="ISO-8601 timestamp"),
+    _user: AuthUser = Depends(require_authenticated_user),
+):
+    """Return load sequences that are due to fire.
+
+    A sequence is considered due if:
+    - schedule_cadence is set (not null)
+    - schedule_enabled is not false
+    - last_fired_at is null or older than not_fired_since
+    """
+    try:
+        parsed = datetime.fromisoformat(not_fired_since)
+        # If the parsed datetime has no timezone info, assume UTC.
+        if parsed.tzinfo is None:
+            threshold = parsed.replace(tzinfo=timezone.utc)
+        else:
+            threshold = parsed
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="not_fired_since must be a valid ISO-8601 timestamp.",
+        )
+
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, schedule_cadence, schedule_enabled, last_fired_at
+            FROM load_sequences
+            WHERE schedule_cadence IS NOT NULL
+              AND (schedule_enabled IS TRUE OR schedule_enabled IS NULL)
+              AND (last_fired_at IS NULL OR last_fired_at <= %s)
+            ORDER BY id
+            """,
+            (threshold,),
+        )
+        rows = cur.fetchall()
+
+    results = []
+    for row in rows:
+        entry = {
+            "id": row["id"],
+            "name": row["name"],
+            "schedule_cadence": row.get("schedule_cadence"),
+            "schedule_enabled": row.get("schedule_enabled"),
+            "last_fired_at": (
+                row["last_fired_at"].isoformat()
+                if row.get("last_fired_at") is not None
+                else None
+            ),
+        }
+        results.append(entry)
+
+    return results
 
 
 @router.get("/{entity_id}", response_model=LoadSequenceResponse)
