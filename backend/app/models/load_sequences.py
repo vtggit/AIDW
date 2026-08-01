@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class LoadSequenceCreate(BaseModel):
     """Request model for creating a load_sequence."""
 
+    last_fired_at: str | None = Field(default=None)
+
     schedule_enabled: bool | None = Field(default=None)
 
     schedule_cadence: str | None = Field(default=None)
@@ -17,6 +19,8 @@ class LoadSequenceCreate(BaseModel):
 class LoadSequenceUpdate(BaseModel):
     """Request model for updating a load_sequence (all fields optional)."""
 
+    last_fired_at: str | None = Field(default=None)
+
     schedule_enabled: bool | None = Field(default=None)
 
     schedule_cadence: str | None = Field(default=None)
@@ -27,6 +31,8 @@ class LoadSequenceUpdate(BaseModel):
 
 class LoadSequenceResponse(BaseModel):
     """Response model for a load_sequence record."""
+
+    last_fired_at: str | None = None
 
     schedule_enabled: bool | None = None
 

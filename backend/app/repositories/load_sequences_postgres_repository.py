@@ -12,7 +12,7 @@ def _generate_id() -> str:
 
 def _row_to_dict(row) -> dict:
     d = dict(row)
-    for key in ("created_at", "updated_at"):
+    for key in ("last_fired_at", "created_at", "updated_at"):
         if d.get(key) and isinstance(d[key], datetime):
             d[key] = d[key].isoformat()
     return d
@@ -37,13 +37,14 @@ class LoadSequencePostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO load_sequences (id, name, description, schedule_cadence, schedule_enabled, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO load_sequences (id, name, description, schedule_cadence, schedule_enabled, last_fired_at, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
                     data.get("description"),
                     data.get("schedule_cadence"),
                     data.get("schedule_enabled"),
+                    data.get("last_fired_at"),
                     now,
                     now,
                 ),
@@ -51,7 +52,13 @@ class LoadSequencePostgresRepository:
         return self.get_by_id(new_id)
 
     def update(self, entity_id: str, data: dict) -> dict | None:
-        updatable = ("name", "description", "schedule_cadence", "schedule_enabled")
+        updatable = (
+            "name",
+            "description",
+            "schedule_cadence",
+            "schedule_enabled",
+            "last_fired_at",
+        )
         fields = [k for k in updatable if k in data]
         if not fields:
             return self.get_by_id(entity_id)
