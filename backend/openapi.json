@@ -13944,6 +13944,17 @@
       },
       "LoadSequenceCreate": {
         "properties": {
+          "schedule_cadence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Cadence"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -13970,6 +13981,17 @@
       },
       "LoadSequenceResponse": {
         "properties": {
+          "schedule_cadence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Cadence"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -14010,6 +14032,17 @@
       },
       "LoadSequenceUpdate": {
         "properties": {
+          "schedule_cadence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Cadence"
+          },
           "name": {
             "anyOf": [
               {
