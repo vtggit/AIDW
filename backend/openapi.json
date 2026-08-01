@@ -9256,6 +9256,65 @@
         }
       }
     },
+    "/api/load-sequences/due": {
+      "get": {
+        "tags": [
+          "load-sequences"
+        ],
+        "summary": "Get Due Load Sequences",
+        "description": "Return load sequences that are due to fire.\n\nA sequence is considered due if:\n- schedule_cadence is set (not null)\n- schedule_enabled is not false\n- last_fired_at is null or older than not_fired_since",
+        "operationId": "get_due_load_sequences_api_load_sequences_due_get",
+        "parameters": [
+          {
+            "name": "not_fired_since",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ISO-8601 timestamp",
+              "title": "Not Fired Since"
+            },
+            "description": "ISO-8601 timestamp"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/load-sequences/{entity_id}": {
       "get": {
         "tags": [
