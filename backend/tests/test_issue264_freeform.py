@@ -114,5 +114,5 @@ def test_issue264_freeform():
     for bid in ["sources-count", "inbox-count", "pii-count"]:
         assert f'{badge_prefix}{bid}">' in text
 
-    # Exactly four panels
-    assert text.count('class="wh-panel"') == 4
+    # At least four panels (issue389 adds a fifth)
+    assert text.count('class="wh-panel"') >= 4

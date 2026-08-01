@@ -104,6 +104,14 @@
         </fieldset>
     </section>
 
+    <section class="wh-panel">
+        <div class="wh-panel-head">
+            <h2>Load sequences</h2>
+            <p class="wh-sub">Inspect sequences and their BPMN-projected flow.</p>
+        </div>
+        <div data-panel="sequences" data-testid="sequences"></div>
+    </section>
+
     <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
 </main>
 
@@ -113,12 +121,14 @@
 <script src="js/warehouse.js"></script>
 <script src="js/sources.js"></script>
 <script src="js/wizard.js"></script>
+<script src="js/sequences.js"></script>
 <!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
 <script src="/assistant/panel.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     Warehouse.init().then(function () { Sources.init(); });
     Wizard.init();
+    Sequences.init();
 });
 </script>
 <script src="js/deeplink.js"></script>
