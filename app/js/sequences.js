@@ -8,7 +8,7 @@ const Sequences = {
 
   renderList(sequences) {
     if (!sequences || sequences.length === 0) {
-      return '<div data-testid="sequences-empty"></div>';
+      return '<div data-testid="sequences-empty">No load sequences yet.</div>';
     }
     let html = '';
     for (let i = 0; i < sequences.length; i++) {
@@ -24,7 +24,7 @@ const Sequences = {
 
     // Check for parse errors
     if (doc.querySelector('parsererror')) {
-      return '<div data-testid="flow-error"></div>';
+      return '<div data-testid="flow-error">Could not render the flow diagram.</div>';
     }
 
     // Find process elements using namespace-aware lookup
@@ -40,7 +40,7 @@ const Sequences = {
     }
 
     if (processes.length === 0) {
-      return '<div data-testid="flow-error"></div>';
+      return '<div data-testid="flow-error">Could not render the flow diagram.</div>';
     }
 
     // Find serviceTask elements in document order
@@ -79,7 +79,7 @@ const Sequences = {
 
     const result = await ApiClient.get('/load-sequences');
     if (!result.ok) {
-      container.innerHTML = '<div data-testid="sequences-error"></div>';
+      container.innerHTML = '<div data-testid="sequences-error">Could not load sequences.</div>';
       return;
     }
 
