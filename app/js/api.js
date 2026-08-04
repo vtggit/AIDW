@@ -109,6 +109,18 @@ const ApiClient = {
             const { message, errorType, responseBody } =
                 await this._parseErrorResponse(response);
 
+            if (errorType === 'auth') {
+                try {
+                    const toast = document.getElementById('toast');
+                    if (toast) {
+                        toast.textContent = 'Your session has expired — sign in again.';
+                        toast.hidden = false;
+                    }
+                } catch (_) {
+                    // silent no-op
+                }
+            }
+
             return {
                 ok: false,
                 error: message,
