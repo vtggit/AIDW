@@ -8,14 +8,14 @@ const Sequences = {
 
   renderList(sequences) {
     if (!sequences || sequences.length === 0) {
-      return '<div data-testid="sequences-empty">No load sequences yet.</div>';
+      return '<input data-testid="sequence-name-input" placeholder="Sequence name"><button data-testid="sequence-create">Create sequence</button><div data-testid="sequences-empty">No load sequences yet.</div>';
     }
     let html = '';
     for (let i = 0; i < sequences.length; i++) {
       const seq = sequences[i];
       html += `<div class="wh-seq-row" data-testid="sequence-row" data-id="${this._esc(seq.id)}">${this._esc(seq.name)}</div>`;
     }
-    return html;
+    return '<input data-testid="sequence-name-input" placeholder="Sequence name"><button data-testid="sequence-create">Create sequence</button>' + html;
   },
 
   renderFlow(bpmnXml) {
@@ -126,6 +126,30 @@ const Sequences = {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       };
+    });
+
+    // Bind delegated click handler for create sequence button
+    container.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-testid="sequence-create"]');
+      if (!btn) return;
+
+      const input = container.querySelector('[data-testid="sequence-name-input"]');
+      const name = input.value.trim();
+      if (!name) return;
+
+      const createResult = await ApiClient.post('/load-sequences', { name });
+      if (!createResult.ok) {
+        container.innerHTML = '<div data-testid="sequences-error">Could not load sequences.</div>';
+        return;
+      }
+
+      const refreshResult = await ApiClient.get('/load-sequences');
+      if (!refreshResult.ok) {
+        container.innerHTML = '<div data-testid="sequences-error">Could not load sequences.</div>';
+        return;
+      }
+
+      container.innerHTML = this.renderList(refreshResult.data);
     });
   },
 };
