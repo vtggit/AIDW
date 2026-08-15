@@ -11,9 +11,9 @@ PII: any referenced field with an active flag withholds the whole item.
 
 import logging
 import urllib.parse
-import urllib.request
 
 from app.db.connection import get_cursor
+from app.egress.http import fetch_bytes
 from app.governance.hashing import subject_key_hash
 from app.ingest.mapper import business_key, parse_rows
 
@@ -33,7 +33,7 @@ class SeriesDataError(Exception):
 def _fetch_rows(url: str) -> bytes:
     """Fetch a raw data page. Factored out so tests can substitute a fixture
     without the network."""
-    return urllib.request.urlopen(url, timeout=30).read()
+    return fetch_bytes(url, timeout=30)
 
 
 def _numeric(v):
