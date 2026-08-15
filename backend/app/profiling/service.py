@@ -13,6 +13,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import app.egress.http
 from app.db.connection import get_cursor
 from app.governance.hashing import subject_key_hash
 from app.ingest.mapper import business_key, parse_rows
@@ -58,7 +59,7 @@ class ProfilingError(Exception):
 
 def _fetch_rows(url: str) -> bytes:
     """Fetch a raw data page. Factored out so tests can substitute a fixture without the network."""
-    return urllib.request.urlopen(url, timeout=30).read()
+    return app.egress.http.fetch_bytes(url, timeout=30)
 
 
 def _parse_rows(raw: bytes) -> list[dict]:
