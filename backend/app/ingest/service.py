@@ -13,11 +13,11 @@ without the network.
 """
 
 import logging
-import urllib.request
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.db.connection import get_cursor
+from app.egress.http import fetch_bytes
 from app.ingest.cursor import apply_rows
 from app.ingest.filters import build_page_url
 from app.ingest.mapper import extract_entries
@@ -36,7 +36,7 @@ class IngestError(Exception):
 
 def _fetch_page(url: str) -> bytes:
     """Fetch a raw data page. Factored out so tests can substitute a fixture without the network."""
-    return urllib.request.urlopen(url, timeout=30).read()
+    return fetch_bytes(url, timeout=30)
 
 
 def _load_context(pipeline_id: str) -> dict:
