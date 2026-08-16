@@ -21,6 +21,8 @@ from datetime import datetime, timedelta, timezone
 from app.db.connection import get_cursor
 from app.governance.executor import execute_deletion
 from app.ingest.service import execute_run
+from app.worker.scheduled_execution import execute_scheduled_run_once
+from app.worker.scheduling import fire_due_sequences_once
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +162,18 @@ def main_loop(
             try:
                 reap_stale_running()
                 reap_stale_executing()
+                try:
+                    fire_due_sequences_once()
+                except Exception:
+                    logger.exception("fire_due_sequences_once failed")
+                while not stop["requested"]:
+                    try:
+                        scheduled_run_id = execute_scheduled_run_once()
+                    except Exception:
+                        logger.exception("execute_scheduled_run_once failed")
+                        break
+                    if scheduled_run_id is None:
+                        break
                 while not stop["requested"] and run_once() is not None:
                     pass  # drain everything that is ready
                 while not stop["requested"] and deletions_once():
