@@ -37,7 +37,7 @@ class SequenceRunPostgresRepository:
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:
             cur.execute(
-                "INSERT INTO sequence_runs (id, name, sequence_id, status, started_at, finished_at, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO sequence_runs (id, name, sequence_id, status, started_at, finished_at, triggered_by, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     new_id,
                     data.get("name"),
@@ -45,6 +45,7 @@ class SequenceRunPostgresRepository:
                     data.get("status"),
                     data.get("started_at"),
                     data.get("finished_at"),
+                    data.get("triggered_by"),
                     now,
                     now,
                 ),
@@ -58,6 +59,7 @@ class SequenceRunPostgresRepository:
             "status",
             "started_at",
             "finished_at",
+            "triggered_by",
         )
         fields = [k for k in updatable if k in data]
         if not fields:
