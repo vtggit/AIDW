@@ -16789,6 +16789,17 @@
       },
       "SequenceRunCreate": {
         "properties": {
+          "triggered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triggered By"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -16848,6 +16859,17 @@
       },
       "SequenceRunResponse": {
         "properties": {
+          "triggered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triggered By"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -17148,6 +17170,17 @@
       },
       "SequenceRunUpdate": {
         "properties": {
+          "triggered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triggered By"
+          },
           "name": {
             "anyOf": [
               {
