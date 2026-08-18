@@ -10620,6 +10620,63 @@
         }
       }
     },
+    "/api/feed-credentials/{entity_id}/rotate": {
+      "post": {
+        "tags": [
+          "feed-credentials"
+        ],
+        "summary": "Rotate Feed Credential",
+        "description": "Rotate a feed credential's key.\n\nGenerates a fresh key, persists only its SHA-256 digest and 8-char prefix,\nand returns the updated record plus the plaintext key exactly once. The\nplaintext is never persisted and never logged.",
+        "operationId": "rotate_feed_credential_api_feed_credentials__entity_id__rotate_post",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/feed-credentials/{entity_id}": {
       "get": {
         "tags": [
