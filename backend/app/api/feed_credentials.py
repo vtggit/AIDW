@@ -1,5 +1,8 @@
 """FeedCredential API routes."""
 
+import hashlib
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role
@@ -42,6 +45,44 @@ def create_feed_credential(
     service: FeedCredentialService = Depends(get_service),
 ):
     return service.create_feed_credential(payload)
+
+
+@router.post("/{entity_id}/rotate")
+def rotate_feed_credential(
+    entity_id: str,
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
+    service: FeedCredentialService = Depends(get_service),
+):
+    """Rotate a feed credential's key.
+
+    Generates a fresh key, persists only its SHA-256 digest and 8-char prefix,
+    and returns the updated record plus the plaintext key exactly once. The
+    plaintext is never persisted and never logged.
+    """
+    existing = service.get_feed_credential(entity_id)
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"FeedCredential '{entity_id}' not found.",
+        )
+
+    plaintext_key = secrets.token_urlsafe(32)
+    key_hash = hashlib.sha256(plaintext_key.encode()).hexdigest()
+    key_prefix = plaintext_key[:8]
+
+    updated = service.update_feed_credential(
+        entity_id,
+        FeedCredentialUpdate(key_hash=key_hash, key_prefix=key_prefix),
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"FeedCredential '{entity_id}' not found.",
+        )
+
+    result = dict(updated)
+    result["key"] = plaintext_key
+    return result
 
 
 @router.get("/{entity_id}", response_model=FeedCredentialResponse)
