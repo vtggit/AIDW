@@ -13,6 +13,9 @@ response carries the ``OData-Version: 4.0`` header.
 """
 
 import os
+from datetime import datetime, timezone
+from decimal import Decimal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
@@ -27,12 +30,33 @@ _ODATA_VERSION = "4.0"
 
 # System query options the entity-set read understands. Anything else that
 # starts with ``$`` is rejected with 501.
-_SUPPORTED_QUERY_OPTIONS = {"$top", "$skip", "$count"}
+_SUPPORTED_QUERY_OPTIONS = {"$top", "$skip", "$count", "$select", "$orderby"}
+
+_NUMERIC_EDM_TYPES = {
+    "Edm.Int16",
+    "Edm.Int32",
+    "Edm.Int64",
+    "Edm.Byte",
+    "Edm.SByte",
+    "Edm.Decimal",
+    "Edm.Double",
+    "Edm.Single",
+}
+_DATE_EDM_TYPES = {"Edm.DateTimeOffset", "Edm.Date"}
 
 
 def _odata_headers() -> dict[str, str]:
     """Headers every feed response must carry."""
     return {"OData-Version": _ODATA_VERSION}
+
+
+def _odata_error(status: int, message: str) -> JSONResponse:
+    """Build the standard OData error response body and headers."""
+    return JSONResponse(
+        status_code=status,
+        content={"error": {"code": str(status), "message": message}},
+        headers=_odata_headers(),
+    )
 
 
 def _load_datasets() -> list[dict]:
@@ -99,7 +123,13 @@ def _parse_int_option(value: str) -> int | None:
 
 
 def _build_next_link(
-    base_url: str, set_name: str, skip: int, top: int | None, count: bool
+    base_url: str,
+    set_name: str,
+    skip: int,
+    top: int | None,
+    count: bool,
+    select: str | None = None,
+    orderby: str | None = None,
 ) -> str:
     """Build the ``@odata.nextLink`` for the next page of a set read."""
     parts = [f"{base_url}/api/feed/v4/{set_name}?$skip={skip}"]
@@ -107,7 +137,110 @@ def _build_next_link(
         parts.append(f"&$top={top}")
     if count:
         parts.append("&$count=true")
+    if select is not None:
+        parts.append(f"&$select={quote(select, safe=',')}")
+    if orderby is not None:
+        parts.append(f"&$orderby={quote(orderby, safe=',')}")
     return "".join(parts)
+
+
+def _advertised_properties(fields: list[dict]) -> dict[str, str]:
+    """Map each advertised OData property name to its original field name.
+
+    ``business_key`` maps to itself; every declared field maps to its
+    original name under its OData identifier.
+    """
+    properties: dict[str, str] = {"business_key": "business_key"}
+    for field in fields:
+        properties[odata_identifier(field["name"])] = field["name"]
+    return properties
+
+
+def _property_edm_type(property_name: str, fields: list[dict]) -> str:
+    """Return the Edm type for an advertised property name."""
+    if property_name == "business_key":
+        return "Edm.String"
+    for field in fields:
+        if odata_identifier(field["name"]) == property_name:
+            return edm_type_for(field.get("data_type"))
+    return "Edm.String"
+
+
+def _coerce_sort_value(value, edm_type: str):
+    """Coerce a payload value to a sortable value for its Edm type family.
+
+    Returns ``None`` when the value is ``None`` or the conversion fails.
+    """
+    if value is None:
+        return None
+    try:
+        if edm_type in _NUMERIC_EDM_TYPES:
+            return Decimal(str(value))
+        if edm_type in _DATE_EDM_TYPES:
+            text = str(value)
+            if text.endswith("Z"):
+                text = text[:-1] + "+00:00"
+            if "T" not in text:
+                text = text + "T00:00:00+00:00"
+            parsed = datetime.fromisoformat(text)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        if edm_type == "Edm.Boolean":
+            return bool(value)
+        return str(value)
+    except (TypeError, ValueError, ArithmeticError):
+        return None
+
+
+def _sort_key(value, edm_type: str):
+    """Build the (is_none, coerced) sort key for one property value."""
+    coerced = _coerce_sort_value(value, edm_type)
+    return (coerced is None, coerced)
+
+
+def _parse_select(raw: str, properties: dict[str, str]) -> list[str] | None:
+    """Parse a ``$select`` option into an ordered list of property names.
+
+    Returns ``None`` (with the offending item named) when an item is empty or
+    not an advertised property.
+    """
+    selected: list[str] = []
+    for item in raw.split(","):
+        name = item.strip()
+        if not name or name not in properties:
+            return None
+        selected.append(name)
+    return selected
+
+
+def _parse_orderby(
+    raw: str, properties: dict[str, str]
+) -> list[tuple[str, bool]] | None:
+    """Parse an ``$orderby`` option into ``(property, descending)`` pairs.
+
+    Returns ``None`` (with the offending item named) when an item is empty,
+    the property is unknown, the direction is not asc/desc, or there are
+    extra tokens.
+    """
+    items: list[tuple[str, bool]] = []
+    for item in raw.split(","):
+        tokens = item.split()
+        if not tokens:
+            return None
+        property_name = tokens[0]
+        if property_name not in properties:
+            return None
+        descending = False
+        if len(tokens) > 1:
+            if len(tokens) > 2:
+                return None
+            direction = tokens[1].lower()
+            if direction not in ("asc", "desc"):
+                return None
+            descending = direction == "desc"
+        items.append((property_name, descending))
+    return items
 
 
 @router.get("")
@@ -206,37 +339,19 @@ def read_entity_set(
     rows. Each ingested payload is rendered with ``business_key`` plus one
     property per declared discovered field (property name is the OData
     identifier of the field name, value looked up by the original field name
-    in the JSONB payload). Undeclared payload keys are dropped and values are
-    emitted as landed, with no coercion.
+    in the JSONB payload). ``$select`` projects to the named properties in
+    order; ``$orderby`` sorts the full set before paging.
     """
     datasets = _load_datasets()
     sets = entity_set_names(datasets)
     dataset_id = sets.get(entity_set)
     if dataset_id is None:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error": {
-                    "code": "404",
-                    "message": f"Entity set '{entity_set}' not found.",
-                }
-            },
-            headers=_odata_headers(),
-        )
+        return _odata_error(404, f"Entity set '{entity_set}' not found.")
 
     # Reject any unsupported system query option before doing any work.
     for key in request.query_params:
         if key.startswith("$") and key not in _SUPPORTED_QUERY_OPTIONS:
-            return JSONResponse(
-                status_code=501,
-                content={
-                    "error": {
-                        "code": "501",
-                        "message": f"Query option '{key}' is not supported.",
-                    }
-                },
-                headers=_odata_headers(),
-            )
+            return _odata_error(501, f"Query option '{key}' is not supported.")
 
     page_size = _page_size()
 
@@ -245,15 +360,8 @@ def read_entity_set(
     if top_raw is not None:
         parsed = _parse_int_option(top_raw)
         if parsed is None:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": {
-                        "code": "400",
-                        "message": "Query option '$top' must be a non-negative integer.",
-                    }
-                },
-                headers=_odata_headers(),
+            return _odata_error(
+                400, "Query option '$top' must be a non-negative integer."
             )
         top = min(parsed, page_size)
 
@@ -262,15 +370,8 @@ def read_entity_set(
     if skip_raw is not None:
         parsed = _parse_int_option(skip_raw)
         if parsed is None:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": {
-                        "code": "400",
-                        "message": "Query option '$skip' must be a non-negative integer.",
-                    }
-                },
-                headers=_odata_headers(),
+            return _odata_error(
+                400, "Query option '$skip' must be a non-negative integer."
             )
         skip = parsed
 
@@ -279,7 +380,71 @@ def read_entity_set(
     fields = _load_fields(dataset_id)
     payloads = _load_payloads(dataset_id)
 
+    properties = _advertised_properties(fields)
+
+    select_raw = request.query_params.get("$select")
+    selected: list[str] | None = None
+    if select_raw is not None:
+        selected = _parse_select(select_raw, properties)
+        if selected is None:
+            for item in select_raw.split(","):
+                name = item.strip()
+                if not name or name not in properties:
+                    return _odata_error(
+                        400,
+                        f"Query option '$select' item '{name}' is not an "
+                        "advertised property.",
+                    )
+
+    orderby_raw = request.query_params.get("$orderby")
+    order_items: list[tuple[str, bool]] | None = None
+    if orderby_raw is not None:
+        order_items = _parse_orderby(orderby_raw, properties)
+        if order_items is None:
+            for item in orderby_raw.split(","):
+                tokens = item.split()
+                if not tokens:
+                    return _odata_error(
+                        400, "Query option '$orderby' contains an empty item."
+                    )
+                property_name = tokens[0]
+                if property_name not in properties:
+                    return _odata_error(
+                        400,
+                        f"Query option '$orderby' item '{property_name}' is "
+                        "not an advertised property.",
+                    )
+                if len(tokens) > 2:
+                    return _odata_error(
+                        400,
+                        f"Query option '$orderby' item '{item}' has extra tokens.",
+                    )
+                if len(tokens) == 2 and tokens[1].lower() not in ("asc", "desc"):
+                    return _odata_error(
+                        400,
+                        f"Query option '$orderby' item '{item}' has an invalid "
+                        "direction.",
+                    )
+
     total = len(payloads)
+
+    if order_items:
+        ordered = list(payloads)
+        for property_name, descending in reversed(order_items):
+            edm_type = _property_edm_type(property_name, fields)
+            original = properties[property_name]
+
+            def _key(row, _original=original, _edm_type=edm_type):
+                payload = row.get("payload") or {}
+                if _original == "business_key":
+                    value = row.get("business_key")
+                else:
+                    value = payload.get(_original)
+                return _sort_key(value, _edm_type)
+
+            ordered.sort(key=_key, reverse=descending)
+        payloads = ordered
+
     page = payloads[skip : skip + page_size]
     if top is not None:
         page = page[:top]
@@ -287,10 +452,19 @@ def read_entity_set(
     value = []
     for row in page:
         payload = row.get("payload") or {}
-        entity: dict = {"business_key": row.get("business_key")}
-        for field in fields:
-            original = field["name"]
-            entity[odata_identifier(original)] = payload.get(original)
+        if selected is None:
+            entity: dict = {"business_key": row.get("business_key")}
+            for field in fields:
+                original = field["name"]
+                entity[odata_identifier(original)] = payload.get(original)
+        else:
+            entity = {}
+            for property_name in selected:
+                original = properties[property_name]
+                if original == "business_key":
+                    entity[property_name] = row.get("business_key")
+                else:
+                    entity[property_name] = payload.get(original)
         value.append(entity)
 
     base_url = str(request.base_url).rstrip("/")
@@ -302,7 +476,13 @@ def read_entity_set(
         body["@odata.count"] = total
     if len(page) > 0 and skip + len(page) < total:
         body["@odata.nextLink"] = _build_next_link(
-            base_url, entity_set, skip + len(page), top, count
+            base_url,
+            entity_set,
+            skip + len(page),
+            top,
+            count,
+            select=select_raw,
+            orderby=orderby_raw,
         )
 
     return JSONResponse(
