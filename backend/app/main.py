@@ -258,6 +258,7 @@ def create_app() -> FastAPI:
     from app.api.discovered_fields import router as discovered_fields_router
     from app.api.discovery import router as discovery_router
     from app.api.discovery_runs import router as discovery_runs_router
+    from app.api.feed_credentials import router as feed_credentials_router
     from app.api.field_profiles import router as field_profiles_router
     from app.api.health import router as health_router
     from app.api.ingest import router as ingest_router
@@ -334,6 +335,7 @@ def create_app() -> FastAPI:
     application.include_router(sequence_steps_router)
     application.include_router(sequence_runs_router)
     application.include_router(sequence_run_steps_router)
+    application.include_router(feed_credentials_router)
 
     @application.on_event("startup")
     def on_startup():
