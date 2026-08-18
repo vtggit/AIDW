@@ -9670,7 +9670,7 @@
           "feed-odata"
         ],
         "summary": "Read Entity Set",
-        "description": "Return the ingested payloads for a dataset as OData v4 entities.\n\nThe set is resolved through :func:`entity_set_names` over the datasets\nrows. Each ingested payload is rendered with ``business_key`` plus one\nproperty per declared discovered field (property name is the OData\nidentifier of the field name, value looked up by the original field name\nin the JSONB payload). Undeclared payload keys are dropped and values are\nemitted as landed, with no coercion.",
+        "description": "Return the ingested payloads for a dataset as OData v4 entities.\n\nThe set is resolved through :func:`entity_set_names` over the datasets\nrows. Each ingested payload is rendered with ``business_key`` plus one\nproperty per declared discovered field (property name is the OData\nidentifier of the field name, value looked up by the original field name\nin the JSONB payload). ``$select`` projects to the named properties in\norder; ``$orderby`` sorts the full set before paging.",
         "operationId": "read_entity_set_api_feed_v4__entity_set__get",
         "parameters": [
           {
