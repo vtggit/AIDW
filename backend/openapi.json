@@ -9604,6 +9604,66 @@
         }
       }
     },
+    "/api/feed/v4/": {
+      "get": {
+        "tags": [
+          "feed-odata"
+        ],
+        "summary": "Service Document",
+        "description": "Return the OData v4 service document.\n\nOne entry per dataset, keyed by the entity-set name produced by\n:func:`entity_set_names`.",
+        "operationId": "service_document_api_feed_v4__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feed/v4": {
+      "get": {
+        "tags": [
+          "feed-odata"
+        ],
+        "summary": "Service Document",
+        "description": "Return the OData v4 service document.\n\nOne entry per dataset, keyed by the entity-set name produced by\n:func:`entity_set_names`.",
+        "operationId": "service_document_api_feed_v4_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feed/v4/$metadata": {
+      "get": {
+        "tags": [
+          "feed-odata"
+        ],
+        "summary": "Metadata Document",
+        "description": "Return the CSDL 4.0 EDMX metadata document as ``application/xml``.",
+        "operationId": "metadata_document_api_feed_v4__metadata_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequence-steps": {
       "get": {
         "tags": [
