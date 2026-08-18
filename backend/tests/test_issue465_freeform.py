@@ -174,7 +174,7 @@ def test_issue465_freeform(monkeypatch):
     assert "message" in error
 
     # --- unsupported system query option -> 501 ---------------------------
-    response = client.get(f"{set_path}?$filter=Order_Id eq 101", headers=auth)
+    response = client.get(f"{set_path}?$expand=Nope", headers=auth)
     assert response.status_code == 501
     error = response.json()["error"]
     assert error["code"] == "501"

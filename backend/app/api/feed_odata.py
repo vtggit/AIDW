@@ -22,6 +22,8 @@ from fastapi.responses import JSONResponse, Response
 
 from app.db.connection import get_cursor
 from app.feed.auth import require_feed_credential
+from app.feed.filter_eval import FilterPropertyError, evaluate
+from app.feed.filter_parse import FilterSyntaxError, parse_filter
 from app.feed.naming import edm_type_for, entity_set_names, odata_identifier
 
 router = APIRouter(prefix="/api/feed/v4", tags=["feed-odata"])
@@ -30,7 +32,7 @@ _ODATA_VERSION = "4.0"
 
 # System query options the entity-set read understands. Anything else that
 # starts with ``$`` is rejected with 501.
-_SUPPORTED_QUERY_OPTIONS = {"$top", "$skip", "$count", "$select", "$orderby"}
+_SUPPORTED_QUERY_OPTIONS = {"$top", "$skip", "$count", "$select", "$orderby", "$filter"}
 
 _NUMERIC_EDM_TYPES = {
     "Edm.Int16",
@@ -130,6 +132,7 @@ def _build_next_link(
     count: bool,
     select: str | None = None,
     orderby: str | None = None,
+    filter_text: str | None = None,
 ) -> str:
     """Build the ``@odata.nextLink`` for the next page of a set read."""
     parts = [f"{base_url}/api/feed/v4/{set_name}?$skip={skip}"]
@@ -141,6 +144,8 @@ def _build_next_link(
         parts.append(f"&$select={quote(select, safe=',')}")
     if orderby is not None:
         parts.append(f"&$orderby={quote(orderby, safe=',')}")
+    if filter_text is not None:
+        parts.append(f"&$filter={quote(filter_text, safe='')}")
     return "".join(parts)
 
 
@@ -339,8 +344,10 @@ def read_entity_set(
     rows. Each ingested payload is rendered with ``business_key`` plus one
     property per declared discovered field (property name is the OData
     identifier of the field name, value looked up by the original field name
-    in the JSONB payload). ``$select`` projects to the named properties in
-    order; ``$orderby`` sorts the full set before paging.
+    in the JSONB payload). ``$filter`` is parsed once per request and applied
+    to each rendered entity before ``$orderby``, ``$skip``, ``$top`` and any
+    ``$select`` projection; ``$select`` projects to the named properties in
+    order; ``$orderby`` sorts the filtered set before paging.
     """
     datasets = _load_datasets()
     sets = entity_set_names(datasets)
@@ -426,46 +433,67 @@ def read_entity_set(
                         "direction.",
                     )
 
-    total = len(payloads)
+    # Render every landed payload to its full entity dict (business_key plus
+    # one key per declared field, named by its OData identifier and valued by
+    # the original field name in the payload).
+    entities: list[dict] = []
+    for row in payloads:
+        payload = row.get("payload") or {}
+        entity: dict = {"business_key": row.get("business_key")}
+        for field in fields:
+            original = field["name"]
+            entity[odata_identifier(original)] = payload.get(original)
+        entities.append(entity)
+
+    # Apply $filter (if any) to each rendered entity BEFORE $orderby, $skip,
+    # $top and any $select projection.
+    filter_raw = request.query_params.get("$filter")
+    if filter_raw is not None:
+        try:
+            filter_ast = parse_filter(filter_raw)
+        except FilterSyntaxError as exc:
+            return _odata_error(400, str(exc))
+        types: dict[str, str] = {"business_key": "Edm.String"}
+        for field in fields:
+            types[odata_identifier(field["name"])] = edm_type_for(
+                field.get("data_type")
+            )
+        kept: list[dict] = []
+        for entity in entities:
+            try:
+                if evaluate(filter_ast, entity, types):
+                    kept.append(entity)
+            except FilterPropertyError as exc:
+                return _odata_error(400, str(exc))
+        entities = kept
+
+    total = len(entities)
 
     if order_items:
-        ordered = list(payloads)
+        ordered = list(entities)
         for property_name, descending in reversed(order_items):
             edm_type = _property_edm_type(property_name, fields)
-            original = properties[property_name]
 
-            def _key(row, _original=original, _edm_type=edm_type):
-                payload = row.get("payload") or {}
-                if _original == "business_key":
-                    value = row.get("business_key")
-                else:
-                    value = payload.get(_original)
+            def _key(row, _edm_type=edm_type):
+                value = row.get(property_name)
                 return _sort_key(value, _edm_type)
 
             ordered.sort(key=_key, reverse=descending)
-        payloads = ordered
+        entities = ordered
 
-    page = payloads[skip : skip + page_size]
+    page = entities[skip : skip + page_size]
     if top is not None:
         page = page[:top]
 
     value = []
-    for row in page:
-        payload = row.get("payload") or {}
+    for entity in page:
         if selected is None:
-            entity: dict = {"business_key": row.get("business_key")}
-            for field in fields:
-                original = field["name"]
-                entity[odata_identifier(original)] = payload.get(original)
+            value.append(entity)
         else:
-            entity = {}
+            projected = {}
             for property_name in selected:
-                original = properties[property_name]
-                if original == "business_key":
-                    entity[property_name] = row.get("business_key")
-                else:
-                    entity[property_name] = payload.get(original)
-        value.append(entity)
+                projected[property_name] = entity.get(property_name)
+            value.append(projected)
 
     base_url = str(request.base_url).rstrip("/")
     body: dict = {
@@ -483,6 +511,7 @@ def read_entity_set(
             count,
             select=select_raw,
             orderby=orderby_raw,
+            filter_text=filter_raw,
         )
 
     return JSONResponse(
