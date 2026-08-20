@@ -115,6 +115,18 @@ def _page_size() -> int:
     return value if value > 0 else 1000
 
 
+def _feed_top_max() -> int:
+    """Return the feed $top maximum, read from the environment at call time."""
+    raw = os.environ.get("FEED_TOP_MAX")
+    if raw is None:
+        return 5000
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 5000
+    return value if value > 0 else 5000
+
+
 def _parse_int_option(value: str) -> int | None:
     """Parse a non-negative integer query option; ``None`` when invalid."""
     try:
@@ -369,6 +381,13 @@ def read_entity_set(
         if parsed is None:
             return _odata_error(
                 400, "Query option '$top' must be a non-negative integer."
+            )
+        top_max = _feed_top_max()
+        if parsed > top_max:
+            return _odata_error(
+                400,
+                f"Query option '$top' value {parsed} exceeds the server "
+                f"maximum of {top_max}.",
             )
         top = min(parsed, page_size)
 
