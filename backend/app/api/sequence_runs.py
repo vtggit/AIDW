@@ -1,6 +1,6 @@
 """SequenceRun API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
@@ -30,9 +30,22 @@ def get_service() -> SequenceRunService:
 def list_sequence_runs(
     limit: int | None = None,
     offset: int | None = None,
+    status: str | None = None,
     _user: AuthUser = Depends(require_authenticated_user),
     service: SequenceRunService = Depends(get_service),
+    response: Response = None,
 ):
+    if status is not None:
+        all_runs = service.list_sequence_runs()
+        matched = [r for r in all_runs if r.get("status") == status]
+        # X-Total-Count reflects the FILTERED total, before the window is applied.
+        if response is not None:
+            response.headers["X-Total-Count"] = str(len(matched))
+        if offset is not None:
+            matched = matched[offset:]
+        if limit is not None:
+            matched = matched[:limit]
+        return matched
     return service.list_sequence_runs(limit=limit, offset=offset)
 
 
