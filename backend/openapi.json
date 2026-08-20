@@ -9389,7 +9389,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DueLoadSequenceResponse"
+                  },
+                  "title": "Response Get Due Load Sequences Api Load Sequences Due Get"
+                }
               }
             }
           },
@@ -13957,6 +13963,57 @@
         "type": "object",
         "title": "DiscoveryRunUpdate",
         "description": "Request model for updating a discovery_run (all fields optional)."
+      },
+      "DueLoadSequenceResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "schedule_cadence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Cadence"
+          },
+          "schedule_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Enabled"
+          },
+          "last_fired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fired At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DueLoadSequenceResponse"
       },
       "FeedCredentialCreate": {
         "properties": {

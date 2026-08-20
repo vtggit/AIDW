@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
@@ -18,6 +19,15 @@ from app.repositories.load_sequences_postgres_repository import (
     LoadSequencePostgresRepository,
 )
 from app.services.load_sequences_service import LoadSequenceService
+
+
+class DueLoadSequenceResponse(BaseModel):
+    id: str
+    name: str
+    schedule_cadence: str | None = None
+    schedule_enabled: bool | None = None
+    last_fired_at: str | None = None
+
 
 router = APIRouter(prefix="/api/load-sequences", tags=["load-sequences"])
 
@@ -50,7 +60,7 @@ def create_load_sequence(
     return service.create_load_sequence(payload)
 
 
-@router.get("/due")
+@router.get("/due", response_model=list[DueLoadSequenceResponse])
 def get_due_load_sequences(
     not_fired_since: str = Query(..., description="ISO-8601 timestamp"),
     _user: AuthUser = Depends(require_authenticated_user),
