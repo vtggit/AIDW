@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from app.auth.authorization import ROLE_ADMIN, require_role
@@ -41,11 +41,14 @@ def get_service() -> LoadSequenceService:
 
 @router.get("", response_model=list[LoadSequenceResponse])
 def list_load_sequences(
-    limit: int | None = None,
-    offset: int | None = None,
+    limit: int | None = Query(None, ge=1, le=100),
+    offset: int | None = Query(None, ge=0),
+    response: Response = None,
     _user: AuthUser = Depends(require_authenticated_user),
     service: LoadSequenceService = Depends(get_service),
 ):
+    total = len(service.list_load_sequences())
+    response.headers["X-Total-Count"] = str(total)
     return service.list_load_sequences(limit=limit, offset=offset)
 
 
