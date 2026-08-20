@@ -31,10 +31,12 @@ def get_service() -> LoadSequenceService:
 
 @router.get("", response_model=list[LoadSequenceResponse])
 def list_load_sequences(
+    limit: int | None = None,
+    offset: int | None = None,
     _user: AuthUser = Depends(require_authenticated_user),
     service: LoadSequenceService = Depends(get_service),
 ):
-    return service.list_load_sequences()
+    return service.list_load_sequences(limit=limit, offset=offset)
 
 
 @router.post(
