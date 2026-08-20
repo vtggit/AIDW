@@ -28,10 +28,12 @@ def get_service() -> SequenceRunService:
 
 @router.get("", response_model=list[SequenceRunResponse])
 def list_sequence_runs(
+    limit: int | None = None,
+    offset: int | None = None,
     _user: AuthUser = Depends(require_authenticated_user),
     service: SequenceRunService = Depends(get_service),
 ):
-    return service.list_sequence_runs()
+    return service.list_sequence_runs(limit=limit, offset=offset)
 
 
 @router.post(
