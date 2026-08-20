@@ -21,12 +21,13 @@ Security notes:
 from __future__ import annotations
 
 import base64
-import os
 import re
 import urllib.error
 import urllib.request
 
 from app.db.connection import get_cursor
+from app.egress import SecretRefInvalid, SecretUnavailable
+from app.egress.secrets import resolve_secret
 
 
 class EgressError(Exception):
@@ -66,13 +67,12 @@ def _parse_www_authenticate_schemes(header_value: str | None) -> list[str]:
     return schemes
 
 
-def resolve_secret(secret_ref: str) -> str:
-    """Resolve a secret reference to its value.
+class SecretUnavailableAuthError(EgressAuthError, SecretUnavailable):
+    """Raised when a referenced environment variable is unset or empty."""
 
-    The reference is the name of an environment variable; the value is
-    read at call time so that tests can monkeypatch it.
-    """
-    return os.environ.get(secret_ref, "")
+
+class SecretRefInvalidAuthError(EgressAuthError, SecretRefInvalid):
+    """Raised when a secret reference is malformed."""
 
 
 def credential_for_url(url: str) -> dict | None:
@@ -149,8 +149,15 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
         if auth_scheme is not None:
             if auth_scheme == "basic":
                 principal = credential.get("principal") or ""
+                if not principal.strip():
+                    raise EgressAuthError("credential principal is empty or whitespace")
                 secret_ref = credential.get("secret_ref") or ""
-                secret = resolve_secret(secret_ref)
+                try:
+                    secret = resolve_secret(secret_ref)
+                except SecretUnavailable as exc:
+                    raise SecretUnavailableAuthError(str(exc)) from exc
+                except SecretRefInvalid as exc:
+                    raise SecretRefInvalidAuthError(str(exc)) from exc
                 token = base64.b64encode(f"{principal}:{secret}".encode()).decode(
                     "ascii"
                 )
