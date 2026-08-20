@@ -30,7 +30,8 @@ never edited silently.
 | `800-171-3.8.3` | Media Protection | NIST SP 800-171r2 §3.8.3 | L2 | cui | high |
 | `800-171-3.13.11` | System & Comms Protection | NIST SP 800-171r2 §3.13.11 | L2 | cui | high |
 | `VTG-ADOPT-001` | Adoption Policy | company-authored | — | adoption | high |
+| `VTG-DEPLOY-001` | Deploy Authority & Active-Content Safety | company-authored | — | dsr, gdpr, adoption | high |
 
 **Ratification state:** all v1 controls ratified by the operator (interim ratifier —
-theoretical-company phase, 2026-07-16). A future compliance authority re-ratifies on
+theoretical-company phase, 2026-07-16); VTG-DEPLOY-001 v1 ratified 2026-07-24 (ADR AIDW#290). A future compliance authority re-ratifies on
 assumption of the role.
