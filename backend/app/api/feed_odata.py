@@ -127,6 +127,18 @@ def _feed_top_max() -> int:
     return value if value > 0 else 5000
 
 
+def _metadata_max_age() -> int:
+    """Return the metadata cache max-age, read from the environment at call time."""
+    raw = os.environ.get("FEED_METADATA_MAX_AGE")
+    if raw is None:
+        return 300
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 300
+    return value if value > 0 else 300
+
+
 def _parse_int_option(value: str) -> int | None:
     """Parse a non-negative integer query option; ``None`` when invalid."""
     try:
@@ -282,7 +294,10 @@ def service_document(
             "@odata.context": f"{base_url}/api/feed/v4/$metadata",
             "value": value,
         },
-        headers=_odata_headers(),
+        headers={
+            **_odata_headers(),
+            "Cache-Control": f"private, max-age={_metadata_max_age()}",
+        },
     )
 
 
@@ -340,7 +355,10 @@ def metadata_document(
     return Response(
         content=xml,
         media_type="application/xml",
-        headers=_odata_headers(),
+        headers={
+            **_odata_headers(),
+            "Cache-Control": f"private, max-age={_metadata_max_age()}",
+        },
     )
 
 
