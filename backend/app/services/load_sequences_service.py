@@ -12,8 +12,10 @@ class LoadSequenceService:
     def __init__(self, repository: LoadSequencePostgresRepository):
         self.repository = repository
 
-    def list_load_sequences(self) -> list[dict]:
-        return self.repository.list_all()
+    def list_load_sequences(
+        self, limit: int | None = None, offset: int | None = None
+    ) -> list[dict]:
+        return self.repository.list_all(limit=limit, offset=offset)
 
     def get_load_sequence(self, entity_id: str) -> dict | None:
         return self.repository.get_by_id(entity_id)

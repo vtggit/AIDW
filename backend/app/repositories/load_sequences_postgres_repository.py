@@ -21,9 +21,19 @@ def _row_to_dict(row) -> dict:
 class LoadSequencePostgresRepository:
     """PostgreSQL repository for the load_sequences table."""
 
-    def list_all(self) -> list[dict]:
+    def list_all(
+        self, limit: int | None = None, offset: int | None = None
+    ) -> list[dict]:
+        sql = "SELECT * FROM load_sequences ORDER BY created_at DESC"
+        params: list = []
+        if limit is not None:
+            sql += " LIMIT %s"
+            params.append(limit)
+        if offset is not None:
+            sql += " OFFSET %s"
+            params.append(offset)
         with get_cursor() as cur:
-            cur.execute("SELECT * FROM load_sequences ORDER BY created_at DESC")
+            cur.execute(sql, tuple(params))
             return [_row_to_dict(r) for r in cur.fetchall()]
 
     def get_by_id(self, entity_id: str) -> dict | None:
