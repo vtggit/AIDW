@@ -12,8 +12,10 @@ class SequenceRunService:
     def __init__(self, repository: SequenceRunPostgresRepository):
         self.repository = repository
 
-    def list_sequence_runs(self) -> list[dict]:
-        return self.repository.list_all()
+    def list_sequence_runs(
+        self, limit: int | None = None, offset: int | None = None
+    ) -> list[dict]:
+        return self.repository.list_all(limit=limit, offset=offset)
 
     def get_sequence_run(self, entity_id: str) -> dict | None:
         return self.repository.get_by_id(entity_id)
