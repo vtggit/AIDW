@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from app.db.connection import get_cursor
@@ -74,6 +75,13 @@ class SecretUnavailableAuthError(EgressAuthError, SecretUnavailable):
 
 class SecretRefInvalidAuthError(EgressAuthError, SecretRefInvalid):
     """Raised when a secret reference is malformed."""
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that suppresses automatic redirect following."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def credential_for_url(url: str) -> dict | None:
@@ -133,19 +141,23 @@ def credential_for_url(url: str) -> dict | None:
 def fetch_bytes(url: str, timeout: int = 30) -> bytes:
     """Fetch *url* and return the response body as bytes.
 
-    If a credential is resolved for *url* and its ``auth_scheme`` is
-    ``basic``, an ``Authorization: Basic <base64>`` header is added.
-    If the scheme is any other non-null value, :class:`EgressError` is
-    raised.  If no credential is resolved, the request is made without
-    an Authorization header.
+    Redirects are followed manually (at most 3 hops).  Each redirect
+    target is validated via :func:`validate_destination` before the
+    request is sent.  The ``Authorization`` header (when a credential
+    is resolved) is attached only to requests whose host matches the
+    original URL's host (case-insensitive).
 
     Raises:
         EgressAuthError: on HTTP 401 or 403.
-        EgressError: on unsupported auth scheme or other HTTP errors.
+        EgressError: on unsupported auth scheme, too many redirects,
+            or other HTTP errors.
     """
     validate_destination(url)
     credential = credential_for_url(url)
 
+    original_host = (urllib.parse.urlparse(url).hostname or "").lower()
+
+    auth_header: str | None = None
     if credential is not None:
         auth_scheme = credential.get("auth_scheme")
         if auth_scheme is not None:
@@ -163,26 +175,49 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
                 token = base64.b64encode(f"{principal}:{secret}".encode()).decode(
                     "ascii"
                 )
-                request = urllib.request.Request(url)
-                request.add_header("Authorization", f"Basic {token}")
+                auth_header = f"Basic {token}"
             else:
                 raise EgressError(f"unsupported auth_scheme: {auth_scheme}")
-        else:
-            request = urllib.request.Request(url)
-    else:
-        request = urllib.request.Request(url)
 
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read()
-    except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403):
-            www_auth = exc.headers.get("WWW-Authenticate") if exc.headers else None
-            schemes = _parse_www_authenticate_schemes(www_auth)
-            scheme_text = ", ".join(schemes) if schemes else "unknown"
-            raise EgressAuthError(
-                f"HTTP {exc.code} — authentication failed (scheme: {scheme_text})"
-            ) from exc
-        raise EgressError(f"HTTP {exc.code} — {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise EgressError(f"URL error: {exc.reason}") from exc
+    opener = urllib.request.build_opener(_NoRedirectHandler)
+    current_url = url
+    max_hops = 3
+    hop_count = 0
+
+    while True:
+        request = urllib.request.Request(current_url)
+        current_host = (urllib.parse.urlparse(current_url).hostname or "").lower()
+        if auth_header is not None and current_host == original_host:
+            request.add_header("Authorization", auth_header)
+
+        try:
+            with opener.open(request, timeout=timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code in (301, 302, 303, 307, 308):
+                hop_count += 1
+                if hop_count > max_hops:
+                    raise EgressError(
+                        f"too many redirects (max {max_hops} hops)"
+                    ) from exc
+                location = exc.headers.get("Location")
+                if location is None:
+                    raise EgressError(
+                        f"HTTP {exc.code} — missing Location header"
+                    ) from exc
+                if not location.startswith(("http://", "https://")):
+                    location = urllib.parse.urljoin(current_url, location)
+                validate_destination(location)
+                current_url = location
+                continue
+            if exc.code in (401, 403):
+                www_auth = exc.headers.get("WWW-Authenticate") if exc.headers else None
+                schemes = _parse_www_authenticate_schemes(www_auth)
+                scheme_text = ", ".join(schemes) if schemes else "unknown"
+                raise EgressAuthError(
+                    f"HTTP {exc.code} — authentication failed "
+                    f"(scheme: {scheme_text})"
+                ) from exc
+            raise EgressError(f"HTTP {exc.code} — {exc.reason}") from exc
+        except urllib.error.URLError as exc:
+            raise EgressError(f"URL error: {exc.reason}") from exc
