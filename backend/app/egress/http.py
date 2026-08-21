@@ -27,6 +27,7 @@ import urllib.request
 
 from app.db.connection import get_cursor
 from app.egress import SecretRefInvalid, SecretUnavailable
+from app.egress.policy import validate_destination
 from app.egress.secrets import resolve_secret
 
 
@@ -142,6 +143,7 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
         EgressAuthError: on HTTP 401 or 403.
         EgressError: on unsupported auth scheme or other HTTP errors.
     """
+    validate_destination(url)
     credential = credential_for_url(url)
 
     if credential is not None:
