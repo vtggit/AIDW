@@ -1,47 +1,40 @@
-AIDW Software License
+AIDW — Evaluation and Reference License
 
-Copyright (c) 2026 Virtual Technology Group. All rights reserved.
+Copyright (c) 2026 Virtual Technology Group LLC. All rights reserved.
 
-This is a proprietary license. It is NOT an open-source license and does not
-grant the rights described by the Open Source Definition (such as the right to
-redistribute or to create and distribute modified versions).
+This repository is published for viewing and evaluation. Virtual Technology
+Group LLC ("VTG") grants you a personal, non-exclusive, non-transferable,
+revocable permission to VIEW this repository and to USE the software it contains
+for your own internal purposes, subject to every condition below.
 
-1. Definitions.
-   "Software" means the AIDW software made available in this repository,
-   including its source code, documentation, and associated files.
-   "Licensor" means Virtual Technology Group, the copyright holder.
-   "You" means the individual or entity exercising the permissions granted by
-   this License.
+You may NOT:
 
-2. Grant of License.
-   Subject to Your compliance with this License, the Licensor grants You a
-   worldwide, royalty-free, non-exclusive, non-transferable license to download,
-   install, and use the Software, free of charge, for Your own use.
+  1. distribute, publish, mirror, or otherwise share this software or any
+     portion of it, in source or compiled form;
+  2. modify this software or create derivative works of it;
+  3. sublicense, sell, rent, lease, or offer it as a hosted or managed service;
+  4. remove or alter this notice or any copyright, attribution, or license
+     notice contained in the software;
+  5. copy this repository beyond what is strictly required to view or use it —
+     including forking or republishing it — except where the terms of service of
+     the platform hosting this repository require that such an action be
+     permitted, in which case that platform-granted right applies solely to the
+     extent required and grants no further rights under this license.
 
-3. Restrictions.
-   You may NOT, in whole or in part, directly or indirectly:
-   (a) distribute, publish, sublicense, sell, rent, lease, lend, host for others,
-       or otherwise make the Software available to any third party;
-   (b) modify, adapt, translate, or create derivative works of the Software; or
-   (c) remove, alter, or obscure any copyright, license, or proprietary notice.
+This permission terminates automatically if you breach any condition above, and
+may be revoked by VTG at any time.
 
-4. Reservation of Rights.
-   All rights not expressly granted in this License are reserved by the Licensor.
-   No rights are granted by implication, estoppel, or otherwise. This License
-   grants no rights in the Licensor's trademarks, service marks, or trade names.
+NO WARRANTY; USE AT YOUR OWN RISK. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT
+WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+NONINFRINGEMENT. THIS SOFTWARE IS DEVELOPMENT AND DEMONSTRATION SOFTWARE, IS NOT
+INTENDED FOR PRODUCTION USE, AND CARRIES NO SUPPORT, MAINTENANCE, OR SERVICE
+COMMITMENT OF ANY KIND.
 
-5. Termination.
-   This License terminates automatically if You breach any of its terms. Upon
-   termination, You must cease all use of the Software and destroy all copies in
-   Your possession or control.
+LIMITATION OF LIABILITY. IN NO EVENT SHALL VIRTUAL TECHNOLOGY GROUP LLC BE
+LIABLE FOR ANY CLAIM, DAMAGES, DATA LOSS, BUSINESS INTERRUPTION, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-6. Disclaimer of Warranty.
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
-
-7. Limitation of Liability.
-   IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
-   OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-   SOFTWARE.
+Contact: Virtual Technology Group LLC
