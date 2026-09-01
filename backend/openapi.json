@@ -10730,13 +10730,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FeedCredentialResponse"
-                  },
-                  "title": "Response List Feed Credentials Api Feed Credentials Get"
-                }
+                "schema": {}
               }
             }
           },
@@ -10906,9 +10900,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FeedCredentialResponse"
-                }
+                "schema": {}
               }
             }
           },

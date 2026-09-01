@@ -4,6 +4,7 @@ import hashlib
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 
 from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
@@ -28,12 +29,33 @@ def get_service() -> FeedCredentialService:
     return _service
 
 
-@router.get("", response_model=list[FeedCredentialResponse])
+def _is_admin(user: AuthUser) -> bool:
+    """Return True when the caller holds the admin role."""
+    return ROLE_ADMIN in user.roles
+
+
+def _redact_key_material(entity: dict, user: AuthUser) -> dict:
+    """Return a copy of *entity* with key material removed for non-admins.
+
+    ``key_hash`` (and any equivalent key material) is only ever returned to
+    admins; non-admin callers receive the record without it.
+    """
+    if _is_admin(user):
+        return entity
+    redacted = dict(entity)
+    redacted.pop("key_hash", None)
+    return redacted
+
+
+@router.get("")
 def list_feed_credentials(
-    _user: AuthUser = Depends(require_authenticated_user),
+    user: AuthUser = Depends(require_authenticated_user),
     service: FeedCredentialService = Depends(get_service),
 ):
-    return service.list_feed_credentials()
+    entities = service.list_feed_credentials()
+    return JSONResponse(
+        content=[_redact_key_material(entity, user) for entity in entities]
+    )
 
 
 @router.post(
@@ -85,10 +107,10 @@ def rotate_feed_credential(
     return result
 
 
-@router.get("/{entity_id}", response_model=FeedCredentialResponse)
+@router.get("/{entity_id}")
 def get_feed_credential(
     entity_id: str,
-    _user: AuthUser = Depends(require_authenticated_user),
+    user: AuthUser = Depends(require_authenticated_user),
     service: FeedCredentialService = Depends(get_service),
 ):
     entity = service.get_feed_credential(entity_id)
@@ -97,7 +119,7 @@ def get_feed_credential(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"FeedCredential '{entity_id}' not found.",
         )
-    return entity
+    return JSONResponse(content=_redact_key_material(entity, user))
 
 
 @router.put("/{entity_id}", response_model=FeedCredentialResponse)
