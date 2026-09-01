@@ -9,9 +9,14 @@ Two presentation forms are accepted:
   credential's stored ``principal`` and the key must match its ``key_hash``.
 * ``X-Api-Key: <key>`` — the key must match a credential's ``key_hash``.
 
-Only the SHA-256 hex digest of the presented key is ever computed; the plaintext
-key is never logged or echoed.  Any missing, malformed, unknown, mismatched, or
-revoked credential yields a 401 with a ``WWW-Authenticate`` challenge.
+A valid ``X-Api-Key`` authenticates on its own even when an unrelated
+(non-Basic) ``Authorization`` header is also present; a valid Basic
+``Authorization`` header still authenticates.  Only the SHA-256 hex digest of
+the presented key is ever computed; the plaintext key is never logged or
+echoed.  Any missing, malformed, unknown, mismatched, or revoked credential
+yields a 401 with a ``WWW-Authenticate`` challenge.  A malformed stored
+``key_hash`` (e.g. a non-ASCII value) is treated as a non-match rather than
+raising, so it 401s instead of 500ing.
 """
 
 import base64
@@ -56,15 +61,33 @@ def _parse_basic_authorization(authorization: str) -> tuple[str, str] | None:
     return principal, key
 
 
+def _hash_matches(stored_hash, key_digest: str) -> bool:
+    """Return True when a stored ``key_hash`` matches the presented key digest.
+
+    Tolerates a malformed stored value (``None`` or a non-ASCII string that
+    cannot be encoded to bytes): such a value is treated as a non-match rather
+    than raising, so a corrupted row 401s instead of 500ing.
+    """
+    if stored_hash is None:
+        return False
+    try:
+        stored_bytes = stored_hash.encode("utf-8")
+    except (AttributeError, UnicodeEncodeError, TypeError):
+        return False
+    return hmac.compare_digest(stored_bytes, key_digest.encode("utf-8"))
+
+
 def require_feed_credential(request: Request) -> dict:
     """Authenticate a feed consumer and return the matched credential row.
 
     Accepts either ``Authorization: Basic base64(principal:key)`` or
-    ``X-Api-Key: <key>``.  The SHA-256 hex digest of the presented key is
-    compared (via :func:`hmac.compare_digest`) against the ``key_hash`` of
-    non-revoked ``feed_credentials`` rows; for Basic auth the row's
-    ``principal`` must also equal the presented username.  A ``NULL``
-    ``key_hash`` never matches.
+    ``X-Api-Key: <key>``.  A valid ``X-Api-Key`` authenticates even when an
+    unrelated (non-Basic) ``Authorization`` header is also present; a valid
+    Basic ``Authorization`` header still authenticates.  The SHA-256 hex digest
+    of the presented key is compared (via :func:`hmac.compare_digest`) against
+    the ``key_hash`` of non-revoked ``feed_credentials`` rows; for Basic auth
+    the row's ``principal`` must also equal the presented username.  A ``NULL``
+    or malformed ``key_hash`` never matches.
 
     Raises:
         HTTPException: 401 with a ``WWW-Authenticate`` challenge on any
@@ -81,9 +104,14 @@ def require_feed_credential(request: Request) -> dict:
 
     if authorization:
         parsed = _parse_basic_authorization(authorization)
-        if parsed is None:
+        if parsed is not None:
+            principal, key = parsed
+        elif api_key:
+            # A non-Basic Authorization header is ignored when a valid
+            # X-Api-Key is also presented.
+            key = api_key
+        else:
             raise _unauthorized()
-        principal, key = parsed
     elif api_key:
         key = api_key
     else:
@@ -113,10 +141,7 @@ def require_feed_credential(request: Request) -> dict:
         rows = cur.fetchall()
 
     for row in rows:
-        stored_hash = row.get("key_hash")
-        if stored_hash is None:
-            continue
-        if hmac.compare_digest(stored_hash, key_digest):
+        if _hash_matches(row.get("key_hash"), key_digest):
             return dict(row)
 
     raise _unauthorized()
