@@ -153,11 +153,19 @@ def _denied_reason(host: str, strict: bool) -> str | None:
             return "link-local IPv6 address (fe80::/10)"
         if strict and v6 in _LOOPBACK_V6_NET:
             return "loopback IPv6 address (::1)"
+        mapped_v4 = v6.ipv4_mapped
+        if mapped_v4 is not None:
+            if mapped_v4 == ipaddress.ip_address(_UNSPECIFIED_V4):
+                return "unspecified address 0.0.0.0"
+            if mapped_v4 in _LINK_LOCAL_V4:
+                return "link-local IPv4 address (169.254.0.0/16)"
+            if strict and mapped_v4 in _LOOPBACK_V4:
+                return "loopback IPv4 address (127.0.0.0/8)"
         return None
 
     # Not an IP literal — a hostname.  Only the loopback hostname is denied,
     # and only in strict mode.
-    if strict and host == _LOOPBACK_HOSTNAME:
+    if strict and host.lower() == _LOOPBACK_HOSTNAME:
         return "loopback hostname 'localhost'"
     return None
 
