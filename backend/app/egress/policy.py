@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 from urllib.parse import urlsplit
 
 from app.egress import EgressError
@@ -119,6 +120,37 @@ def _is_strict() -> bool:
     return os.environ.get(_POLICY_ENV) == _STRICT
 
 
+_IP_LIKE_RE = re.compile(r"(?:0x[0-9a-fA-F]+|[0-9]+)(?:\.(?:0x[0-9a-fA-F]+|[0-9]+))*")
+
+
+def _is_ip_like(host: str) -> bool:
+    """Return True if *host* looks like an IP address but may not be canonical.
+
+    Matches hosts composed solely of decimal digits, dots, and ``0x``-prefixed
+    hexadecimal labels (e.g. ``127.1``, ``0x7f000001``, ``0177.0.0.1``).
+    """
+    return _IP_LIKE_RE.fullmatch(host) is not None
+
+
+def _is_canonical_ipv4(host: str) -> bool:
+    """Return True if *host* is a canonical dotted-quad IPv4 literal.
+
+    Canonical means exactly four decimal octets, each 0-255, with no leading
+    zeros (the single digit ``0`` is allowed).
+    """
+    parts = host.split(".")
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not part or not all(c in "0123456789" for c in part):
+            return False
+        if len(part) > 1 and part[0] == "0":
+            return False
+        if int(part) > 255:
+            return False
+    return True
+
+
 def _denied_reason(host: str, strict: bool) -> str | None:
     """Return a human-readable denial reason for *host*, or None when allowed.
 
@@ -130,6 +162,12 @@ def _denied_reason(host: str, strict: bool) -> str | None:
 
     if host == _UNSPECIFIED_V4:
         return "unspecified address 0.0.0.0"
+
+    if host == "::":
+        return "unspecified address ::"
+
+    if _is_ip_like(host) and not _is_canonical_ipv4(host):
+        return "non-canonical IP-like address"
 
     # IPv4 literal classification.
     try:
