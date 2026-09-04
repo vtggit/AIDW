@@ -201,10 +201,18 @@ def _denied_reason(host: str, strict: bool) -> str | None:
                 return "loopback IPv4 address (127.0.0.0/8)"
         return None
 
-    # Not an IP literal — a hostname.  Only the loopback hostname is denied,
-    # and only in strict mode.
-    if strict and host.lower() == _LOOPBACK_HOSTNAME:
-        return "loopback hostname 'localhost'"
+    # Not an IP literal — a hostname.  Loopback hostnames are denied in
+    # strict mode: the bare name (any case, optional trailing dot), any
+    # subdomain of the ``localhost`` TLD, and the common alias
+    # ``localhost.localdomain``.
+    if strict:
+        normalized = host.lower().rstrip(".")
+        if (
+            normalized == _LOOPBACK_HOSTNAME
+            or normalized.endswith("." + _LOOPBACK_HOSTNAME)
+            or normalized == _LOOPBACK_HOSTNAME + ".localdomain"
+        ):
+            return "loopback hostname 'localhost'"
     return None
 
 
