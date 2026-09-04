@@ -59,6 +59,9 @@ _LOOPBACK_HOSTNAME = "localhost"
 # The loopback IPv6 address, denied in strict mode.
 _LOOPBACK_V6 = "::1"
 
+# The unspecified IPv6 address, denied in every mode.
+_UNSPECIFIED_V6 = ipaddress.ip_address("::")
+
 # Link-local / loopback network ranges.
 _LINK_LOCAL_V4 = ipaddress.ip_network("169.254.0.0/16")
 _LOOPBACK_V4 = ipaddress.ip_network("127.0.0.0/8")
@@ -187,6 +190,8 @@ def _denied_reason(host: str, strict: bool) -> str | None:
     except ValueError:
         v6 = None
     if v6 is not None and v6.version == 6:
+        if v6 == _UNSPECIFIED_V6:
+            return "unspecified address ::"
         if v6 in _LINK_LOCAL_V6:
             return "link-local IPv6 address (fe80::/10)"
         if strict and v6 in _LOOPBACK_V6_NET:
@@ -232,9 +237,14 @@ def validate_destination(url: str) -> None:
             IPv4/IPv6/``localhost``) and the host is not exempted by
             ``EGRESS_ALLOWED_HOSTS``.
     """
-    host = _extract_host(url)
+    try:
+        host = _extract_host(url)
+    except ValueError:
+        raise EgressDestinationDenied(
+            f"Egress destination denied: invalid bracketed host ({url!r})"
+        )
     allowed = _allowed_hosts()
-    if host in allowed:
+    if host.lower() in {h.lower() for h in allowed}:
         return
     strict = _is_strict()
     reason = _denied_reason(host, strict)
