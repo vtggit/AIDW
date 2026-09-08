@@ -168,10 +168,11 @@ def test_issue474_freeform(monkeypatch):
 
     monkeypatch.setattr(feed_odata, "evaluate", recorder)
 
+    monkeypatch.setenv("FEED_PAGE_SIZE", "1")
     response = client.get(
         set_path,
         headers=auth,
-        params={"$filter": "Order_Id gt 1", "$top": "1", "$count": "true"},
+        params={"$filter": "Order_Id gt 1", "$top": "2", "$count": "true"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -180,6 +181,7 @@ def test_issue474_freeform(monkeypatch):
     next_link = body["@odata.nextLink"]
     assert "$filter" in next_link
     assert "$skip=1" in next_link
+    monkeypatch.delenv("FEED_PAGE_SIZE")
 
     assert len(recorded) >= 3
     expected_ast = ("cmp", "gt", "Order_Id", 1)

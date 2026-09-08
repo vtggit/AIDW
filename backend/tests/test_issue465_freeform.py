@@ -134,14 +134,16 @@ def test_issue465_freeform(monkeypatch):
     assert value[2]["Order_Id"] == 103
     assert value[0]["Order_Date"] == "2024-01-15T00:00:00Z"
 
-    # --- $top=2 -> 2 rows + nextLink ($skip=2, $top=2) --------------------
+    # --- $top=2 -> 2 rows + nextLink ($skip=1, $top=1) --------------------
+    monkeypatch.setenv("FEED_PAGE_SIZE", "1")
     response = client.get(f"{set_path}?$top=2", headers=auth)
     assert response.status_code == 200
     body = response.json()
-    assert [row["business_key"] for row in body["value"]] == ["k1", "k2"]
+    assert [row["business_key"] for row in body["value"]] == ["k1"]
     next_link = body["@odata.nextLink"]
-    assert "$skip=2" in next_link
-    assert "$top=2" in next_link
+    assert "$skip=1" in next_link
+    assert "$top=1" in next_link
+    monkeypatch.delenv("FEED_PAGE_SIZE")
 
     # --- $skip=2 -> last row, no nextLink ---------------------------------
     response = client.get(f"{set_path}?$skip=2", headers=auth)

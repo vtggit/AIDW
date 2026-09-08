@@ -110,7 +110,7 @@ def _get(client: TestClient, query: str) -> TestClient:
     return client.get(f"{BASE_PATH}/{SET_NAME}{query}", headers=_auth_headers())
 
 
-def test_issue472_freeform(clean_database):
+def test_issue472_freeform(clean_database, monkeypatch):
     _seed()
     app = FastAPI()
     app.include_router(feed_odata_router)
@@ -174,9 +174,10 @@ def test_issue472_freeform(clean_database):
         assert resp.status_code == 200
         assert resp.json()["@odata.count"] == 3
 
-        # $top=1&$orderby=Order_Id desc — first page plus a nextLink that
-        # preserves $skip, $top and $orderby.
-        resp = _get(client, "?$top=1&$orderby=Order_Id desc")
+        # $top=2&$orderby=Order_Id desc — first page plus a nextLink that
+        # preserves $skip, the remaining $top budget and $orderby.
+        monkeypatch.setenv("FEED_PAGE_SIZE", "1")
+        resp = _get(client, "?$top=2&$orderby=Order_Id desc")
         assert resp.status_code == 200
         body = resp.json()
         assert _business_keys(body) == ["k2"]
@@ -184,3 +185,4 @@ def test_issue472_freeform(clean_database):
         assert "$skip=1" in next_link
         assert "$top=1" in next_link
         assert "$orderby=Order_Id desc" in next_link
+        monkeypatch.delenv("FEED_PAGE_SIZE")

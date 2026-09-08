@@ -398,6 +398,16 @@ def read_entity_set(
     to each rendered entity before ``$orderby``, ``$skip``, ``$top`` and any
     ``$select`` projection; ``$select`` projects to the named properties in
     order; ``$orderby`` sorts the filtered set before paging.
+
+    ``$top`` is a cap on the TOTAL rows a client receives across all pages,
+    not a per-page size. The nextLink mechanism encodes the remaining budget
+    in the ``$top`` it carries, so the ``$top`` in a request is the budget for
+    the current page (capped by the page size): the page holds
+    ``min(page size, $top)`` rows starting at ``$skip``. ``@odata.nextLink``
+    is emitted only while the budget is not exhausted and more rows remain,
+    and each emitted link carries ``$top`` equal to the remaining budget
+    (the request's ``$top`` minus the rows this page delivers). Once the
+    budget is spent no nextLink is emitted.
     """
     datasets = _load_datasets()
     sets = entity_set_names(datasets)
@@ -427,7 +437,7 @@ def read_entity_set(
                 f"Query option '$top' value {parsed} exceeds the server "
                 f"maximum of {top_max}.",
             )
-        top = min(parsed, page_size)
+        top = parsed
 
     skip_raw = request.query_params.get("$skip")
     skip = 0
@@ -538,9 +548,14 @@ def read_entity_set(
             ordered.sort(key=_key, reverse=descending)
         entities = ordered
 
-    page = entities[skip : skip + page_size]
+    # $top is a cap on the TOTAL rows a client receives across all pages. The
+    # nextLink mechanism encodes the remaining budget in the $top it carries,
+    # so the $top in a request is the budget for THIS page (capped by the page
+    # size). The page holds min(page size, $top) rows starting at $skip.
     if top is not None:
-        page = page[:top]
+        page = entities[skip : skip + min(page_size, top)]
+    else:
+        page = entities[skip : skip + page_size]
 
     value = []
     for entity in page:
@@ -559,12 +574,26 @@ def read_entity_set(
     }
     if count:
         body["@odata.count"] = total
-    if len(page) > 0 and skip + len(page) < total:
+
+    # Emit a nextLink only while the budget is not exhausted and more rows
+    # remain. With $top the budget is the remaining total (the request's $top
+    # minus the rows this page delivers); without it the budget is unbounded.
+    # The link carries the remaining budget as $top.
+    if top is not None:
+        more_rows = skip + len(page) < total
+        budget_left = top - len(page)
+        emit_next = more_rows and budget_left > 0
+        next_top = budget_left if emit_next else None
+    else:
+        emit_next = len(page) > 0 and skip + len(page) < total
+        next_top = None
+
+    if emit_next:
         body["@odata.nextLink"] = _build_next_link(
             base_url,
             entity_set,
             skip + len(page),
-            top,
+            next_top,
             count,
             select=select_raw,
             orderby=orderby_raw,

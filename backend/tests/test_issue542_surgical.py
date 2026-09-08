@@ -96,6 +96,7 @@ def test_issue542_surgical(monkeypatch):
     set_path = "/api/feed/v4/Feed_542_Orders"
 
     # --- $top=2 produces @odata.nextLink and @odata.context ---------------
+    monkeypatch.setenv("FEED_PAGE_SIZE", "1")
     response = client.get(f"{set_path}?$top=2", headers=auth)
     assert response.status_code == 200
     body = response.json()
@@ -109,8 +110,9 @@ def test_issue542_surgical(monkeypatch):
     next_link = body["@odata.nextLink"]
     assert next_link.startswith(f"{EXTERNAL_URL}/api/feed/v4/")
     assert "feed.example.com" in next_link
-    assert "$skip=2" in next_link
-    assert "$top=2" in next_link
+    assert "$skip=1" in next_link
+    assert "$top=1" in next_link
+    monkeypatch.delenv("FEED_PAGE_SIZE")
 
     # --- service document also uses external base URL ---------------------
     response = client.get("/api/feed/v4/", headers=auth)
