@@ -34,6 +34,9 @@ import re
 # Operators a comparison may use, in the order they are tried.
 _COMPARISON_OPS = ("eq", "ne", "gt", "ge", "lt", "le")
 
+# Maximum nesting depth (parentheses or `not`) allowed in a filter expression.
+_MAX_DEPTH = 32
+
 # Boolean keywords, matched case-insensitively.
 _AND = "and"
 _OR = "or"
@@ -173,6 +176,7 @@ class _Parser:
     def __init__(self, tokens: list[tuple[str, str]]) -> None:
         self._tokens = tokens
         self._pos = 0
+        self._depth = 0
 
     def _peek(self) -> tuple[str, str]:
         return self._tokens[self._pos]
@@ -181,9 +185,6 @@ class _Parser:
         tok = self._tokens[self._pos]
         self._pos += 1
         return tok
-
-    def _at_eof(self) -> bool:
-        return self._tokens[self._pos][0] == "eof"
 
     def _expect(self, kind: str, what: str) -> tuple[str, str]:
         tok = self._peek()
@@ -235,7 +236,11 @@ class _Parser:
         tok = self._peek()
         if tok[0] == "ident" and tok[1].lower() == _NOT:
             self._advance()
+            if self._depth >= _MAX_DEPTH:
+                raise FilterSyntaxError("filter expression nesting too deep")
+            self._depth += 1
             operand = self._parse_not()
+            self._depth -= 1
             return ("not", operand)
         return self._parse_comparison()
 
@@ -244,7 +249,11 @@ class _Parser:
         tok = self._peek()
         if tok[0] == "lparen":
             self._advance()
+            if self._depth >= _MAX_DEPTH:
+                raise FilterSyntaxError("filter expression nesting too deep")
+            self._depth += 1
             node = self._parse_or()
+            self._depth -= 1
             self._expect("rparen", "')'")
             return node
         if tok[0] != "ident":
