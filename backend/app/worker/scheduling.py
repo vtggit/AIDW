@@ -57,13 +57,18 @@ def fire_due_sequences_once(now: datetime | None = None) -> list[str]:
                 continue
 
             run_id = str(uuid.uuid4())
+            name_part = sequence_name if sequence_name else str(sequence_id)
+            composed_name = f"scheduled: {name_part}"
+            if len(composed_name) > 255:
+                prefix = "scheduled: "
+                composed_name = prefix + name_part[: 255 - len(prefix)]
             cur.execute(
                 "INSERT INTO sequence_runs "
                 "(id, name, sequence_id, status, triggered_by, created_at, updated_at) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     run_id,
-                    f"scheduled: {sequence_name}",
+                    composed_name,
                     sequence_id,
                     "pending",
                     "schedule",
