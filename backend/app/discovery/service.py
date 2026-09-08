@@ -13,7 +13,14 @@ from uuid import uuid4
 
 from app.db.connection import get_cursor
 from app.discovery.schema_reader import get_reader
-from app.egress.http import fetch_bytes
+from app.egress.http import (
+    EgressAuthError,
+    EgressError,
+    SecretRefInvalidAuthError,
+    SecretUnavailableAuthError,
+    fetch_bytes,
+)
+from app.egress.policy import EgressDestinationDenied
 from app.pii.service import scan_pii_for_source
 from app.suggestion.service import regenerate_suggestions_for_source
 
@@ -27,7 +34,16 @@ class DiscoveryError(Exception):
 def _fetch_metadata(url: str) -> bytes:
     """Fetch the raw $metadata document. Factored out so tests can substitute a fixture without
     hitting the network."""
-    return fetch_bytes(url, timeout=30)
+    try:
+        return fetch_bytes(url, timeout=30)
+    except (SecretUnavailableAuthError, SecretRefInvalidAuthError) as exc:
+        raise DiscoveryError("credential unavailable for this source") from exc
+    except EgressAuthError as exc:
+        raise DiscoveryError("authentication against the source failed") from exc
+    except EgressDestinationDenied as exc:
+        raise DiscoveryError("destination denied by egress policy") from exc
+    except (EgressError, TimeoutError, ConnectionError) as exc:
+        raise DiscoveryError("source endpoint unreachable") from exc
 
 
 def discover_source(source_id: str) -> dict:
