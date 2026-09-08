@@ -16,6 +16,13 @@ Security notes:
       contains only the status code and the scheme names parsed from
       the ``WWW-Authenticate`` header.  The credential, principal, or
       secret value is never included.
+    * The ``Authorization`` header is re-attached on a redirect only
+      when the redirect target's *effective origin* (scheme, lower-cased
+      host, and effective port with default ports normalized) equals the
+      original request's effective origin.  A scheme downgrade (https to
+      http), a port change, or a host change all drop the header.  A
+      malformed or unparseable redirect port is treated as an origin
+      mismatch and the header is omitted.
 """
 
 from __future__ import annotations
@@ -84,6 +91,36 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _effective_origin(url: str) -> tuple[str, str, int] | None:
+    """Return the effective origin ``(scheme, host, port)`` of *url*.
+
+    The scheme is lower-cased, the host is lower-cased, and the port is
+    the URL's explicit port when present and parseable, otherwise the
+    scheme's default port (80 for http, 443 for https).  Returns ``None``
+    when the URL has no host, its explicit port is malformed or
+    unparseable, or the scheme is not http/https.
+    """
+    parsed = urllib.parse.urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return None
+    try:
+        explicit_port = parsed.port
+    except (ValueError, TypeError):
+        return None
+    if explicit_port is None:
+        if scheme == "http":
+            port = 80
+        elif scheme == "https":
+            port = 443
+        else:
+            return None
+    else:
+        port = explicit_port
+    return (scheme, host, port)
+
+
 def credential_for_url(url: str) -> dict | None:
     """Return the earliest credential row for the connection matching *url*.
 
@@ -143,9 +180,12 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
 
     Redirects are followed manually (at most 3 hops).  Each redirect
     target is validated via :func:`validate_destination` before the
-    request is sent.  The ``Authorization`` header (when a credential
-    is resolved) is attached only to requests whose host matches the
-    original URL's host (case-insensitive).
+    request is sent.  The ``Authorization`` header (when a credential is
+    resolved) is re-attached on a redirect only when the redirect
+    target's effective origin (scheme, lower-cased host, and effective
+    port with default ports normalized) equals the original request's
+    effective origin; otherwise it is omitted.  A malformed or
+    unparseable redirect port is treated as an origin mismatch.
 
     Raises:
         EgressAuthError: on HTTP 401 or 403.
@@ -155,7 +195,7 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
     validate_destination(url)
     credential = credential_for_url(url)
 
-    original_host = (urllib.parse.urlparse(url).hostname or "").lower()
+    original_origin = _effective_origin(url)
 
     auth_header: str | None = None
     if credential is not None:
@@ -186,9 +226,14 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
 
     while True:
         request = urllib.request.Request(current_url)
-        current_host = (urllib.parse.urlparse(current_url).hostname or "").lower()
-        if auth_header is not None and current_host == original_host:
-            request.add_header("Authorization", auth_header)
+        if auth_header is not None:
+            current_origin = _effective_origin(current_url)
+            if (
+                original_origin is not None
+                and current_origin is not None
+                and current_origin == original_origin
+            ):
+                request.add_header("Authorization", auth_header)
 
         try:
             with opener.open(request, timeout=timeout) as response:
