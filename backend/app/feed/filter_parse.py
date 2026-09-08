@@ -138,6 +138,19 @@ def _tokenize(text: str) -> list[tuple[str, str]]:
                 i = m.end()
                 continue
             raise FilterSyntaxError(f"unexpected character {ch!r} in filter expression")
+        if ch in ("-", "+"):
+            # Signed numeric literal: -5, +5, -5.0, +3.14
+            m = _DECIMAL_RE.match(text, i)
+            if m:
+                tokens.append(("number", m.group(0)))
+                i = m.end()
+                continue
+            m = _INT_RE.match(text, i)
+            if m:
+                tokens.append(("number", m.group(0)))
+                i = m.end()
+                continue
+            raise FilterSyntaxError(f"unexpected character {ch!r} in filter expression")
         if ch.isalpha() or ch == "_":
             j = i
             while j < n and (text[j].isalnum() or text[j] == "_"):
