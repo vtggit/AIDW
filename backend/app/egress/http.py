@@ -8,10 +8,25 @@ database access.
 
 Security notes:
     * Credentials are resolved by matching the connection ``endpoint``
-      (trailing slashes stripped) as the longest prefix of the target
-      URL.  The join key between ``source_connections`` and
-      ``source_credentials`` is ``source_id`` — the connection's own
-      ``id`` column is never used to look up a credential.
+      against the target URL on an **origin and path boundary**: the
+      endpoint's scheme, host, and effective port must each equal the
+      target's (case-insensitive for scheme and host), and the endpoint's
+      path (dot segments normalized per RFC 3986) must be a prefix of the
+      target's path that ends on a path-segment boundary (``/``).  A
+      longer sibling host, a different port, a different scheme, or a
+      path that merely shares a textual prefix does not resolve another
+      endpoint's credential.  The join key between
+      ``source_connections`` and ``source_credentials`` is
+      ``source_id`` — the connection's own ``id`` column is never used
+      to look up a credential.
+    * When a source has multiple ``source_credentials`` rows, the
+      intended **active** credential is selected deterministically (the
+      most recently created row, ties broken by id) rather than the
+      earliest, so a rotated credential takes effect.
+    * A URL that resolves to a credential whose ``auth_scheme`` is
+      unsupported, or that resolves to no credential at all, performs the
+      anonymous fetch the pre-egress callers performed instead of
+      failing closed before the request.
     * On HTTP 401/403 the raised :class:`EgressAuthError` message
       contains only the status code and the scheme names parsed from
       the ``WWW-Authenticate`` header.  The credential, principal, or
@@ -121,19 +136,104 @@ def _effective_origin(url: str) -> tuple[str, str, int] | None:
     return (scheme, host, port)
 
 
+def _effective_port(parsed: urllib.parse.ParseResult) -> int:
+    """Return the effective port of a parsed URL.
+
+    The explicit port when present and parseable, otherwise the scheme's
+    default port (80 for http, 443 for https), or 0 when the scheme has
+    no default.  Comparing effective ports means an endpoint on one port
+    never resolves a credential for a target on a different port.
+    """
+    try:
+        explicit = parsed.port
+    except (ValueError, TypeError):
+        explicit = None
+    if explicit is not None:
+        return explicit
+    scheme = (parsed.scheme or "").lower()
+    if scheme == "http":
+        return 80
+    if scheme == "https":
+        return 443
+    return 0
+
+
+def _normalize_path(path: str) -> str:
+    """Remove dot segments from a URL path per RFC 3986 §5.2.4.
+
+    ``/api/../secret`` normalizes to ``/secret`` so that a path that
+    merely contains a dot segment is compared on its effective path, not
+    its raw textual form.  An empty path stays empty.
+    """
+    if not path:
+        return ""
+    output: list[str] = []
+    for segment in path.split("/"):
+        if segment == ".":
+            continue
+        if segment == "..":
+            if output:
+                output.pop()
+            continue
+        output.append(segment)
+    result = "/".join(output)
+    if path.startswith("/") and not result.startswith("/"):
+        result = "/" + result
+    return result
+
+
+def _endpoint_matches_target(endpoint: str, target: str) -> bool:
+    """Return True when *endpoint* matches *target* on an origin and path boundary.
+
+    The endpoint's scheme, host, and effective port must each equal the
+    target's (case-insensitive for scheme and host), and the endpoint's
+    path (dot segments normalized) must be a prefix of the target's path
+    that ends on a path-segment boundary (``/``).  A longer sibling host,
+    a different port, a different scheme, or a path that merely shares a
+    textual prefix does not match.
+    """
+    ep = urllib.parse.urlparse(endpoint)
+    tg = urllib.parse.urlparse(target)
+
+    if (ep.scheme or "").lower() != (tg.scheme or "").lower():
+        return False
+
+    ep_host = (ep.hostname or "").lower()
+    tg_host = (tg.hostname or "").lower()
+    if not ep_host or ep_host != tg_host:
+        return False
+
+    if _effective_port(ep) != _effective_port(tg):
+        return False
+
+    ep_path = _normalize_path(ep.path or "")
+    tg_path = _normalize_path(tg.path or "")
+
+    if ep_path == tg_path:
+        return True
+    if ep_path == "":
+        return True
+    if not ep_path.endswith("/"):
+        ep_path += "/"
+    return tg_path.startswith(ep_path)
+
+
 def credential_for_url(url: str) -> dict | None:
-    """Return the earliest credential row for the connection matching *url*.
+    """Return the active credential row for the connection matching *url*.
 
     Selection logic:
-        1. Find the ``source_connections`` row whose ``endpoint``
-           (trailing slashes stripped) is the longest prefix of *url*.
+        1. Find the ``source_connections`` row whose ``endpoint`` matches
+           *url* on an origin and path boundary (exact scheme, host, and
+           effective port, plus a path prefix ending on a segment
+           boundary), preferring the longest matching endpoint.
         2. Read that row's ``source_id`` column.
-        3. Return the earliest ``source_credentials`` row (by
-           ``created_at``) having the same ``source_id``.
+        3. Return the intended **active** ``source_credentials`` row for
+           that ``source_id`` — the most recently created row, ties
+           broken by id — so a rotated credential takes effect.
 
-    Returns ``None`` when no connection endpoint is a prefix of *url*,
-    when the matched connection has a null ``source_id``, or when that
-    source has no credential row.
+    Returns ``None`` when no connection endpoint matches *url*, when the
+    matched connection has a null ``source_id``, or when that source has
+    no credential row.
     """
     target = _strip_trailing_slashes(url)
 
@@ -143,14 +243,15 @@ def credential_for_url(url: str) -> dict | None:
         )
         connections = cur.fetchall()
 
-    # Find the connection whose endpoint is the longest prefix of the target.
+    # Find the connection whose endpoint matches the target on an origin and
+    # path boundary, preferring the longest matching endpoint.
     best: dict | None = None
     best_len = -1
     for conn in connections:
         endpoint = _strip_trailing_slashes(conn["endpoint"])
         if not endpoint:
             continue
-        if target == endpoint or target.startswith(endpoint):
+        if _endpoint_matches_target(endpoint, target):
             if len(endpoint) > best_len:
                 best = conn
                 best_len = len(endpoint)
@@ -167,7 +268,7 @@ def credential_for_url(url: str) -> dict | None:
             "SELECT id, name, auth_scheme, principal, secret_ref, token_endpoint, "
             "source_id, created_at, updated_at "
             "FROM source_credentials WHERE source_id = %s "
-            "ORDER BY created_at LIMIT 1",
+            "ORDER BY created_at DESC, id DESC LIMIT 1",
             (source_id,),
         )
         row = cur.fetchone()
@@ -187,10 +288,14 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
     effective origin; otherwise it is omitted.  A malformed or
     unparseable redirect port is treated as an origin mismatch.
 
+    A URL that resolves to no credential, or to a credential whose
+    ``auth_scheme`` is unsupported, performs the anonymous fetch the
+    pre-egress callers performed (no ``Authorization`` header) rather
+    than failing closed before the request.
+
     Raises:
         EgressAuthError: on HTTP 401 or 403.
-        EgressError: on unsupported auth scheme, too many redirects,
-            or other HTTP errors.
+        EgressError: on too many redirects or other HTTP errors.
     """
     validate_destination(url)
     credential = credential_for_url(url)
@@ -216,8 +321,8 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
                     "ascii"
                 )
                 auth_header = f"Basic {token}"
-            else:
-                raise EgressError(f"unsupported auth_scheme: {auth_scheme}")
+            # An unsupported auth_scheme falls through to an anonymous fetch
+            # (no Authorization header) rather than failing closed.
 
     opener = urllib.request.build_opener(_NoRedirectHandler)
     current_url = url
