@@ -113,8 +113,14 @@ const ApiClient = {
                 try {
                     const toast = document.getElementById('toast');
                     if (toast) {
-                        toast.textContent = 'Your session has expired — sign in again.';
+                        const sessionText = 'Your session has expired — sign in again.';
+                        toast.textContent = sessionText;
                         toast.hidden = false;
+                        setTimeout(() => {
+                            if (toast.textContent === sessionText) {
+                                toast.hidden = true;
+                            }
+                        }, 8000);
                     }
                 } catch (_) {
                     // silent no-op
@@ -200,7 +206,8 @@ const ApiClient = {
      * Parse an HTTP error response into a structured error.
      *
      * Classifies errors into types for consistent frontend handling:
-     *   - 'auth'       → 401 Unauthorized or 403 Forbidden
+     *   - 'auth'       → 401 Unauthorized
+     *   - 'forbidden'  → 403 Forbidden
      *   - 'validation' → 422 Unprocessable Entity (FastAPI validation)
      *   - 'server'     → 5xx or other non-OK responses
      *
@@ -219,7 +226,7 @@ const ApiClient = {
         if (response.status === 401) {
             errorType = 'auth';
         } else if (response.status === 403) {
-            errorType = 'auth';
+            errorType = 'forbidden';
         } else if (response.status === 422) {
             errorType = 'validation';
         } else if (response.status >= 500) {
