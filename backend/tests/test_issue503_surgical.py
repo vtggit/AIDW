@@ -74,7 +74,7 @@ def test_issue503_surgical():
     }
     expected_auth = "Basic " + base64.b64encode(b"user:s3cret").decode()
 
-    # --- 1: same-host redirect keeps Authorization header ---
+    # --- 1: same-host different-port redirect drops Authorization header ---
     srv_b = _TestServer(body=b"hello").start()
     srv_a = _TestServer(redirect_to=srv_b.url).start()
     try:
@@ -86,7 +86,7 @@ def test_issue503_surgical():
             result = egress_http.fetch_bytes(srv_a.url)
         assert result == b"hello"
         assert srv_a.headers_received[0]["Authorization"] == expected_auth
-        assert srv_b.headers_received[0]["Authorization"] == expected_auth
+        assert "Authorization" not in srv_b.headers_received[0]
     finally:
         srv_a.stop()
         srv_b.stop()

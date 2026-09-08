@@ -16,6 +16,13 @@ Security notes:
       contains only the status code and the scheme names parsed from
       the ``WWW-Authenticate`` header.  The credential, principal, or
       secret value is never included.
+    * The ``Authorization`` header is re-attached on a redirect only
+      when the redirect target's effective origin (scheme + effective
+      port, with default ports normalized) equals the original
+      request's effective origin.  A scheme downgrade (https -> http)
+      or any port change is an origin mismatch and the header is
+      omitted.  A malformed or unparseable redirect port is treated as
+      an origin mismatch (never a crash).
 """
 
 from __future__ import annotations
@@ -84,6 +91,50 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _effective_port(parsed: urllib.parse.ParseResult) -> int | None:
+    """Return the effective port for a parsed URL, or ``None`` if unparseable.
+
+    An explicit port is returned as-is.  When no port is present the
+    scheme's default port is used (80 for http, 443 for https); an
+    unknown scheme yields ``None``.  A malformed or out-of-range port
+    (which makes ``ParseResult.port`` raise ``ValueError``) yields
+    ``None`` so the caller treats it as an origin mismatch rather than
+    crashing.
+    """
+    try:
+        explicit = parsed.port
+    except (ValueError, TypeError):
+        return None
+    if explicit is not None:
+        return explicit
+    scheme = (parsed.scheme or "").lower()
+    if scheme == "http":
+        return 80
+    if scheme == "https":
+        return 443
+    return None
+
+
+def _effective_origin(url: str) -> tuple[str, int] | None:
+    """Return the effective origin ``(scheme, port)`` for *url*.
+
+    The scheme is lower-cased and the port is the effective port with
+    defaults normalized.  Returns ``None`` when the URL cannot be
+    parsed, has no scheme/host, or carries a malformed port, so the
+    caller treats it as an origin mismatch.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except (ValueError, TypeError):
+        return None
+    if not parsed.scheme or not parsed.hostname:
+        return None
+    port = _effective_port(parsed)
+    if port is None:
+        return None
+    return (parsed.scheme.lower(), port)
+
+
 def credential_for_url(url: str) -> dict | None:
     """Return the earliest credential row for the connection matching *url*.
 
@@ -144,8 +195,12 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
     Redirects are followed manually (at most 3 hops).  Each redirect
     target is validated via :func:`validate_destination` before the
     request is sent.  The ``Authorization`` header (when a credential
-    is resolved) is attached only to requests whose host matches the
-    original URL's host (case-insensitive).
+    is resolved) is re-attached only when the redirect target's
+    effective origin (scheme + effective port, with default ports
+    normalized) equals the original request's effective origin; a
+    scheme downgrade or any port change omits the header, and a
+    malformed or unparseable redirect port is treated as an origin
+    mismatch (the header is omitted, never a crash).
 
     Raises:
         EgressAuthError: on HTTP 401 or 403.
@@ -155,7 +210,7 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
     validate_destination(url)
     credential = credential_for_url(url)
 
-    original_host = (urllib.parse.urlparse(url).hostname or "").lower()
+    original_origin = _effective_origin(url)
 
     auth_header: str | None = None
     if credential is not None:
@@ -186,9 +241,10 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
 
     while True:
         request = urllib.request.Request(current_url)
-        current_host = (urllib.parse.urlparse(current_url).hostname or "").lower()
-        if auth_header is not None and current_host == original_host:
-            request.add_header("Authorization", auth_header)
+        if auth_header is not None:
+            current_origin = _effective_origin(current_url)
+            if current_origin is not None and current_origin == original_origin:
+                request.add_header("Authorization", auth_header)
 
         try:
             with opener.open(request, timeout=timeout) as response:
