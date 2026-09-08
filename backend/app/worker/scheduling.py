@@ -13,6 +13,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+import psycopg2
+
 from app.db.connection import get_cursor
 from app.scheduling.cadence import is_due
 
@@ -47,7 +49,7 @@ def fire_due_sequences_once(now: datetime | None = None) -> list[str]:
         )
         rows = cur.fetchall()
 
-        for row in rows:
+        for idx, row in enumerate(rows):
             sequence_id = row["id"]
             sequence_name = row["name"]
             cadence = row.get("schedule_cadence")
@@ -71,27 +73,39 @@ def fire_due_sequences_once(now: datetime | None = None) -> list[str]:
             if len(composed_name) > 255:
                 prefix = "scheduled: "
                 composed_name = prefix + name_part[: 255 - len(prefix)]
-            cur.execute(
-                "INSERT INTO sequence_runs "
-                "(id, name, sequence_id, status, triggered_by, created_at, updated_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (
-                    run_id,
-                    composed_name,
-                    sequence_id,
-                    "pending",
-                    "schedule",
-                    now,
-                    now,
-                ),
-            )
-            cur.execute(
-                "UPDATE load_sequences "
-                "SET last_fired_at = %s, updated_at = %s "
-                "WHERE id = %s",
-                (now, now, sequence_id),
-            )
-            created_run_ids.append(run_id)
+            sp_name = f"sp_{idx}"
+            cur.execute(f"SAVEPOINT {sp_name}")
+            try:
+                cur.execute(
+                    "INSERT INTO sequence_runs "
+                    "(id, name, sequence_id, status, triggered_by, "
+                    "created_at, updated_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        run_id,
+                        composed_name,
+                        sequence_id,
+                        "pending",
+                        "schedule",
+                        now,
+                        now,
+                    ),
+                )
+                cur.execute(
+                    "UPDATE load_sequences "
+                    "SET last_fired_at = %s, updated_at = %s "
+                    "WHERE id = %s",
+                    (now, now, sequence_id),
+                )
+                cur.execute(f"RELEASE SAVEPOINT {sp_name}")
+                created_run_ids.append(run_id)
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                raise
+            except Exception as exc:
+                cur.execute(f"ROLLBACK TO SAVEPOINT {sp_name}")
+                cur.execute(f"RELEASE SAVEPOINT {sp_name}")
+                logger.warning("failed to fire sequence %s: %s", sequence_id, exc)
+                continue
 
     if created_run_ids:
         logger.info("fired %d due load sequence(s)", len(created_run_ids))
