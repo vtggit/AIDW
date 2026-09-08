@@ -54,6 +54,15 @@ ENABLE_INAPI_EGRESS: bool = os.getenv("ENABLE_INAPI_EGRESS", "false").lower() in
 INGEST_EXECUTOR: str = os.getenv("INGEST_EXECUTOR", "inline").strip().lower()
 
 # ---------------------------------------------------------------------------
+# OData v4 feed — external origin for @odata.nextLink, @odata.context,
+# and service-document URLs
+# ---------------------------------------------------------------------------
+FEED_EXTERNAL_BASE_URL: str = os.getenv("FEED_EXTERNAL_BASE_URL", "")
+FEED_TRUST_FORWARDED_HEADERS: bool = os.getenv(
+    "FEED_TRUST_FORWARDED_HEADERS", "false"
+).lower() in ("true", "1", "yes")
+
+# ---------------------------------------------------------------------------
 # CORS — comma-separated list of allowed frontend origins
 # ---------------------------------------------------------------------------
 _CORS_RAW: str = os.getenv(
