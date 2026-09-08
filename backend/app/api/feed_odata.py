@@ -20,6 +20,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 
+from app.config import FEED_EXTERNAL_BASE_URL, FEED_TRUST_FORWARDED_HEADERS
 from app.db.connection import get_cursor
 from app.feed.auth import require_feed_credential
 from app.feed.filter_eval import FilterPropertyError, evaluate
@@ -59,6 +60,25 @@ def _odata_error(status: int, message: str) -> JSONResponse:
         content={"error": {"code": str(status), "message": message}},
         headers=_odata_headers(),
     )
+
+
+def _external_base_url(request: Request) -> str:
+    """Compute the external base URL for feed responses.
+
+    Priority:
+    1. ``FEED_EXTERNAL_BASE_URL`` setting (when non-empty).
+    2. ``X-Forwarded-Proto`` + ``X-Forwarded-Host`` headers (when
+       ``FEED_TRUST_FORWARDED_HEADERS`` is true and both are present).
+    3. ``str(request.base_url)``.
+    """
+    if FEED_EXTERNAL_BASE_URL:
+        return FEED_EXTERNAL_BASE_URL.rstrip("/")
+    if FEED_TRUST_FORWARDED_HEADERS:
+        proto = request.headers.get("x-forwarded-proto")
+        host = request.headers.get("x-forwarded-host")
+        if proto and host:
+            return f"{proto}://{host}"
+    return str(request.base_url).rstrip("/")
 
 
 def _load_datasets() -> list[dict]:
@@ -285,7 +305,7 @@ def service_document(
     """
     datasets = _load_datasets()
     sets = entity_set_names(datasets)
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _external_base_url(request)
     value = [
         {"name": set_name, "kind": "EntitySet", "url": set_name} for set_name in sets
     ]
@@ -532,7 +552,7 @@ def read_entity_set(
                 projected[property_name] = entity.get(property_name)
             value.append(projected)
 
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _external_base_url(request)
     body: dict = {
         "@odata.context": f"{base_url}/api/feed/v4/$metadata#{entity_set}",
         "value": value,
