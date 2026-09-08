@@ -221,6 +221,32 @@ def _denied_reason(host: str, strict: bool) -> str | None:
     return None
 
 
+def _bracketed_host_segment(url: str) -> str | None:
+    """Extract the bracketed host segment from *url* without full parsing.
+
+    Returns the bracketed segment (including brackets) if found, else None.
+    Used in the ValueError path where urlsplit has already failed, so a
+    minimal string scan avoids leaking userinfo, query, or fragment.
+    """
+    scheme_end = url.find("://")
+    if scheme_end == -1:
+        return None
+    authority_start = scheme_end + 3
+    end = len(url)
+    for i in range(authority_start, len(url)):
+        if url[i] in "/?#":
+            end = i
+            break
+    authority = url[authority_start:end]
+    bracket_start = authority.find("[")
+    if bracket_start == -1:
+        return None
+    bracket_end = authority.find("]", bracket_start)
+    if bracket_end == -1:
+        return None
+    return authority[bracket_start : bracket_end + 1]
+
+
 def validate_destination(url: str) -> None:
     """Validate that the host of *url* is permitted for egress.
 
@@ -240,9 +266,12 @@ def validate_destination(url: str) -> None:
     try:
         host = _extract_host(url)
     except ValueError:
-        raise EgressDestinationDenied(
-            f"Egress destination denied: invalid bracketed host ({url!r})"
-        )
+        bracketed = _bracketed_host_segment(url)
+        if bracketed is not None:
+            raise EgressDestinationDenied(
+                f"Egress destination denied: invalid bracketed host ({bracketed!r})"
+            )
+        raise EgressDestinationDenied("Egress destination denied: unparseable host")
     allowed = _allowed_hosts()
     if host.lower() in {h.lower() for h in allowed}:
         return
