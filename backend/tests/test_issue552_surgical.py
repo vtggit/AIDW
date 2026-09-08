@@ -33,13 +33,16 @@ def test_issue552_surgical():
     long_name = "A" * 255
     seq_id = "seq-001"
     mock_cur = MagicMock()
-    mock_cur.fetchall.return_value = [
-        {
-            "id": seq_id,
-            "name": long_name,
-            "schedule_cadence": "daily",
-            "last_fired_at": None,
-        },
+    mock_cur.fetchall.side_effect = [
+        [
+            {
+                "id": seq_id,
+                "name": long_name,
+                "schedule_cadence": "daily",
+                "last_fired_at": None,
+            },
+        ],
+        [],
     ]
     _run_fire(mock_cur)
     inserted = _get_inserted_name(mock_cur)
@@ -48,13 +51,16 @@ def test_issue552_surgical():
 
     # --- Case 2: NULL name falls back to sequence_id ---
     mock_cur2 = MagicMock()
-    mock_cur2.fetchall.return_value = [
-        {
-            "id": seq_id,
-            "name": None,
-            "schedule_cadence": "daily",
-            "last_fired_at": None,
-        },
+    mock_cur2.fetchall.side_effect = [
+        [
+            {
+                "id": seq_id,
+                "name": None,
+                "schedule_cadence": "daily",
+                "last_fired_at": None,
+            },
+        ],
+        [],
     ]
     _run_fire(mock_cur2)
     inserted2 = _get_inserted_name(mock_cur2)
@@ -65,8 +71,16 @@ def test_issue552_surgical():
 
     # --- Case 3: empty-string name falls back to sequence_id ---
     mock_cur3 = MagicMock()
-    mock_cur3.fetchall.return_value = [
-        {"id": seq_id, "name": "", "schedule_cadence": "daily", "last_fired_at": None},
+    mock_cur3.fetchall.side_effect = [
+        [
+            {
+                "id": seq_id,
+                "name": "",
+                "schedule_cadence": "daily",
+                "last_fired_at": None,
+            },
+        ],
+        [],
     ]
     _run_fire(mock_cur3)
     inserted3 = _get_inserted_name(mock_cur3)

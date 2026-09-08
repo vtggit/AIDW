@@ -56,6 +56,15 @@ def fire_due_sequences_once(now: datetime | None = None) -> list[str]:
             if not is_due(cadence, last_fired_at, now):
                 continue
 
+            cur.execute(
+                "SELECT 1 FROM sequence_runs "
+                "WHERE sequence_id = %s AND status IN ('pending', 'running') "
+                "LIMIT 1",
+                (sequence_id,),
+            )
+            if cur.fetchall():
+                continue
+
             run_id = str(uuid.uuid4())
             name_part = sequence_name if sequence_name else str(sequence_id)
             composed_name = f"scheduled: {name_part}"
