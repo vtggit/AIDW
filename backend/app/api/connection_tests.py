@@ -1,6 +1,7 @@
 """ConnectionTest API routes."""
 
 import time
+import urllib.error
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,6 +12,8 @@ from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.db.connection import get_cursor
 from app.egress.http import EgressAuthError
+from app.egress.policy import EgressDestinationDenied
+from app.egress.secrets import SecretRefInvalid, SecretUnavailable
 from app.models.connection_tests import (
     ConnectionTestCreate,
     ConnectionTestResponse,
@@ -109,7 +112,13 @@ def run_connection_test(
     except EgressAuthError:
         result_status = "auth_failed"
         message = "Authentication failed against the source endpoint."
-    except Exception:
+    except EgressDestinationDenied:
+        result_status = "unreachable"
+        message = "Destination denied by egress policy."
+    except (SecretUnavailable, SecretRefInvalid):
+        result_status = "unreachable"
+        message = "Credential unavailable for this source."
+    except (urllib.error.URLError, TimeoutError):
         result_status = "unreachable"
         message = "Source endpoint is unreachable."
     latency_ms = int((time.monotonic() - started) * 1000)
