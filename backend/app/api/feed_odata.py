@@ -218,7 +218,11 @@ def _property_edm_type(property_name: str, fields: list[dict]) -> str:
 def _coerce_sort_value(value, edm_type: str):
     """Coerce a payload value to a sortable value for its Edm type family.
 
-    Returns ``None`` when the value is ``None`` or the conversion fails.
+    Returns ``None`` when the value is ``None`` or the conversion fails. For
+    ``Edm.Boolean`` the value is returned only when it is a JSON boolean
+    (``True``/``False``); any other value — including the strings ``"true"``
+    and ``"false"`` — yields ``None`` so it sorts as "no ordering", the same
+    rule ``filter_eval`` applies to boolean comparisons.
     """
     if value is None:
         return None
@@ -236,16 +240,52 @@ def _coerce_sort_value(value, edm_type: str):
                 parsed = parsed.replace(tzinfo=timezone.utc)
             return parsed
         if edm_type == "Edm.Boolean":
-            return bool(value)
+            if isinstance(value, bool):
+                return value
+            return None
         return str(value)
     except (TypeError, ValueError, ArithmeticError):
         return None
 
 
 def _sort_key(value, edm_type: str):
-    """Build the (is_none, coerced) sort key for one property value."""
+    """Build the (is_none, coerced) sort key for one property value.
+
+    Kept for parity with the coercion contract; the entity-set read sorts via
+    :func:`_sort_entities`, which keeps no-ordering values last in both
+    directions rather than relying on a single reversed tuple key.
+    """
     coerced = _coerce_sort_value(value, edm_type)
     return (coerced is None, coerced)
+
+
+def _sort_entities(entities: list[dict], order_items, fields: list[dict]) -> list[dict]:
+    """Sort rendered entities by the parsed ``$orderby`` items.
+
+    Rows whose value does not coerce to a sortable value (``None``, or a value
+    that fails coercion for its Edm type) always sort LAST, regardless of
+    direction — the same "no ordering" rule ``$filter`` applies. Direction is
+    applied only to the rows that do carry a sortable value, so a descending
+    sort never floats the no-ordering rows to the front.
+    """
+    ordered = list(entities)
+    for property_name, descending in reversed(order_items):
+        edm_type = _property_edm_type(property_name, fields)
+
+        def _coerce(row, _edm_type=edm_type, _prop=property_name):
+            return _coerce_sort_value(row.get(_prop), _edm_type)
+
+        with_value: list[tuple] = []
+        without_value: list[dict] = []
+        for row in ordered:
+            coerced = _coerce(row)
+            if coerced is None:
+                without_value.append(row)
+            else:
+                with_value.append((coerced, row))
+        with_value.sort(key=lambda pair: pair[0], reverse=descending)
+        ordered = [row for _, row in with_value] + without_value
+    return ordered
 
 
 def _parse_select(raw: str, properties: dict[str, str]) -> list[str] | None:
@@ -537,16 +577,7 @@ def read_entity_set(
     total = len(entities)
 
     if order_items:
-        ordered = list(entities)
-        for property_name, descending in reversed(order_items):
-            edm_type = _property_edm_type(property_name, fields)
-
-            def _key(row, _edm_type=edm_type):
-                value = row.get(property_name)
-                return _sort_key(value, _edm_type)
-
-            ordered.sort(key=_key, reverse=descending)
-        entities = ordered
+        entities = _sort_entities(entities, order_items, fields)
 
     # $top is a cap on the TOTAL rows a client receives across all pages. The
     # nextLink mechanism encodes the remaining budget in the $top it carries,

@@ -83,6 +83,20 @@ def odata_identifier(name: str) -> str:
     return sanitized[:_MAX_IDENTIFIER_LENGTH]
 
 
+def _suffixed_identifier(base: str, suffix: int) -> str:
+    """Return ``base`` with a ``_<suffix>`` collision suffix, within the cap.
+
+    The suffixed identifier is at most 128 characters: when the base is too
+    long to carry the suffix, the base is shortened (from the end) so that
+    ``base + "_" + suffix`` fits exactly under the cap.
+    """
+    suffix_text = f"_{suffix}"
+    if len(base) + len(suffix_text) <= _MAX_IDENTIFIER_LENGTH:
+        return base + suffix_text
+    keep = _MAX_IDENTIFIER_LENGTH - len(suffix_text)
+    return base[:keep] + suffix_text
+
+
 def entity_set_names(datasets: list[dict]) -> dict[str, str]:
     """Map each dataset to a unique OData entity-set name.
 
@@ -92,7 +106,10 @@ def entity_set_names(datasets: list[dict]) -> dict[str, str]:
     ascending ``(created_at, id)`` order regardless of their position in
     the input, so the earliest-created dataset keeps the bare name and any
     later dataset that collides is suffixed ``_2``, ``_3``, ... The
-    mapping is therefore stable across calls.
+    collision suffix is applied within the 128-character identifier cap:
+    when the base is too long to carry the suffix, the base is shortened so
+    the suffixed identifier is at most 128 characters and remains unique
+    across the set. The mapping is therefore stable across calls.
     """
     ordered = sorted(datasets, key=lambda d: (d["created_at"], d["id"]))
     result: dict[str, str] = {}
@@ -103,7 +120,7 @@ def entity_set_names(datasets: list[dict]) -> dict[str, str]:
         suffix = 1
         while candidate in used:
             suffix += 1
-            candidate = f"{base}_{suffix}"
+            candidate = _suffixed_identifier(base, suffix)
         used.add(candidate)
         result[candidate] = dataset["id"]
     return result
