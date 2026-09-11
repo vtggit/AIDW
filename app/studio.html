@@ -135,10 +135,26 @@
 <script src="/assistant/panel.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    Warehouse.init().then(function () { Sources.init(); });
-    Wizard.init();
-    Sequences.init();
-    SequenceRuns.init();
+    var authPromise;
+    try {
+        authPromise = Auth.init();
+    } catch (e) {
+        authPromise = Promise.reject(e);
+    }
+    authPromise.then(function (user) {
+        if (user === null) {
+            window.location.href = 'index.html';
+            return;
+        }
+        Warehouse.init().then(function () { Sources.init(); });
+        Wizard.init();
+        Sequences.init();
+        SequenceRuns.init();
+    }).catch(function (err) {
+        var el = document.getElementById('auth-status');
+        el.textContent = 'Authentication failed: ' + (err && err.message ? err.message : 'unknown error');
+        el.style.color = '#c0392b';
+    });
 });
 </script>
 <script src="js/deeplink.js"></script>
