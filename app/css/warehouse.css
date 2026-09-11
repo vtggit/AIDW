@@ -239,6 +239,62 @@
 .src-meta { display: flex; align-items: center; gap: 10px; font-size: 0.85em; opacity: 0.85; }
 .src-status { flex-basis: 100%; font-size: 0.8em; opacity: 0.7; }
 
+/* ── Source flow diagram (discover → ingest → transform → load) ──────────── */
+.src-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.src-flow-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.src-node {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  font-size: 0.85em;
+  text-align: center;
+}
+.src-node-label {
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+.src-arrow {
+  width: 1.5rem;
+  height: 2px;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+}
+.src-discover {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+}
+.src-ingest {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+}
+.src-transform {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+}
+.src-load {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+}
+
 /* ── Dashboard item charts (filled from /dashboard-items/{id}/data) ───────── */
 .wh-item {
     flex-wrap: wrap; /* the chart row wraps to its own full-width line */
