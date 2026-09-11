@@ -203,7 +203,7 @@ const Warehouse = {
         let R = isPosInt(i.grid_row_span) ? Math.min(6, Math.max(1, i.grid_row_span)) : 1;
         const style = `grid-column: ${S} / span ${W}; grid-row: span ${R}`;
         const effStart = (S === 'auto') ? 1 : S;
-        const editorHtml = (i.id === editingId)
+        const editorHtml = (String(i.id) === String(editingId))
             ? `<div class="wh-layout-editor">
       <input type="number" data-testid="layout-col-start" min="1" max="${C}" value="${effStart}">
       <input type="number" data-testid="layout-col-span" min="1" max="${C}" value="${W}">
@@ -345,6 +345,7 @@ const Warehouse = {
                         container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, btn.closest('.wh-item').dataset.id);
                     } else if (action === 'cancel-layout') {
                         container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, null);
+                        await Warehouse._fillCharts(container, items);
                     } else if (action === 'save-layout') {
                         const tileEl = btn.closest('.wh-item');
                         const itemId = tileEl.dataset.id;
@@ -362,8 +363,10 @@ const Warehouse = {
                                 layouts[existingIdx].grid_col_span = res.data.grid_col_span;
                                 layouts[existingIdx].grid_row_span = res.data.grid_row_span;
                                 container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, null);
+                                await Warehouse._fillCharts(container, items);
                             } else {
                                 container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, itemId);
+                                await Warehouse._fillCharts(container, items);
                             }
                         } else {
                             const itemObj = items.find(i => i.id === itemId);
@@ -373,8 +376,10 @@ const Warehouse = {
                             if (res.ok) {
                                 layouts.unshift(res.data);
                                 container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, null);
+                                await Warehouse._fillCharts(container, items);
                             } else {
                                 container.innerHTML = Warehouse.renderDashboards(dashboards, items, layouts, itemId);
+                                await Warehouse._fillCharts(container, items);
                             }
                         }
                     }
