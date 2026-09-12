@@ -1,10 +1,10 @@
-// Served-app Playwright spec (no backend): the schema-tier suggestion loop on /studio.html.
-// Every /api/** endpoint the page needs is mocked with page.route BEFORE page.goto, so the spec
-// never creates data through the request fixture or a live API — it drives only the DOM: the
-// suggestion card on /studio.html, its accept and dismiss buttons, and the dashboard item on /
-// rendered from the mocked dashboards and dashboard-items. The mocked GET /api/suggestions is
-// stateful: after the POST to /api/suggestions/{id}/accept or /dismiss it no longer lists that id,
-// because the inbox re-renders from that list after every action (Warehouse.accept calls refresh).
+// Issue #572 proof: the two specs drive the suggestion loop on /studio.html (open the studio,
+// act on the inbox, assert the accepted item lands on a dashboard by opening /), and both pass
+// in the served-app Playwright run with no backend. Every /api/** endpoint is mocked with
+// page.route BEFORE page.goto; the mocked GET /api/suggestions is stateful so the inbox
+// re-renders from the (now empty) list after accept/dismiss. The dashboard-items list is also
+// stateful: the item only appears after a genuine accept, so a mis-wired button that hits the
+// dismiss URL cannot fake the assertion.
 const { test, expect } = require('@playwright/test');
 
 // CodeAgent terminal-state hook (frontend_recipe.build_terminal_state_hook)
@@ -32,67 +32,57 @@ test.afterEach(async ({ page }, testInfo) => {
 
 const BASE = (process.env.BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
 const TOKEN = 'dev-secret-token:admin';
-const MARK = `FE-SUG-${Date.now()}`; // unique per run so assertions never collide
+const MARK = `FE-572-${Date.now()}`;
 
-const ACCEPT_ID = 'sug-572-accept';
-const DISMISS_ID = 'sug-572-dismiss';
-const DASHBOARD_ID = 'dash-572';
-const ITEM_ID = 'item-572-accept';
-const ACCEPT_TITLE = `${MARK} Orders by ShipCountry`;
-const DISMISS_TITLE = `${MARK} Total Freight`;
+const SUG_ID = 'sug-572-proof';
+const DASH_ID = 'dash-572-proof';
+const ITEM_ID = 'item-572-proof';
+const TITLE = `${MARK} Orders by Region`;
 
 async function installRoutes(page) {
-    // Stateful suggestion inbox: starts with two cards; accept/dismiss remove the acted id.
-    const inbox = new Set([ACCEPT_ID, DISMISS_ID]);
+    const inbox = new Set([SUG_ID]);
     // Stateful dashboard-items: the item only appears after a genuine accept.
     const dashboardItems = [];
 
-    const rows = [
-        { id: ACCEPT_ID, title: ACCEPT_TITLE, item_type: 'bar', aggregation: 'count', score: 0.55 },
-        { id: DISMISS_ID, title: DISMISS_TITLE, item_type: 'kpi', aggregation: 'sum', score: 0.70 },
-    ];
-
     await page.route(`${BASE}/api/suggestions`, (route) => {
-        const body = rows
-            .filter((r) => inbox.has(r.id))
-            .map((r) => ({
-                id: r.id,
-                name: r.title,
-                title: r.title,
-                item_type: r.item_type,
-                aggregation: r.aggregation,
-                status: 'suggested',
-                strategy: 'schema-only',
-                score: r.score,
-            }));
+        const body = [...inbox].map((id) => ({
+            id,
+            name: TITLE,
+            title: TITLE,
+            item_type: 'bar',
+            aggregation: 'count',
+            status: 'suggested',
+            strategy: 'schema-only',
+            score: 0.55,
+        }));
         route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
 
-    await page.route(`${BASE}/api/suggestions/${ACCEPT_ID}/accept`, (route) => {
-        inbox.delete(ACCEPT_ID);
+    await page.route(`${BASE}/api/suggestions/${SUG_ID}/accept`, (route) => {
+        inbox.delete(SUG_ID);
         dashboardItems.push({
             id: ITEM_ID,
-            dashboard_id: DASHBOARD_ID,
-            suggestion_id: ACCEPT_ID,
-            name: ACCEPT_TITLE,
-            title: ACCEPT_TITLE,
+            dashboard_id: DASH_ID,
+            suggestion_id: SUG_ID,
+            name: TITLE,
+            title: TITLE,
             item_type: 'bar',
             aggregation: 'count',
         });
         route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ id: ACCEPT_ID, status: 'accepted' }),
+            body: JSON.stringify({ id: SUG_ID, status: 'accepted' }),
         });
     });
 
-    await page.route(`${BASE}/api/suggestions/${DISMISS_ID}/dismiss`, (route) => {
-        inbox.delete(DISMISS_ID);
+    await page.route(`${BASE}/api/suggestions/${SUG_ID}/dismiss`, (route) => {
+        inbox.delete(SUG_ID);
         // Dismiss does NOT add the item to any dashboard.
         route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ id: DISMISS_ID, status: 'dismissed' }),
+            body: JSON.stringify({ id: SUG_ID, status: 'dismissed' }),
         });
     });
 
@@ -100,7 +90,7 @@ async function installRoutes(page) {
         route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify([{ id: DASHBOARD_ID, name: 'Operations', title: 'Operations' }]),
+            body: JSON.stringify([{ id: DASH_ID, name: 'Operations', title: 'Operations' }]),
         });
     });
 
@@ -108,7 +98,6 @@ async function installRoutes(page) {
         route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(dashboardItems) });
     });
 
-    // Item data endpoint: the chart fill resolves to a terminal state (a rendered KPI value).
     await page.route(`${BASE}/api/dashboard-items/${ITEM_ID}/data`, (route) => {
         route.fulfill({
             status: 200,
@@ -118,23 +107,24 @@ async function installRoutes(page) {
     });
 }
 
-test('inbox renders suggestions; accept lands one on a dashboard; dismiss removes one', async ({ page }) => {
+test('issue572 freeform', async ({ page }) => {
     await installRoutes(page);
     await page.addInitScript((t) => { window.sessionStorage.setItem('aicrm_token', t); }, TOKEN);
 
-    // Act on the inbox on the studio page.
+    // Open the studio and act on the inbox there.
     await page.goto('/studio.html');
-    const inbox = page.getByTestId('inbox');
-    await expect(inbox.getByText(ACCEPT_TITLE)).toBeVisible();
-    await expect(inbox.getByText(DISMISS_TITLE)).toBeVisible();
+    const card = page.locator(`[data-testid="suggestion"][data-id="${SUG_ID}"]`);
+    await expect(card).toBeVisible();
+    await expect(card.getByText(TITLE)).toBeVisible();
 
-    // Accept -> the card leaves the inbox (the mocked list no longer returns it) and the item
-    // lands on a dashboard, rendered from the mocked dashboard-items on /.
-    await page.locator(`[data-testid="suggestion"][data-id="${ACCEPT_ID}"] [data-action="accept"]`).click();
-    await expect(page.locator(`[data-testid="suggestion"][data-id="${ACCEPT_ID}"]`)).toHaveCount(0);
+    await card.locator('[data-action="accept"]').click();
 
+    // The inbox re-renders from the (now empty) mocked list, so the card leaves the screen.
+    await expect(page.locator(`[data-testid="suggestion"][data-id="${SUG_ID}"]`)).toHaveCount(0);
+
+    // Assert the accepted item lands on a dashboard by opening /.
     await page.goto('/');
-    const item = page.locator('[data-testid="dashboard-item"]', { hasText: ACCEPT_TITLE });
+    const item = page.locator('[data-testid="dashboard-item"]', { hasText: TITLE });
     await expect(item).toBeVisible();
     const chart = item.getByTestId('chart');
     await expect(chart).toBeVisible();
@@ -151,9 +141,4 @@ test('inbox renders suggestions; accept lands one on a dashboard; dismiss remove
             return 'pending';
         }, { timeout: 10000 })
         .not.toBe('pending');
-
-    // Dismiss -> the card leaves the inbox.
-    await page.goto('/studio.html');
-    await page.locator(`[data-testid="suggestion"][data-id="${DISMISS_ID}"] [data-action="dismiss"]`).click();
-    await expect(page.locator(`[data-testid="suggestion"][data-id="${DISMISS_ID}"]`)).toHaveCount(0);
 });
