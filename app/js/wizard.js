@@ -31,8 +31,18 @@ const Wizard = {
   async init() {
     const container = document.getElementById('wizard-definitions');
     if (!container) return;
+    await Auth.init();
+    this._applyAdminGating();
     this._bindEvents();
     await this.loadDefinitions();
+  },
+
+  _applyAdminGating() {
+    if (Auth.isAdmin()) return;
+    ['wizard-create-def-btn', 'wizard-create-step-btn', 'wizard-create-flow-btn'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
   },
 
   _bindEvents() {
