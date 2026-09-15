@@ -1,0 +1,70 @@
+# VTG control record — compliance-gate corpus (company-authored deploy-authority policy v1)
+id: VTG-DEPLOY-001
+family: Deploy Authority & Active-Content Safety
+title: Executable-definition deploy + live-erasure callback trust surface
+source:
+  framework: company policy (operator-ratified 2026-07-24, ADR AIDW#290)
+  section: adoption / integration
+  note: >
+    Governs deploying an executable BPMN definition to the Flowable sidecar and
+    permitting it to call back into AIDW's live, irreversible erasure executor.
+    Separate from and additive to VTG-ADOPT-001 and AIDW#189 (adoption, data-centric,
+    "no integration work authorized"). Fills the AIDW#195 governed-deploy slot.
+    GDPR/DSR right-to-erasure is provenance (citation only); this is the operative rule.
+cmmc_level: null
+statement: >
+  An executable BPMN definition may be deployed to the Flowable sidecar and permitted
+  to call back into AIDW only when it simultaneously satisfies all four sub-controls
+  (a)-(d) below. A definition failing any sub-control is rejected fail-closed at deploy
+  time. The engine may never autonomously effect an irreversible action against a data
+  subject who was not human-verified through AIDW's own review surface.
+sub_controls:
+  a_active_content_allowlist: >
+    ALLOW only: userTask, gateways, timer events, start/end events, and serviceTask
+    bound to a fixed external-worker topic registry. DENY, fail-closed at deploy:
+    inline scriptTask, class= FQCN delegates, execution/task listeners carrying
+    script or class, mail/sendTask, and any service expression reaching an external
+    URL. Rationale: the sidecar has zero custom beans — in-engine active content has
+    no AIDW-side authorization context.
+  b_external_worker_binding: >
+    Service tasks use flowable:type="external-worker" on a registry topic; an
+    AIDW-side worker polls the topic and executes inside AIDW's boundary with a
+    Keycloak service-account JWT. HTTP-task and in-JVM delegates are disqualified
+    (baked static secret / no custom beans). Spike-proven on engine 8.0.0 (2026-07-24).
+  c_deploy_authority_provenance: >
+    Admin-only deploy endpoint. Only the Path-B server-side generator's deterministic
+    output keyed to a process_definitions row may be deployed — never arbitrary
+    uploaded BPMN XML. Schema-validated on ingest, size-capped, version-immutable.
+  d_callback_trust_boundary: >
+    The engine->AIDW service-task callback authenticates with a Keycloak
+    service-account client-credentials JWT bearing dedicated role workflow-executor
+    (never an end-user token) and may reach only the single allowlisted execute
+    endpoint. It is correlation-checked against an AIDW-persisted (instance_id,
+    request_id) binding, and AIDW re-reads status authoritatively rather than trusting
+    a returned success boolean. LOAD-BEARING INVARIANT: the human received->verifying
+    identity-verification transition stays admin-token-driven through AIDW's own review
+    surface; a service task can never autonomously trigger erasure of an un-verified
+    subject.
+operative_conditions:
+  - Short access-token lifespan on the workflow-executor Keycloak client.
+  - The execute endpoint evaluates the workflow-executor role PER REQUEST and never
+    caches the authz decision (revocation enforced at both the IdP and AIDW — the hard
+    kill-switch is removing the role mapping / disabling the client).
+  - The AIDW-side worker keeps the resolved subject value OFF the log/observability
+    path (resolution is used to act, never logged) — the opaque boundary holds end to end.
+  - Decommission / ACT_* history sanitization is tracked (non-blocking; the duty is
+    carried by AIDW#189's mandatory history-purge + per-instance purge).
+deferred_prod_tier:
+  - External-worker poll-scaling for high-throughput DSR waves (safety is poll-rate
+    independent — guaranteed by correlation binding + status re-read + executor
+    generation-token fencing).
+  - Secret-vaulting mechanics for the workflow-executor credential.
+  - FIPS / at-rest posture (LUKS2, dedicated instance) — inherits AIDW#189 deferral;
+    dev holds no CUI.
+applicability_tags: [dsr, gdpr, adoption]
+severity: high
+version: 1
+status: ratified
+ratified_by: operator (interim ratifier — theoretical-company phase)
+ratified_date: "2026-07-24"
+related: [VTG-ADOPT-001, "AIDW#189", "AIDW#195", "AIDW#290"]
