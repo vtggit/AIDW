@@ -15,8 +15,17 @@
  */
 const Sources = {
     async init() {
+        await Auth.init();
         const form = document.getElementById('source-form');
-        if (form) form.addEventListener('submit', (e) => this._onSubmit(e));
+        if (form) {
+            if (!Auth.isAdmin()) {
+                form.remove();
+                const submit = document.getElementById('src-submit');
+                if (submit) submit.remove();
+            } else {
+                form.addEventListener('submit', (e) => this._onSubmit(e));
+            }
+        }
         const list = document.getElementById('sources');
         if (list) list.addEventListener('click', (e) => this._onListClick(e));
         await this.refresh();
