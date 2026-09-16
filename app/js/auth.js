@@ -36,7 +36,7 @@ const Auth = {
      *   2. sessionStorage  (set by loginWithToken or manual injection)
      */
     async init() {
-        if (this._initialized) return;
+        if (this._initialized) return this._user;
         this._initialized = true;
 
         // Migrate a token from the URL hash fragment into sessionStorage
@@ -53,7 +53,7 @@ const Auth = {
                 // backend's runtime value is authoritative.
                 if (configResult.data.authEnabled === false) {
                     console.info('Auth is disabled on the backend.');
-                    return;
+                    return this._user;
                 }
             }
         } catch {
@@ -63,6 +63,7 @@ const Auth = {
 
         // Attempt to resolve the current user
         this._setUserFromAuthResult(await ApiClient.get('/auth/me'));
+        return this._user;
     },
 
     /** Is the backend running real IdP (production) auth? Drives dev-token vs redirect. */
