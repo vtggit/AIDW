@@ -203,7 +203,8 @@ const Warehouse = {
         let R = isPosInt(i.grid_row_span) ? Math.min(6, Math.max(1, i.grid_row_span)) : 1;
         const style = `grid-column: ${S} / span ${W}; grid-row: span ${R}`;
         const effStart = (S === 'auto') ? 1 : S;
-        const editorHtml = (String(i.id) === String(editingId))
+        const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin();
+        const editorHtml = (isAdmin && String(i.id) === String(editingId))
             ? `<div class="wh-layout-editor">
       <input type="number" data-testid="layout-col-start" min="1" max="${C}" value="${effStart}">
       <input type="number" data-testid="layout-col-span" min="1" max="${C}" value="${W}">
@@ -212,12 +213,13 @@ const Warehouse = {
       <button type="button" class="btn btn-sm" data-action="cancel-layout">Cancel</button>
     </div>`
             : '';
+        const editBtn = isAdmin ? `<button type="button" class="btn btn-sm" data-action="edit-layout">Edit layout</button>` : '';
         return `<div class="wh-item" data-testid="dashboard-item" data-id="${Warehouse._attr(i.id)}" style="${style}">
       <span class="badge wh-chart">${Warehouse._chartLabel(i.item_type)}</span>
       <span class="wh-title">${Warehouse._esc(i.title || i.name || '')}</span>
       <div class="wh-item-chart" data-testid="chart" data-id="${Warehouse._attr(i.id)}">${Warehouse._chartNote('Loading data…')}</div>
       ${editorHtml}
-      <button type="button" class="btn btn-sm" data-action="edit-layout">Edit layout</button>
+      ${editBtn}
     </div>`;
     },
 
