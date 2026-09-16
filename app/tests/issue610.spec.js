@@ -22,28 +22,42 @@ test.afterEach(async ({ page }, testInfo) => {
   test.expect(stuck, `element(s) still showing a loading placeholder after the proof: ${stuck.join(', ')} -- every render path must reach a terminal state (data, an empty note or an error), or declare data-loading-ok`).toEqual([]);
 });
 
-test('issue568 surgical', async ({ page }) => {
-    // Two distinct tokens so each pass's hash migration is unambiguous and cannot be
-    // mistaken for leftover state from the previous pass.
-    const TOKEN1 = 'surgical-pass-one-token';
-    const TOKEN2 = 'surgical-pass-two-token';
+
+// Issue #610 — proving spec for the rewritten surgical auth proof.
+//
+// Drives ONLY the DOM and the network against the served app (no module is replaced:
+// window.Auth / window.ApiClient / js/auth.js are left untouched). A single
+// page.route('**/api/**') handler branches on the URL before any navigation, so every
+// request the real modules make is intercepted.
+//
+// Proven here:
+//   • The token seeded via the URL hash `#access_token=<token>` is migrated by auth.js
+//     into sessionStorage['aicrm_token'] (NOT localStorage['auth_token']).
+//   • Every module's first /api request carries the Authorization header and no protected
+//     request returns 401.
+//   • Protected route mocks return 401 when Authorization is missing or invalid — they do
+//     not blindly succeed (verified by a raw, unauthenticated probe that must receive 401).
+//   • A second pass with /api/auth/config unreachable still lets the modules start and
+//     performs no navigation away from studio.html.
+//   • No rejection/redirect path is asserted: auth.js resolves (undefined or a user object),
+//     never rejects, so the rejecting-init scenario is dropped as unreachable.
+
+test('issue610 freeform', async ({ page }) => {
+    const TOKEN1 = 'issue610-pass-one-token';
+    const TOKEN2 = 'issue610-pass-two-token';
 
     let apiCalls = [];
     let configUnreachable = false;
     let expectedToken = '';
-    // Exact-token validation: a request is authenticated only when it carries the
-    // precise Bearer token for this pass. "Bearer <anything-else>" (or no header)
-    // is treated as unauthenticated and rejected with 401 on protected routes.
+    // Exact-token validation: only the precise Bearer token for this pass is accepted.
     const isValidAuth = (h) => !!h && h === `Bearer ${expectedToken}`;
 
-    // Single catch-all handler that branches on the URL before any navigation.
     await page.route('**/api/**', async (route) => {
         const url = route.request().url();
         const authHeader = route.request().headers()['authorization'];
         let status, body;
 
         if (url.includes('/api/auth/config')) {
-            // Public endpoint — reachable unless we are simulating an outage.
             if (configUnreachable) {
                 status = 503;
                 body = { detail: 'Service Unavailable' };
@@ -52,10 +66,9 @@ test('issue568 surgical', async ({ page }) => {
                 body = { authEnabled: true, authMode: 'development', issuer: '', clientId: '' };
             }
         } else if (url.includes('/api/auth/me')) {
-            // Identity endpoint is always protected and validates the exact token.
             if (isValidAuth(authHeader)) {
                 status = 200;
-                body = { authenticated: true, user: { username: 'testuser', roles: ['admin'] } };
+                body = { authenticated: true, user: { username: 'proofuser', roles: ['admin'] } };
             } else {
                 status = 401;
                 body = { detail: 'Not authenticated' };
@@ -80,8 +93,8 @@ test('issue568 surgical', async ({ page }) => {
     });
 
     // ------------------------------------------------------------------
-    // Pass 1 — token seeded via the URL hash; migrated into sessionStorage and
-    // every module's first /api request carries Authorization (none returns 401).
+    // Pass 1 — token seeded via URL hash; migrated to sessionStorage (not localStorage);
+    // every module's first request carries Authorization and none returns 401.
     // ------------------------------------------------------------------
     {
         apiCalls = [];
@@ -90,15 +103,11 @@ test('issue568 surgical', async ({ page }) => {
 
         await page.goto(`/studio.html#access_token=${TOKEN1}`);
 
-        // Terminal marker from the Sequences module (independent of Warehouse),
-        // proving the post-auth init chain reached a rendered state.
         await expect(page.locator('[data-testid="sequences-empty"]'))
             .toHaveText(/No load sequences yet/);
-        // Ensure the Wizard module's first request has been captured too.
         await expect.poll(() => apiCalls.some((c) => c.url.includes('/api/process-definitions')))
             .toBe(true);
 
-        // Token migrated from the hash into sessionStorage, NOT localStorage.
         const stored = await page.evaluate(() => sessionStorage.getItem('aicrm_token'));
         expect(stored).toBe(TOKEN1);
         const local = await page.evaluate(() => localStorage.getItem('auth_token'));
@@ -107,7 +116,6 @@ test('issue568 surgical', async ({ page }) => {
         const initCalls = apiCalls.slice();
         const byPath = (frag) => initCalls.filter((c) => c.url.includes(frag));
 
-        // Auth, Sequences and Wizard modules' first requests carried the exact header.
         for (const frag of ['/api/auth/me', '/api/load-sequences', '/api/process-definitions']) {
             const calls = byPath(frag);
             expect(calls.length, `no ${frag} request recorded`).toBeGreaterThan(0);
@@ -117,31 +125,24 @@ test('issue568 surgical', async ({ page }) => {
             }
         }
 
-        // If the Sources module fired (Warehouse→Sources chain), it was authenticated too.
-        for (const c of byPath('/api/sources')) {
-            expect(c.authorization).toBe(`Bearer ${TOKEN1}`);
-            expect(c.status).not.toBe(401);
-        }
-
-        // Universal: no captured request returned 401 → every module's requests were
-        // authenticated (the mock returns 401 for any unauthenticated protected call).
+        // Universal: no captured request returned 401 → every module's requests were authenticated.
         for (const c of initCalls) {
             expect(c.status, `unexpected 401 on ${c.url}`).not.toBe(401);
         }
 
-        // Prove the mock enforces auth rather than blindly succeeding: a raw,
-        // unauthenticated request to a protected panel endpoint must receive 401.
+        // Prove the mock enforces auth rather than blindly succeeding: a raw, unauthenticated
+        // request to a protected panel endpoint must receive 401.
         const probe = await page.evaluate(async () => (await fetch('/api/sources')).status);
         expect(probe).toBe(401);
 
-        // Authenticated user resolved (undefined, not null) → no redirect away.
+        // Authenticated user resolved (undefined, not null) → no redirect away from studio.html.
         expect(page.url()).toContain('studio.html');
     }
 
     // ------------------------------------------------------------------
-    // Pass 2 — /api/auth/config unreachable; modules still start and no navigation
-    // happens. A full document reload is forced (about:blank hop) so auth.js re-runs
-    // and re-migrates the token from a fresh hash, with a distinct token proving it.
+    // Pass 2 — /api/auth/config unreachable; modules still start and no navigation happens.
+    // A full document reload is forced (about:blank hop) so auth.js re-runs and re-migrates
+    // the token from a fresh hash, with a distinct token proving it is not leftover state.
     // ------------------------------------------------------------------
     {
         apiCalls = [];
