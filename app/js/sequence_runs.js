@@ -87,9 +87,11 @@ const SequenceRuns = {
       const allRuns = Array.isArray(res.data) ? res.data : [];
       const filteredRuns = allRuns.filter(r => r.sequence_id === selectedSequenceId);
 
-      // Render history + execute button
+      // Render history + execute button (admin-only)
       let html = this.renderRuns(filteredRuns);
-      html += `<button data-testid="sequence-execute">Execute</button>`;
+      if (Auth.isAdmin()) {
+        html += `<button data-testid="sequence-execute">Execute</button>`;
+      }
       container.innerHTML = html;
 
       // Bind execute click
