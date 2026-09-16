@@ -22,47 +22,80 @@ test.afterEach(async ({ page }, testInfo) => {
   test.expect(stuck, `element(s) still showing a loading placeholder after the proof: ${stuck.join(', ')} -- every render path must reach a terminal state (data, an empty note or an error), or declare data-loading-ok`).toEqual([]);
 });
 
-
 test('issue570 surgical', async ({ page }) => {
-    await page.route('/api/**', async (route) => {
-        const url = route.request().url();
-        const method = route.request().method();
-        const path = new URL(url).pathname;
-
-        if (path === '/api/dashboards' && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, name: 'Test Dashboard', grid_columns: 12 }]) });
-        }
-        if (path === '/api/dashboard-items' && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, dashboard_id: 1, title: 'My Chart', item_type: 'bar', position: 1 }]) });
-        }
-        if (path === '/api/dashboard-item-layouts' && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-        }
-        if (path === '/api/dashboard-item-layouts' && method === 'POST') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 1, dashboard_item_id: 1, name: 'layout', grid_col_start: 2, grid_col_span: 3, grid_row_span: 2 }) });
-        }
-        if (path.startsWith('/api/dashboard-item-layouts/') && method === 'PUT') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 1, dashboard_item_id: 1, name: 'layout', grid_col_start: 2, grid_col_span: 3, grid_row_span: 2 }) });
-        }
-        if (path.startsWith('/api/dashboard-items/') && path.endsWith('/data') && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ series: [{ label: 'A', value: 10 }, { label: 'B', value: 20 }], item_type: 'bar', dimension: 'category', aggregation: 'sum', measure: 'amount', sample_size: 100, title: 'My Chart' }) });
-        }
-        if (path === '/api/suggestions' && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-        }
-        if (path === '/api/pii-flags' && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-        }
-        if (path === '/api/datasets' && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-        }
-        if (path === '/api/discovered-fields' && method === 'GET') {
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-        }
+    // Establish an admin identity via mocked HTTP responses BEFORE the page boots.
+    // The catch-all is registered FIRST so it never shadows the specific mocks below
+    // (Playwright checks the most recently registered route first).
+    await page.route('**/api/**', async (route) => {
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
     });
 
+    await page.route('/api/auth/config', async (route) => {
+        return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ authEnabled: true, authMode: 'development' }),
+        });
+    });
+
+    await page.route('/api/auth/me', async (route) => {
+        return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                authenticated: true,
+                user: { username: 'admin', sub: 'admin', roles: ['admin'] },
+            }),
+        });
+    });
+
+    // Stateful layout mock so a saved item is present on the next GET (the page re-fetches after save).
+    let layouts = [];
+    await page.route('/api/dashboards', async (route) => {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, name: 'Test Dashboard', grid_columns: 12 }]) });
+    });
+    await page.route('/api/dashboard-items', async (route) => {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, dashboard_id: 1, title: 'My Chart', item_type: 'bar', position: 1 }]) });
+    });
+    await page.route('/api/dashboard-item-layouts', async (route) => {
+        const method = route.request().method();
+        if (method === 'POST') {
+            const body = JSON.parse(route.request().postData() || '{}');
+            const created = Object.assign({ id: 1 }, body);
+            layouts.push(created);
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(created) });
+        }
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(layouts) });
+    });
+    await page.route('**/api/dashboard-item-layouts/**', async (route) => {
+        const method = route.request().method();
+        if (method === 'PUT') {
+            const body = JSON.parse(route.request().postData() || '{}');
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(Object.assign({ id: 1 }, body)) });
+        }
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('**/api/dashboard-items/**/data', async (route) => {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ series: [{ label: 'A', value: 10 }, { label: 'B', value: 20 }], item_type: 'bar', dimension: 'category', aggregation: 'sum', measure: 'amount', sample_size: 100, title: 'My Chart' }) });
+    });
+    await page.route('/api/suggestions', async (route) => {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('/api/pii-flags', async (route) => {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('/api/datasets', async (route) => {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+    await page.route('/api/discovered-fields', async (route) => {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+
     await page.goto('/');
+
+    // The page's own boot-time Auth.init() consumes the mocked /api/auth/me. Wait for that to
+    // resolve into an admin state before rendering or clicking any admin-gated control.
+    await page.waitForFunction(() => Auth.isAdmin() === true);
 
     // Wait for the initial chart to reach a terminal state (SVG visible)
     const initialChart = page.locator('[data-testid="chart"]').first();
