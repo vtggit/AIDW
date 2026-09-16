@@ -7,15 +7,16 @@ const Sequences = {
   },
 
   renderList(sequences) {
+    const createBtn = Auth.isAdmin() ? '<button data-testid="sequence-create">Create sequence</button>' : '';
     if (!sequences || sequences.length === 0) {
-      return '<input data-testid="sequence-name-input" placeholder="Sequence name"><button data-testid="sequence-create">Create sequence</button><div data-testid="sequences-empty">No load sequences yet.</div>';
+      return '<input data-testid="sequence-name-input" placeholder="Sequence name">' + createBtn + '<div data-testid="sequences-empty">No load sequences yet.</div>';
     }
     let html = '';
     for (let i = 0; i < sequences.length; i++) {
       const seq = sequences[i];
       html += `<div class="wh-seq-row" data-testid="sequence-row" data-id="${this._esc(seq.id)}">${this._esc(seq.name)}</div>`;
     }
-    return '<input data-testid="sequence-name-input" placeholder="Sequence name"><button data-testid="sequence-create">Create sequence</button>' + html;
+    return '<input data-testid="sequence-name-input" placeholder="Sequence name">' + createBtn + html;
   },
 
   renderFlow(bpmnXml) {
