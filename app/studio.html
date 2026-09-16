@@ -141,8 +141,9 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (e) {
         authPromise = Promise.reject(e);
     }
-    authPromise.then(function (user) {
-        if (user === null) {
+    authPromise.then(function () {
+        var user = Auth.getCurrentUser();
+        if (user === null && Auth.isProductionAuth()) {
             window.location.href = 'index.html';
             return;
         }
