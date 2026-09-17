@@ -36,6 +36,12 @@ class LoadSequencePostgresRepository:
             cur.execute(sql, tuple(params))
             return [_row_to_dict(r) for r in cur.fetchall()]
 
+    def count(self) -> int:
+        with get_cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS n FROM load_sequences")
+            row = cur.fetchone()
+            return int(row["n"])
+
     def get_by_id(self, entity_id: str) -> dict | None:
         with get_cursor() as cur:
             cur.execute("SELECT * FROM load_sequences WHERE id = %s", (entity_id,))

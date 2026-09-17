@@ -13,9 +13,15 @@ class SequenceRunService:
         self.repository = repository
 
     def list_sequence_runs(
-        self, limit: int | None = None, offset: int | None = None
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+        status: str | None = None,
     ) -> list[dict]:
-        return self.repository.list_all(limit=limit, offset=offset)
+        return self.repository.list_all(limit=limit, offset=offset, status=status)
+
+    def count_sequence_runs(self, status: str | None = None) -> int:
+        return self.repository.count(status=status)
 
     def get_sequence_run(self, entity_id: str) -> dict | None:
         return self.repository.get_by_id(entity_id)
