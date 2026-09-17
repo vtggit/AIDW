@@ -56,9 +56,24 @@ def execute_sequence_run(run_id: str) -> dict:
             detail=f"SequenceRun '{run_id}' is not pending (current status: {current_status}).",
         )
 
-    # 2. Mark run as running
+    # 2. Atomically claim the run: pending → running.
+    # The status column is nullable with no default; a run created through the
+    # API has status NULL, which COALESCE treats as 'pending'.
     now = _now_iso()
-    _run_repo.update(run_id, {"status": "running", "started_at": now})
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE sequence_runs "
+            "SET status = 'running', "
+            "started_at = COALESCE(started_at, %s) "
+            "WHERE id = %s "
+            "AND COALESCE(status, 'pending') = 'pending'",
+            (now, run_id),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"SequenceRun '{run_id}' is not pending.",
+            )
 
     sequence_id = run["sequence_id"]
 
