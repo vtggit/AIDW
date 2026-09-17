@@ -5,7 +5,8 @@ Provides:
     - Alembic migration applied to test database
     - FastAPI TestClient wrapped by httpx
     - Auth token fixtures for admin and non-admin users
-    - Per-test transaction rollback for data isolation
+    - Per-test cleanup: every application table is emptied before each test
+      (seed rows inserted by migrations are kept)
 """
 
 import os
@@ -277,25 +278,89 @@ def user_headers(user_token):
 # ---------------------------------------------------------------------------
 
 
+# Tables the migrations SEED (0076-0078: the built-in process definitions with their steps and
+# flows). They reference only each other and nothing references them, so every other table can
+# be truncated with CASCADE without touching them; rows a test adds to them are deleted, the
+# seeded rows stay. Child tables first.
+_SEEDED_TABLES = ("sequence_flows", "process_steps", "process_definitions")
+_seed_ids: dict = {}
+_app_tables: list = []  # read once per session: migrations do not run between tests
+
+
 @pytest.fixture(autouse=True)
 def clean_database(client):
-    """Truncate all application tables before each test for data isolation.
+    """Empty every application table before each test, so no test sees another test's rows.
 
-    Order matters: audit_log must be last (or first) since it has no FK
-    constraints, but we truncate it last to ensure clean state.
+    The table list is read from the database (every table of the current schema except
+    Alembic's bookkeeping), so a new migration's tables are covered without touching this
+    fixture. Seeded tables keep exactly the rows the migrations inserted: their ids are
+    captured once, before the first test has written anything.
     """
     import psycopg2
+    import psycopg2.errors  # noqa: F401  (the FK-violation class used below)
 
     from app.db.connection import get_connection_params
 
     conn = psycopg2.connect(**get_connection_params())
     try:
         with conn.cursor() as cur:
-            # Truncate all tables in a single statement so PostgreSQL handles
-            # foreign-key constraints atomically (e.g. contact_tag_mapping has
-            # FKs to both contacts and contact_tags).
-            tables = ["audit_log"]
-            cur.execute("TRUNCATE TABLE " + ", ".join(tables) + " RESTART IDENTITY;")
+            if not _app_tables:
+                cur.execute(
+                    "SELECT tablename FROM pg_tables "
+                    "WHERE schemaname = current_schema() AND tablename <> 'alembic_version' "
+                    "ORDER BY tablename"
+                )
+                _app_tables.extend(row[0] for row in cur.fetchall())
+            tables = list(_app_tables)
+            for table in _SEEDED_TABLES:
+                if table not in tables:
+                    continue
+                if table not in _seed_ids:
+                    cur.execute(f'SELECT id FROM "{table}"')
+                    _seed_ids[table] = [row[0] for row in cur.fetchall()]
+                cur.execute(
+                    f'DELETE FROM "{table}" WHERE NOT (id = ANY(%s))',
+                    (_seed_ids[table],),
+                )
+            rest = [t for t in tables if t not in _SEEDED_TABLES]
+            if rest:
+                # TRUNCATE costs a file operation per table, and a test writes to a handful of
+                # them: one probe finds the tables that hold rows, and only those are emptied.
+                cur.execute(
+                    " UNION ALL ".join(
+                        f"SELECT '{t}' WHERE EXISTS (SELECT 1 FROM \"{t}\")"
+                        for t in rest
+                    )
+                )
+                rest = [row[0] for row in cur.fetchall()]
+            if "audit_log" in rest:
+                cur.execute('TRUNCATE TABLE "audit_log" RESTART IDENTITY;')
+                rest.remove("audit_log")
+            # A test leaves a handful of rows, so DELETE beats TRUNCATE (a file operation per
+            # table). A parent whose children still hold rows fails its DELETE; it is retried
+            # after them. Whatever is left after the passes falls back to TRUNCATE ... CASCADE.
+            pending = rest
+            for _ in range(len(rest) + 1):
+                if not pending:
+                    break
+                blocked = []
+                for table in pending:
+                    cur.execute("SAVEPOINT clean_one")
+                    try:
+                        cur.execute(f'DELETE FROM "{table}"')
+                        cur.execute("RELEASE SAVEPOINT clean_one")
+                    except psycopg2.errors.ForeignKeyViolation:
+                        cur.execute("ROLLBACK TO SAVEPOINT clean_one")
+                        blocked.append(table)
+                if len(blocked) == len(pending):
+                    break
+                pending = blocked
+            if pending:
+                cur.execute(
+                    "TRUNCATE TABLE "
+                    + ", ".join(f'"{t}"' for t in pending)
+                    + " RESTART IDENTITY CASCADE;"
+                )
         conn.commit()
     except Exception:
         conn.rollback()
