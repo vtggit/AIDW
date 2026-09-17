@@ -47,7 +47,8 @@ def list_load_sequences(
     _user: AuthUser = Depends(require_authenticated_user),
     service: LoadSequenceService = Depends(get_service),
 ):
-    total = len(service.list_load_sequences())
+    # X-Total-Count comes from a count, not from materialising every row a second time.
+    total = service.count_load_sequences()
     response.headers["X-Total-Count"] = str(total)
     return service.list_load_sequences(limit=limit, offset=offset)
 

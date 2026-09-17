@@ -22,10 +22,19 @@ class SequenceRunPostgresRepository:
     """PostgreSQL repository for the sequence_runs table."""
 
     def list_all(
-        self, limit: int | None = None, offset: int | None = None
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+        status: str | None = None,
     ) -> list[dict]:
-        sql = "SELECT * FROM sequence_runs ORDER BY created_at DESC"
+        sql = "SELECT * FROM sequence_runs"
         params: list = []
+        if status is not None:
+            sql += " WHERE status = %s"
+            params.append(status)
+        # ORDER BY created_at DESC only — no id tiebreaker, so the windowed listing
+        # preserves the existing endpoint ordering exactly.
+        sql += " ORDER BY created_at DESC"
         if limit is not None:
             sql += " LIMIT %s"
             params.append(limit)
@@ -35,6 +44,17 @@ class SequenceRunPostgresRepository:
         with get_cursor() as cur:
             cur.execute(sql, tuple(params))
             return [_row_to_dict(r) for r in cur.fetchall()]
+
+    def count(self, status: str | None = None) -> int:
+        sql = "SELECT COUNT(*) AS n FROM sequence_runs"
+        params: list = []
+        if status is not None:
+            sql += " WHERE status = %s"
+            params.append(status)
+        with get_cursor() as cur:
+            cur.execute(sql, tuple(params))
+            row = cur.fetchone()
+            return int(row["n"])
 
     def get_by_id(self, entity_id: str) -> dict | None:
         with get_cursor() as cur:

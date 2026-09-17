@@ -17,6 +17,9 @@ class LoadSequenceService:
     ) -> list[dict]:
         return self.repository.list_all(limit=limit, offset=offset)
 
+    def count_load_sequences(self) -> int:
+        return self.repository.count()
+
     def get_load_sequence(self, entity_id: str) -> dict | None:
         return self.repository.get_by_id(entity_id)
 

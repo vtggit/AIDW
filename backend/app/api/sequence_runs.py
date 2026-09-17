@@ -47,26 +47,18 @@ def list_sequence_runs(
             status_code=422,
             detail="Invalid value for parameter 'offset': must be 0 or greater.",
         )
-    if status is not None:
-        all_runs = service.list_sequence_runs()
-        matched = [r for r in all_runs if r.get("status") == status]
-        # X-Total-Count reflects the FILTERED total, before the window is applied.
-        if response is not None:
-            response.headers["X-Total-Count"] = str(len(matched))
-        if offset is not None:
-            matched = matched[offset:]
-        if limit is not None:
-            matched = matched[:limit]
-        return matched
-    # Unfiltered list: X-Total-Count is the unfiltered total, before the window.
-    all_runs = service.list_sequence_runs()
+    if status is not None and "\x00" in status:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid value for parameter 'status': must not contain null bytes.",
+        )
+    # X-Total-Count reflects the (optionally status-filtered) total, before the window.
     if response is not None:
-        response.headers["X-Total-Count"] = str(len(all_runs))
-    if offset is not None:
-        all_runs = all_runs[offset:]
-    if limit is not None:
-        all_runs = all_runs[:limit]
-    return all_runs
+        response.headers["X-Total-Count"] = str(
+            service.count_sequence_runs(status=status)
+        )
+    # Fetch only the requested window through the service.
+    return service.list_sequence_runs(limit=limit, offset=offset, status=status)
 
 
 @router.post("", response_model=SequenceRunResponse, status_code=201)
