@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 POLL_SECONDS = float(os.getenv("WORKER_POLL_SECONDS", "5"))
 STALE_RUNNING_SECONDS = int(os.getenv("WORKER_STALE_RUNNING_SECONDS", "1800"))
 DELETION_MAX_ATTEMPTS = 5  # beyond this the request sits for operator triage (#76)
+STRANDED_SCHEDULED_SECONDS = int(os.getenv("WORKER_STRANDED_SCHEDULED_SECONDS", "1800"))
 
 
 def claim_next() -> str | None:
@@ -132,6 +133,28 @@ def reap_stale_executing(max_age_seconds: int | None = None) -> int:
     return reaped
 
 
+def reap_stranded_scheduled(max_age_seconds: int | None = None) -> int:
+    """Reset stranded scheduled sequence runs: ``pending`` rows carrying the
+    ``started_at`` claim marker whose ``updated_at`` is older than the cutoff get
+    ``started_at`` cleared so the scheduled claim path can re-select them.
+    Returns the number reaped."""
+    cutoff_age = (
+        STRANDED_SCHEDULED_SECONDS if max_age_seconds is None else max_age_seconds
+    )
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=cutoff_age)
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE sequence_runs SET started_at = NULL, updated_at = NOW() "
+            "WHERE triggered_by = 'schedule' AND status = 'pending' "
+            "AND started_at IS NOT NULL AND updated_at < %s",
+            (cutoff,),
+        )
+        reaped = cur.rowcount
+    if reaped:
+        logger.warning("reaped %d stranded scheduled sequence run(s)", reaped)
+    return reaped
+
+
 def main_loop(
     poll_seconds: float | None = None, max_iterations: int | None = None
 ) -> None:
@@ -162,6 +185,10 @@ def main_loop(
             try:
                 reap_stale_running()
                 reap_stale_executing()
+                try:
+                    reap_stranded_scheduled()
+                except Exception:
+                    logger.exception("reap_stranded_scheduled failed")
                 try:
                     fire_due_sequences_once()
                 except Exception:
