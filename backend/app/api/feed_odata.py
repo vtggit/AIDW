@@ -10,6 +10,17 @@ on :func:`app.feed.auth.require_feed_credential`, and no Basic / X-Api-Key
 parsing happens here.  Naming is delegated to :mod:`app.feed.naming`, and the
 database is read only through :func:`app.db.connection.get_cursor`.  Every
 response carries the ``OData-Version: 4.0`` header.
+
+Field identifiers are ordered by ``discovered_fields.field_position`` (then
+``name``) and, when two or more fields sanitize to the same OData identifier,
+disambiguated deterministically by appending a numeric suffix in that order
+(the first keeps the base identifier, the second gets ``<base>2``, the third
+``<base>3``, ...). A candidate that is already taken by an earlier field —
+whether as a base or as a generated suffix — is skipped, so the emitted
+identifiers are always globally unique. The same mapping is shared by
+``$metadata`` generation and the entity render, so the CSDL stays schema-valid
+(at most one ``<Property>`` per identifier) and no field's data is silently
+shadowed in entity payloads or ``$filter``/``$orderby``.
 """
 
 import os
@@ -90,11 +101,16 @@ def _load_datasets() -> list[dict]:
 
 
 def _load_fields(dataset_id: str) -> list[dict]:
-    """Return the discovered fields for a single dataset."""
+    """Return the discovered fields for a single dataset.
+
+    Ordered by ``field_position`` (NULLs last) then ``name`` — the canonical
+    order the feed advertises and disambiguates field identifiers in.
+    """
     with get_cursor() as cur:
         cur.execute(
             "SELECT name, data_type FROM discovered_fields "
-            "WHERE dataset_id = %s ORDER BY name",
+            "WHERE dataset_id = %s "
+            "ORDER BY field_position NULLS LAST, name",
             (dataset_id,),
         )
         rows = cur.fetchall()
@@ -193,24 +209,56 @@ def _build_next_link(
     return "".join(parts)
 
 
-def _advertised_properties(fields: list[dict]) -> dict[str, str]:
+def _field_identifiers(fields: list[dict]) -> list[str]:
+    """Return the disambiguated OData identifier for each field, in order.
+
+    ``fields`` must already be in canonical order (``field_position`` then
+    ``name``). When two or more fields sanitize to the same OData identifier,
+    the first keeps the base identifier and each subsequent one gets a numeric
+    suffix (``<base>2``, ``<base>3``, ...). A candidate that is already taken
+    by an earlier field — whether as a base or as a generated suffix — is
+    skipped, so the emitted identifiers are always globally unique: the CSDL
+    carries at most one ``<Property>`` per identifier and no field's data is
+    shadowed in the entity render. The mapping is deterministic and stable
+    across schema reads, and is shared by ``$metadata`` generation and the
+    entity render.
+    """
+    identifiers: list[str] = []
+    used: set[str] = set()
+    for field in fields:
+        base = odata_identifier(field["name"])
+        candidate = base
+        suffix = 1
+        while candidate in used:
+            suffix += 1
+            candidate = f"{base}{suffix}"
+        used.add(candidate)
+        identifiers.append(candidate)
+    return identifiers
+
+
+def _advertised_properties(
+    fields: list[dict], identifiers: list[str]
+) -> dict[str, str]:
     """Map each advertised OData property name to its original field name.
 
-    ``business_key`` maps to itself; every declared field maps to its
-    original name under its OData identifier.
+    ``business_key`` maps to itself; every declared field maps to its original
+    name under its (disambiguated) OData identifier.
     """
     properties: dict[str, str] = {"business_key": "business_key"}
-    for field in fields:
-        properties[odata_identifier(field["name"])] = field["name"]
+    for field, identifier in zip(fields, identifiers):
+        properties[identifier] = field["name"]
     return properties
 
 
-def _property_edm_type(property_name: str, fields: list[dict]) -> str:
+def _property_edm_type(
+    property_name: str, fields: list[dict], identifiers: list[str]
+) -> str:
     """Return the Edm type for an advertised property name."""
     if property_name == "business_key":
         return "Edm.String"
-    for field in fields:
-        if odata_identifier(field["name"]) == property_name:
+    for field, identifier in zip(fields, identifiers):
+        if identifier == property_name:
             return edm_type_for(field.get("data_type"))
     return "Edm.String"
 
@@ -259,7 +307,9 @@ def _sort_key(value, edm_type: str):
     return (coerced is None, coerced)
 
 
-def _sort_entities(entities: list[dict], order_items, fields: list[dict]) -> list[dict]:
+def _sort_entities(
+    entities: list[dict], order_items, fields: list[dict], identifiers: list[str]
+) -> list[dict]:
     """Sort rendered entities by the parsed ``$orderby`` items.
 
     Rows whose value does not coerce to a sortable value (``None``, or a value
@@ -270,7 +320,7 @@ def _sort_entities(entities: list[dict], order_items, fields: list[dict]) -> lis
     """
     ordered = list(entities)
     for property_name, descending in reversed(order_items):
-        edm_type = _property_edm_type(property_name, fields)
+        edm_type = _property_edm_type(property_name, fields, identifiers)
 
         def _coerce(row, _edm_type=edm_type, _prop=property_name):
             return _coerce_sort_value(row.get(_prop), _edm_type)
@@ -365,7 +415,12 @@ def service_document(
 def metadata_document(
     _credential: dict = Depends(require_feed_credential),
 ):
-    """Return the CSDL 4.0 EDMX metadata document as ``application/xml``."""
+    """Return the CSDL 4.0 EDMX metadata document as ``application/xml``.
+
+    Field identifiers are emitted in canonical order (``field_position`` then
+    ``name``) and disambiguated with numeric suffixes on collision, so the
+    document carries at most one ``<Property>`` per identifier.
+    """
     datasets = _load_datasets()
     sets = entity_set_names(datasets)
 
@@ -373,11 +428,11 @@ def metadata_document(
     entity_sets: list[str] = []
     for set_name, dataset_id in sets.items():
         fields = _load_fields(dataset_id)
+        identifiers = _field_identifiers(fields)
         properties = [
             '        <Property Name="business_key" Type="Edm.String" Nullable="false"/>'
         ]
-        for field in fields:
-            prop_name = odata_identifier(field["name"])
+        for field, prop_name in zip(fields, identifiers):
             prop_type = edm_type_for(field.get("data_type"))
             properties.append(
                 f'        <Property Name="{_xml_escape(prop_name)}" '
@@ -432,8 +487,8 @@ def read_entity_set(
 
     The set is resolved through :func:`entity_set_names` over the datasets
     rows. Each ingested payload is rendered with ``business_key`` plus one
-    property per declared discovered field (property name is the OData
-    identifier of the field name, value looked up by the original field name
+    property per declared discovered field (property name is the field's
+    disambiguated OData identifier, value looked up by the original field name
     in the JSONB payload). ``$filter`` is parsed once per request and applied
     to each rendered entity before ``$orderby``, ``$skip``, ``$top`` and any
     ``$select`` projection; ``$select`` projects to the named properties in
@@ -494,7 +549,8 @@ def read_entity_set(
     fields = _load_fields(dataset_id)
     payloads = _load_payloads(dataset_id)
 
-    properties = _advertised_properties(fields)
+    identifiers = _field_identifiers(fields)
+    properties = _advertised_properties(fields, identifiers)
 
     select_raw = request.query_params.get("$select")
     selected: list[str] | None = None
@@ -541,15 +597,14 @@ def read_entity_set(
                     )
 
     # Render every landed payload to its full entity dict (business_key plus
-    # one key per declared field, named by its OData identifier and valued by
-    # the original field name in the payload).
+    # one key per declared field, named by its disambiguated OData identifier
+    # and valued by the original field name in the payload).
     entities: list[dict] = []
     for row in payloads:
         payload = row.get("payload") or {}
         entity: dict = {"business_key": row.get("business_key")}
-        for field in fields:
-            original = field["name"]
-            entity[odata_identifier(original)] = payload.get(original)
+        for field, identifier in zip(fields, identifiers):
+            entity[identifier] = payload.get(field["name"])
         entities.append(entity)
 
     # Apply $filter (if any) to each rendered entity BEFORE $orderby, $skip,
@@ -561,10 +616,8 @@ def read_entity_set(
         except FilterSyntaxError as exc:
             return _odata_error(400, str(exc))
         types: dict[str, str] = {"business_key": "Edm.String"}
-        for field in fields:
-            types[odata_identifier(field["name"])] = edm_type_for(
-                field.get("data_type")
-            )
+        for field, identifier in zip(fields, identifiers):
+            types[identifier] = edm_type_for(field.get("data_type"))
         kept: list[dict] = []
         for entity in entities:
             try:
@@ -577,7 +630,7 @@ def read_entity_set(
     total = len(entities)
 
     if order_items:
-        entities = _sort_entities(entities, order_items, fields)
+        entities = _sort_entities(entities, order_items, fields, identifiers)
 
     # $top is a cap on the TOTAL rows a client receives across all pages. The
     # nextLink mechanism encodes the remaining budget in the $top it carries,
