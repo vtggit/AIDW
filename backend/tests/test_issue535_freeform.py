@@ -64,13 +64,14 @@ def test_issue535_freeform():
     # Part 1c: the sort keeps no-ordering values LAST in both directions.
     # ------------------------------------------------------------------
     fields = _boolean_fields()
+    identifiers = ["active"]
     entities = _boolean_sort_entities()
 
-    asc = _sort_entities(entities, [("active", False)], fields)
+    asc = _sort_entities(entities, [("active", False)], fields, identifiers)
     assert [e["business_key"] for e in asc] == ["k2", "k1", "k3", "k4", "k5"]
 
     # Descending: True first, then False, then the no-ordering rows (never first).
-    desc = _sort_entities(entities, [("active", True)], fields)
+    desc = _sort_entities(entities, [("active", True)], fields, identifiers)
     assert [e["business_key"] for e in desc] == ["k1", "k2", "k3", "k4", "k5"]
 
     # ------------------------------------------------------------------
