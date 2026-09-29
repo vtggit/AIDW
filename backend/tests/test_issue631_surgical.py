@@ -40,8 +40,9 @@ def test_issue631_surgical():
     assert "updated_at = NOW()" in sql
     # Must filter on triggered_by = 'schedule'
     assert "triggered_by = 'schedule'" in sql
-    # Must filter on status = 'pending' (must not touch other statuses)
-    assert "status = 'pending'" in sql
+    # Must filter on COALESCE(status, 'pending') = 'pending' (#648: a NULL status
+    # means pending too; must not touch other statuses)
+    assert "COALESCE(status, 'pending') = 'pending'" in sql
     # Must require started_at IS NOT NULL (stranded marker only)
     assert "started_at IS NOT NULL" in sql
     # Must use updated_at for age comparison (not started_at)

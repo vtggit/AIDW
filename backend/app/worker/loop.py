@@ -145,7 +145,7 @@ def reap_stranded_scheduled(max_age_seconds: int | None = None) -> int:
     with get_cursor() as cur:
         cur.execute(
             "UPDATE sequence_runs SET started_at = NULL, updated_at = NOW() "
-            "WHERE triggered_by = 'schedule' AND status = 'pending' "
+            "WHERE triggered_by = 'schedule' AND COALESCE(status, 'pending') = 'pending' "
             "AND started_at IS NOT NULL AND updated_at < %s",
             (cutoff,),
         )

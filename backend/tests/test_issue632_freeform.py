@@ -2,8 +2,9 @@
 
 Proves, with no application code changes:
 1. after the migrations, ``idx_sequence_runs_stranded_scheduled`` exists on
-   sequence_runs with the predicate triggered_by = 'schedule' AND status = 'pending'
-   AND started_at IS NOT NULL (via pg_indexes);
+   sequence_runs with the predicate triggered_by = 'schedule' AND
+   COALESCE(status, 'pending') = 'pending' AND started_at IS NOT NULL (via
+   pg_indexes; the predicate was realigned by #648);
 2. EXPLAIN of the reaper's own UPDATE statement (read from app/worker/loop.py) names
    that index when run in the test's own transaction with
    ``SET LOCAL enable_seqscan = off`` (tables are tiny in tests).
@@ -46,9 +47,19 @@ def _reaper_update_statement() -> str:
 
 def _canonicalize(indexdef: str) -> str:
     """Whitespace-normalized indexdef with Postgres's cosmetic type casts and
-    parentheses removed, so predicate assertions do not depend on formatting."""
-    text = re.sub(r"::\s*text\b", "", indexdef, flags=re.IGNORECASE)
-    return re.sub(r"[()\s]+", " ", text)
+    parentheses removed, so predicate assertions do not depend on formatting.
+
+    Postgres renders predicate literals with the column's declared type, so strip
+    every cosmetic cast (issue #648: the COALESCE predicate comes back as
+    ``(COALESCE(status, 'pending'::character varying))::text = 'pending'::text``),
+    not only ``::text``."""
+    text = re.sub(
+        r"::\s*(?:text|character\s+varying|character|varchar)(?:\s*\(\s*\d+\s*\))?",
+        "",
+        indexdef,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"[(),\s]+", " ", text)
 
 
 @pytest.mark.usefixtures("test_database", "test_env_setup")
@@ -75,7 +86,8 @@ def test_issue632_freeform():
             assert "(updated_at)" in indexdef
             predicate = _canonicalize(indexdef)
             assert "triggered_by = 'schedule'" in predicate
-            assert "status = 'pending'" in predicate
+            # #648: NULL status means pending (COALESCE), no bare equality
+            assert "COALESCE status 'pending' = 'pending'" in predicate
             assert "started_at IS NOT NULL" in predicate
 
             # 2. The reaper's UPDATE plan uses the index. Both statements run in this
