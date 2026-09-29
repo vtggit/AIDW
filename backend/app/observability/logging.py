@@ -16,6 +16,7 @@ structured output that is easier to grep and correlate.
 
 import logging
 import os
+import re
 from contextvars import ContextVar
 
 # ---------------------------------------------------------------------------
@@ -45,12 +46,13 @@ def clear_request_id() -> None:
 
 
 class _RequestIDLogRecord(logging.LogRecord):
-    """Log record that carries the current request ID."""
+    """Log record that carries the current request ID.
 
-    @property
-    def request_id(self) -> str:
-        rid = get_request_id()
-        return rid or "-"
+    ``request_id`` is a plain instance attribute, always present in the
+    record's ``__dict__``: %-style formatters resolve ``%(request_id)s``
+    from the record's ``__dict__`` and never see class-level properties,
+    so the value is materialised up front by :func:`_record_factory`.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +70,45 @@ LOG_DATE_FORMAT: str = "%Y-%m-%dT%H:%M:%S%z"
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
 
+# Request IDs are caller-controllable (e.g. the X-Request-ID header).
+# ASCII control characters (newline, CR, NUL, ...) would split one record
+# across physical lines and corrupt line-based log output, so they are
+# stripped when the value is materialised onto the record.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _sanitize_request_id(value: object) -> str:
+    """Return ``value`` with ASCII control characters removed."""
+    if not isinstance(value, str):
+        value = str(value)
+    return _CONTROL_CHARS_RE.sub("", value)
+
+
+# Canonical LOG_LEVEL names.  Anything else falls back to INFO instead of
+# crashing setup_logging() (e.g. values that happen to shadow attributes
+# of the logging module such as "handlers" or "root", which would make
+# Logger.setLevel() raise).
+_LOG_LEVELS = {
+    "NOTSET": logging.NOTSET,
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
+def _resolve_log_level(raw: object) -> int:
+    """Map a LOG_LEVEL value to a numeric logging level.
+
+    Only the canonical level names are accepted; unknown or hostile
+    values fall back to ``INFO``.
+    """
+    if not isinstance(raw, str):
+        return logging.INFO
+    return _LOG_LEVELS.get(raw.strip().upper(), logging.INFO)
+
+
 def _record_factory(
     name: str,
     level: int,
@@ -79,8 +120,16 @@ def _record_factory(
     func: str = None,
     sinfo: str = None,
 ) -> logging.LogRecord:
-    """Factory that produces _RequestIDLogRecord instances."""
-    return _RequestIDLogRecord(name, level, fn, lno, msg, args, exc_info, func, sinfo)
+    """Factory that produces _RequestIDLogRecord instances.
+
+    Resolves the request ID from the current context (defaulting to the
+    stable value ``"-"`` when no request is in progress) and stores it
+    directly on the record so the formatter can always find it in
+    ``record.__dict__`` before formatting.
+    """
+    record = _RequestIDLogRecord(name, level, fn, lno, msg, args, exc_info, func, sinfo)
+    record.request_id = _sanitize_request_id(get_request_id() or "-")
+    return record
 
 
 def setup_logging() -> None:
@@ -90,7 +139,8 @@ def setup_logging() -> None:
     Should be called once during app bootstrap.  Configures the root logger
     with a formatter that includes the request ID when available.
     """
-    level = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
+    raw_level = os.getenv("LOG_LEVEL", LOG_LEVEL)
+    level = _resolve_log_level(raw_level)
 
     # Use our custom record factory so every log record carries request_id
     logging.setLogRecordFactory(_record_factory)
@@ -108,4 +158,4 @@ def setup_logging() -> None:
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
-    logging.getLogger(__name__).info("Logging initialised at level %s", LOG_LEVEL)
+    logging.getLogger(__name__).info("Logging initialised at level %s", raw_level)
