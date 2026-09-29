@@ -174,7 +174,17 @@ def execute_sequence_run(run_id: str) -> dict:
             # 4b. Trigger the pipeline via the ingest service directly
             from app.ingest.service import start_run
 
-            start_run(pipeline_id)
+            run_body = start_run(pipeline_id)
+            # A returned body whose status is anything other than 'succeeded'
+            # (including the 'deleted' stub) is a failure exactly like a raised
+            # one: fall into the except path below.
+            if not (
+                isinstance(run_body, dict) and run_body.get("status") == "succeeded"
+            ):
+                raise RuntimeError(
+                    "start_run returned a non-succeeded run body "
+                    f"(pipeline_id={pipeline_id!r})"
+                )
             # 4c. Success
             step_finish = _now_iso()
             _run_step_repo.update(
