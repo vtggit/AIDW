@@ -1,6 +1,8 @@
-"""Index test (issue #632) — idx_sequence_runs_stranded_scheduled, the partial index on
-sequence_runs(updated_at) created by migration 0103, exists with the reaper's predicate:
-triggered_by = 'schedule' AND status = 'pending' AND started_at IS NOT NULL."""
+"""Index test (issue #632, predicate realigned by #648) — idx_sequence_runs_stranded_scheduled,
+the partial index on sequence_runs(updated_at) created by migration 0103 and recreated by
+migration 0104, exists with the reaper's predicate:
+triggered_by = 'schedule' AND COALESCE(status, 'pending') = 'pending'
+AND started_at IS NOT NULL."""
 
 import re
 
@@ -12,9 +14,19 @@ INDEX_NAME = "idx_sequence_runs_stranded_scheduled"
 
 def _canonicalize(indexdef: str) -> str:
     """Whitespace-normalized indexdef with Postgres's cosmetic type casts and
-    parentheses removed, so predicate assertions do not depend on formatting."""
-    text = re.sub(r"::\s*text\b", "", indexdef, flags=re.IGNORECASE)
-    return re.sub(r"[()\s]+", " ", text)
+    parentheses removed, so predicate assertions do not depend on formatting.
+
+    Postgres renders predicate literals with the column's declared type, so strip
+    every cosmetic cast (issue #648: the COALESCE predicate comes back as
+    ``(COALESCE(status, 'pending'::character varying))::text = 'pending'::text``),
+    not only ``::text``."""
+    text = re.sub(
+        r"::\s*(?:text|character\s+varying|character|varchar)(?:\s*\(\s*\d+\s*\))?",
+        "",
+        indexdef,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"[(),\s]+", " ", text)
 
 
 def _normalized_indexdef(cur) -> str:
@@ -47,7 +59,8 @@ def test_idx_sequence_runs_updated_at_partial_exists():
             # ... whose predicate matches the reaper's UPDATE filter.
             predicate = _canonicalize(indexdef)
             assert "triggered_by = 'schedule'" in predicate
-            assert "status = 'pending'" in predicate
+            # #648: NULL status means pending (COALESCE), no bare equality
+            assert "COALESCE status 'pending' = 'pending'" in predicate
             assert "started_at IS NOT NULL" in predicate
     finally:
         conn.close()
