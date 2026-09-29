@@ -19,7 +19,7 @@ config = context.config
 # Override the placeholder sqlalchemy.url with the real connection string
 # built from environment variables (same source as app/config.py).
 db_url = (
-    f"postgresql://{os.getenv('DB_USER', 'aicrm')}:"
+    f"postgresql+psycopg2://{os.getenv('DB_USER', 'aicrm')}:"
     f"{os.getenv('DB_PASSWORD', 'aicrm')}@"
     f"{os.getenv('DB_HOST', 'localhost')}:"
     f"{os.getenv('DB_PORT', '5432')}/"
