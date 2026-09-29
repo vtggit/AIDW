@@ -114,7 +114,13 @@ operator-assigned.
 
 ## Hard boundaries
 
-- Draft-only PRs; every merge requires explicit per-PR human authorization.
+- Every PR opens as a draft. It merges automatically only when all nine auto-merge
+  preconditions hold: a pipeline-authored branch, a linked issue, a green contract, no open
+  panel questions, no carve-out label (`compliance`, `governance`, `ca-needs-human`), no
+  change to authentication or authorization paths, no destructive SQL, no file deletions or
+  renames, and every CI check green. A PR that fails any precondition is held with
+  `ca-needs-human` and merges only after an explicit review by the operator or the
+  operator's delegated reviewer.
 - Governance blockers respected, not argued away.
 - No production data destruction; migrations succeed on existing (dirty) data.
 - Never exfiltrate source data or credentials to third parties.
