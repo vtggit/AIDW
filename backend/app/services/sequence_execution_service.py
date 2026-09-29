@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 
+import psycopg2
+
 from app.db.connection import get_cursor
 from app.repositories.sequence_run_steps_postgres_repository import (
     SequenceRunStepPostgresRepository,
@@ -16,6 +18,20 @@ _run_step_repo = SequenceRunStepPostgresRepository()
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _require_final_run(final_run: dict | None, run_id: str) -> dict:
+    """Return the final run state, or raise 5xx if the row vanished mid-execution."""
+    from fastapi import HTTPException, status
+
+    if final_run is None:
+        # The run existed at claim time but is gone now: an internal invariant
+        # broke, so report a 5xx rather than guessing 404 or fabricating state.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"SequenceRun '{run_id}' disappeared during execution.",
+        )
+    return final_run
 
 
 def execute_sequence_run(run_id: str) -> dict:
@@ -35,8 +51,22 @@ def execute_sequence_run(run_id: str) -> dict:
     6. Return the final run state including its steps.
 
     Returns a dict representing the run (with an added 'steps' key) even when steps failed.
+
+    When the atomic claim UPDATE affects 0 rows (the row changed or disappeared
+    after the initial read), the run is re-read on a fresh connection: 404 if it
+    was deleted, 409 if it is no longer pending, 5xx if the re-read fails with a
+    database error.
     """
     from fastapi import HTTPException, status
+
+    # Postgres text cannot store NUL, so a run id containing NUL bytes can never
+    # match a row — but psycopg2 refuses to quote such a parameter (ValueError,
+    # which would surface as a 500). Answer 404 like any other unknown id.
+    if isinstance(run_id, str) and "\x00" in run_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"SequenceRun '{run_id}' not found.",
+        )
 
     # 1. Fetch and validate run status
     run = _run_repo.get_by_id(run_id)
@@ -69,11 +99,32 @@ def execute_sequence_run(run_id: str) -> dict:
             "AND COALESCE(status, 'pending') = 'pending'",
             (now, run_id),
         )
-        if cur.rowcount == 0:
+        claimed = cur.rowcount > 0
+
+    if not claimed:
+        # The row changed (or disappeared) between the initial read and the
+        # claim UPDATE above. Diagnose with a re-read on a fresh connection —
+        # the claim transaction is already closed, so the re-read is a new
+        # transaction that observes the latest committed state, not the claim
+        # transaction's snapshot.
+        try:
+            rechecked = _run_repo.get_by_id(run_id)
+        except psycopg2.Error:
+            # The re-read itself failed on a database/connection error: report
+            # a 5xx rather than guessing 404 or 409.
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"SequenceRun '{run_id}' is not pending.",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"SequenceRun '{run_id}' could not be re-checked.",
             )
+        if rechecked is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"SequenceRun '{run_id}' not found.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"SequenceRun '{run_id}' is not pending.",
+        )
 
     sequence_id = run["sequence_id"]
 
@@ -88,7 +139,7 @@ def execute_sequence_run(run_id: str) -> dict:
     if not steps:
         # No steps to execute — mark as completed immediately
         _run_repo.update(run_id, {"status": "completed", "finished_at": now})
-        final_run = _run_repo.get_by_id(run_id)
+        final_run = _require_final_run(_run_repo.get_by_id(run_id), run_id)
         return {**final_run, "steps": []}
 
     # 4. Process each step
@@ -164,7 +215,7 @@ def execute_sequence_run(run_id: str) -> dict:
         _run_repo.update(run_id, {"status": "completed", "finished_at": complete_time})
 
     # 6. Fetch final run state with its steps
-    final_run = _run_repo.get_by_id(run_id)
+    final_run = _require_final_run(_run_repo.get_by_id(run_id), run_id)
 
     # Fetch all run_steps for this run
     with get_cursor() as cur:
