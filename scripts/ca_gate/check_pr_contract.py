@@ -12,6 +12,10 @@ Verdict rules (from the P4a design synthesis):
   * FAIL-CLOSED: a PR links a contracted issue but omits the PR contract
                  ("proof-map required") — closes the strip-to-dodge hole even
                  when other (non-contracted) issues are also linked.
+  * FETCH ERROR: a linked issue that cannot be fetched (network, timeout, rate
+                 limit, 4xx/5xx) FAILS the check (#645). A failed fetch used to
+                 read as "no contract" and fell through to FAIL-OPEN, so a
+                 contracted PR passed unchecked whenever the API call failed.
   * GOVERNANCE : the live issue contract must have may_proceed==true & no blockers
                  (a footer with may_proceed!=true, incl. mid-flight "pending",
                  fails closed).
@@ -245,7 +249,13 @@ def _name_of(node) -> str:
     return ""
 
 
-def fetch_issue_body(repo: str, number: int) -> str | None:
+class IssueFetchError(RuntimeError):
+    """A linked issue could not be fetched; the gate must not guess its contract."""
+
+
+def fetch_issue_body(repo: str, number: int) -> str:
+    """The issue body ("" when the issue has none). Raises IssueFetchError on ANY failure
+    (#645): an unreachable issue is not evidence that it is uncontracted."""
     import json
     import urllib.request
     tok = os.environ.get("GITHUB_TOKEN", "")
@@ -255,8 +265,8 @@ def fetch_issue_body(repo: str, number: int) -> str | None:
                  "Accept": "application/vnd.github+json"})
     try:
         return json.load(urllib.request.urlopen(req, timeout=30)).get("body") or ""
-    except Exception:
-        return None
+    except Exception as exc:
+        raise IssueFetchError("issue #%d: %s: %s" % (number, type(exc).__name__, exc)) from exc
 
 
 def render_summary(r: Result) -> str:
@@ -300,8 +310,20 @@ def main(argv=None) -> int:
     candidates = set(prose_links)
     if pr and pr.get("implements_issue") is not None:
         candidates.add(int(pr["implements_issue"]))
-    contracts = {n: extract_contract_json(fetch_issue_body(args.repo, int(n)) or "", ISSUE_SCHEMA)
-                 for n in candidates}
+    contracts, fetch_errors = {}, []
+    for n in sorted(candidates):
+        try:
+            body = fetch_issue_body(args.repo, int(n))
+        except IssueFetchError as exc:
+            fetch_errors.append(str(exc))
+            continue
+        contracts[n] = extract_contract_json(body or "", ISSUE_SCHEMA)
+    if fetch_errors:
+        # #645: without the issue the gate cannot tell a contracted PR from an ordinary one
+        r = Result()
+        r.fail("could not fetch the linked issue(s), so the contract cannot be verified "
+               "(fail closed): " + "; ".join(fetch_errors))
+        return _emit(r, args)
     any_contracted = any(c is not None for c in contracts.values())
     target = contracts.get(int(pr["implements_issue"])) if (pr and pr.get("implements_issue") is not None) else None
 
@@ -327,6 +349,11 @@ def main(argv=None) -> int:
                  lambda n: ast_test_is_nontrivial(args.repo_root, n),
                  any_contracted=any_contracted, changed_files=changed)
 
+    return _emit(r, args)
+
+
+def _emit(r: Result, args) -> int:
+    """Print + append the summary, and return the exit code for this verdict."""
     summary = render_summary(r)
     print(summary)
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
