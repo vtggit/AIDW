@@ -1,18 +1,29 @@
 """Cursor-ingest orchestration, split enqueue ⊥ execute (doc §1 API⊥worker).
 
 ``create_pending_run`` validates and enqueues (a ``pending`` runs row, no egress — safe for the
-API in worker mode); ``execute_run`` atomically claims (pending→running) and executes: bootstrap a
-delta_cursor on first run (first non-key temporal field, kind ``timestamp``; datasets with no
-temporal field ingest full pages each run — the op-log unique key keeps that idempotent), build
-the watermark page URL (``ge`` filter — rows sharing the watermark are re-read, and the
-business-key upsert keeps that duplicate-free), then fetch + apply page by page through the
-fixture-tested mapper/filters/cursor modules: every page is fetched through the egress module
-(destination policy and credentials apply to each page), ``@odata.nextLink`` is followed until a
-page has none or the run has read ``INGEST_MAX_ROWS_PER_RUN`` rows (read from the environment at
-call time; a nextLink off the endpoint's origin fails the run before that page is requested),
-and the watermark advances only once, after every page of the run has been stored — to the last
-fully exhausted cursor value, never to or past a tie group cut by the row cap or by a full
-final page; a run that fails part-way leaves the watermark unchanged. It then finalizes the run,
+API in worker mode); ``execute_run`` atomically claims (pending→running) and executes: bootstrap
+a delta_cursor on first run (the first non-key temporal field whose name contains, case-
+insensitively, ``lastmodified`` then ``modified`` then ``updated`` then ``changed``, failing
+those the first containing ``created``, failing those the first temporal field; kind
+``timestamp``; datasets with no temporal field ingest full pages each run — the op-log unique
+key keeps that idempotent), build the watermark page URL (``ge`` filter — rows sharing the
+watermark are re-read, and the business-key upsert keeps that duplicate-free; ``$orderby`` is
+the cursor field followed by the business-key fields, so a tie group keeps one stable order
+across pages), then fetch + apply page by page through the fixture-tested
+mapper/filters/cursor modules: every page is fetched through the egress module (destination
+policy and credentials apply to each page). A server ``@odata.nextLink`` takes precedence when
+present and is followed (a nextLink off the endpoint's origin fails the run before that page is
+requested); a FULL page (as served) without a nextLink does NOT end the run — the run requests
+the next page itself: the run's first page URL with ``$skip`` = the entries the server has
+SERVED so far in this run (same ``$filter``, ``$orderby`` and ``$top``), counting the served
+entries before any run-cap truncation so a capped page never shifts the offset or reads as not
+full, and continues until the run has read ``INGEST_MAX_ROWS_PER_RUN`` rows (read from the
+environment at call time) or a page holds fewer than ``_PAGE_SIZE`` entries; a full page with
+no dict row fails the run rather than spin. The watermark advances only once, after every page
+of the run has been stored — to the last fully exhausted cursor value, never to or past a tie
+group cut by the row cap or by a full final page (a run that stops at the cap with a full last
+page, as served, is a cut, exactly as when a nextLink remains); a run that fails part-way
+leaves the watermark unchanged. It then finalizes the run,
 and on success fires the §6 automatic
 pass: profile + re-score this source's suggestions. ``start_run`` composes both for the interim
 in-API executor; the worker (``app.worker``) calls the same ``execute_run`` — identical rows
@@ -38,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 500
 _TEMPORAL_MARKERS = ("date", "time")
+# Bootstrap cursor-name priority (case-insensitive substring): the freshest-changed field
+# wins, falling back to a creation date, then any temporal field.
+_CURSOR_NAME_MARKERS = ("lastmodified", "modified", "updated", "changed", "created")
 
 _MAX_ROWS_ENV = "INGEST_MAX_ROWS_PER_RUN"
 _DEFAULT_MAX_ROWS_PER_RUN = 50000
@@ -237,18 +251,27 @@ def _load_context(pipeline_id: str) -> dict:
 
 
 def _bootstrap_cursor(cur, pipeline: dict, fields: list[dict], now) -> dict | None:
-    """First run of a pipeline with no delta_cursor: pick the first non-key temporal field as the
-    cursor (kind timestamp). Returns None when the dataset has no temporal field — the pipeline
-    then full-page-ingests each run."""
-    field = next(
-        (
-            f
-            for f in fields
-            if not f.get("is_key")
-            and any(m in (f.get("data_type") or "").lower() for m in _TEMPORAL_MARKERS)
-        ),
-        None,
-    )
+    """First run of a pipeline with no delta_cursor: pick the cursor field DETERMINISTICALLY
+    among the non-key temporal fields — the first whose name contains, case-insensitively,
+    ``lastmodified``, then ``modified``, then ``updated``, then ``changed``; failing those, the
+    first containing ``created``; failing those, the first temporal field as today (kind
+    ``timestamp``). Returns None when the dataset has no temporal field — the pipeline then
+    full-page-ingests each run."""
+    temporal = [
+        f
+        for f in fields
+        if not f.get("is_key")
+        and any(m in (f.get("data_type") or "").lower() for m in _TEMPORAL_MARKERS)
+    ]
+    field = None
+    for marker in _CURSOR_NAME_MARKERS:
+        field = next(
+            (f for f in temporal if marker in (f.get("name") or "").lower()), None
+        )
+        if field is not None:
+            break
+    if field is None:
+        field = temporal[0] if temporal else None
     if field is None:
         return None
     row = {
@@ -367,6 +390,7 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
             )
 
     try:
+        key_names = [f["name"] for f in ctx["key_fields"]]
         url = build_page_url(
             ctx["connection"]["endpoint"],
             dataset["name"],
@@ -375,14 +399,16 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
             cursor_field_name,
             watermark,
             cursor_kind,
+            key_names,
         )
-        key_names = [f["name"] for f in ctx["key_fields"]]
         max_rows = _max_rows_per_run()
         rows_read = rows_written = skipped_no_key = rows_suppressed = 0
         inserts = updates = 0
         page_values: list[list[str]] = []
         capped = False
         last_page_full = False
+        skip_offset = 0
+        warned_unstable_order = False
         while True:
             raw = (
                 _fetch_page(url)
@@ -391,13 +417,21 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
             )
             entries = extract_entries(raw)
             # the cap bounds rows READ: entries beyond the remaining budget are never read, so
-            # they count for nothing; page_full below still counts entries AS FETCHED (a junk
-            # (non-dict) entry occupied a $top slot
+            # they count for nothing; the served count, the page-full test, the no-dict-row
+            # guard and the $skip offset below all count the entries the server SERVED (before
+            # this run-cap truncation) — a capped page must never shift the $skip offset, read
+            # as not full, or fail the no-dict-row guard (a junk (non-dict) entry still
+            # occupied a $top slot); the offset accumulates EVERY page served so far in this
+            # run, nextLink pages included, because the $skip URL is the run's first page URL
+            # — the start of the same ordered stream the nextLink pages continued
+            served = len(entries)
+            served_rows = [r for r in entries if isinstance(r, dict)]
+            skip_offset += served
             remaining = max_rows - rows_read
-            if remaining < len(entries):
+            if remaining < served:
                 entries = entries[:remaining]
             rows = [r for r in entries if isinstance(r, dict)]
-            page_full = len(entries) >= _PAGE_SIZE
+            page_full = served >= _PAGE_SIZE
             last_page_full = page_full
             with get_cursor() as cur:
                 result = apply_rows(
@@ -431,19 +465,57 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
                 page_values.append(values)
             next_link = _page_next_link(raw)
             if rows_read >= max_rows:
-                capped = next_link is not None
+                # the cap cut the run: a FULL final page (as served) may have cut its max
+                # value's tie group at the $top boundary, and a pending nextLink always means
+                # more rows to come — both read as a cut (the watermark stays below it)
+                capped = page_full or next_link is not None
                 break
-            if next_link is None:
+            if next_link is None and not page_full:
+                # a not-full page with no nextLink ends the set
                 break
-            if not rows:
-                # no dict row to read, yet the page claims a nextLink — following it would
-                # spin forever; fail loud (the watermark stays put, the run is visible)
+            if not served_rows:
+                # a page that, as SERVED, holds NO dict row at all: following it — via the
+                # server's nextLink or our own $skip — would spin forever; fail loud (the
+                # watermark stays put, the run is visible). Judged on the entries the server
+                # SERVED, not the cap-truncated slice: a slice left with only non-dict
+                # entries is a budget matter (the run keeps paging and stops at the cap),
+                # not a page without dict rows
+                if next_link is not None:
+                    raise IngestError(
+                        "page without ingestable rows still carries @odata.nextLink — "
+                        "stopping to avoid a paging loop"
+                    )
                 raise IngestError(
-                    "page without ingestable rows still carries @odata.nextLink — "
+                    "page without ingestable rows is full with no @odata.nextLink — "
                     "stopping to avoid a paging loop"
                 )
-            _check_next_link(ctx["connection"]["endpoint"], next_link)
-            url = next_link
+            if next_link is not None:
+                # a server @odata.nextLink takes precedence over our own $skip continuation
+                _check_next_link(ctx["connection"]["endpoint"], next_link)
+                url = next_link
+            else:
+                # a FULL page (as served) without a nextLink does not end the set — request
+                # the next page ourselves: the run's first page URL with $skip = the entries
+                # the server has served so far in this run (same $filter, $orderby, $top)
+                if not (cursor_field_name and key_names) and not warned_unstable_order:
+                    warned_unstable_order = True
+                    logger.warning(
+                        "run %s pages with $skip without a guaranteed order (no cursor "
+                        "field or no key fields) — rows may repeat or be missed across "
+                        "pages",
+                        run_id,
+                    )
+                url = build_page_url(
+                    ctx["connection"]["endpoint"],
+                    dataset["name"],
+                    _PAGE_SIZE,
+                    ctx["connection"].get("protocol_version"),
+                    cursor_field_name,
+                    watermark,
+                    cursor_kind,
+                    key_names,
+                    skip=skip_offset,
+                )
         # the watermark advance lands ONCE, after every page of the run has been stored — a
         # run that failed part-way (caught below) never reaches this point, so its watermark
         # is left unchanged

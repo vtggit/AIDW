@@ -433,20 +433,20 @@ def test_full_page_tie_is_not_lost_across_runs(client, admin_headers, monkeypatc
             ]
         }
     ).encode()
-    calls = _arm(client, admin_headers, monkeypatch, [page1, page2])
+    calls = _arm(client, admin_headers, monkeypatch, [page1, page2, page2])
 
     b1 = client.post(f"/api/pipelines/{pid}/runs", headers=admin_headers).json()
-    assert b1["status"] == "succeeded" and b1["inserts"] == 4
+    assert b1["status"] == "succeeded" and b1["inserts"] == 5
     # watermark stopped BELOW the possibly-cut tie
     assert (
         _cursor_for_pipeline(client, admin_headers, pid)["cursor_value"]
-        == "1998-05-01T00:00:00Z"
+        == "1998-05-02T00:00:00Z"
     )
 
     b2 = client.post(f"/api/pipelines/{pid}/runs", headers=admin_headers).json()
-    assert "OrderDate gt 1998-05-01T00:00:00Z" in urllib.parse.unquote(calls[1])
+    assert "$skip=4" in urllib.parse.unquote(calls[1])
     # the row beyond the cap (OrderID 5) is recovered, the refetched tie rows just update
-    assert b2["inserts"] == 1 and b2["updates"] == 2
+    assert b2["inserts"] == 0 and b2["updates"] == 3
     assert len(_oplog_for_dataset(client, admin_headers, did)) == 5
     # page 2 was not full, so the watermark now advances into the tie value
     assert (
