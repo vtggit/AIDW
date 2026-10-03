@@ -38,6 +38,13 @@ Security notes:
       http), a port change, or a host change all drop the header.  A
       malformed or unparseable redirect port is treated as an origin
       mismatch and the header is omitted.
+    * A timeout or transport failure (``TimeoutError``, ``socket.timeout``,
+      non-HTTP ``urllib.error.URLError``, other ``OSError``) raises
+      :class:`EgressTransportError` with a message of the form
+      ``{ClassName} while contacting {host} after {timeout}s`` — only the
+      original exception class name, the request URL's hostname (or
+      ``<unknown>``), and the configured timeout.  Credentials, headers,
+      response bodies, and raw exception text are never included.
 """
 
 from __future__ import annotations
@@ -49,13 +56,23 @@ import urllib.parse
 import urllib.request
 
 from app.db.connection import get_cursor
-from app.egress import SecretRefInvalid, SecretUnavailable
+from app.egress import (
+    EgressError as EgressBaseError,
+)
+from app.egress import (
+    SecretRefInvalid,
+    SecretUnavailable,
+)
 from app.egress.policy import validate_destination
 from app.egress.secrets import resolve_secret
 
 
-class EgressError(Exception):
-    """Base error for egress HTTP operations."""
+class EgressError(EgressBaseError):
+    """Base error for egress HTTP operations.
+
+    Subclasses the canonical ``app.egress.EgressError`` so callers catching
+    the package-level base also catch HTTP-layer failures.
+    """
 
 
 class EgressAuthError(EgressError):
@@ -63,6 +80,21 @@ class EgressAuthError(EgressError):
 
     The message contains only the HTTP status code and the scheme names
     parsed from the ``WWW-Authenticate`` response header.
+    """
+
+
+class EgressTransportError(EgressError):
+    """A timeout or transport failure while contacting the destination.
+
+    Raised for ``TimeoutError``, ``socket.timeout``, non-HTTP
+    ``urllib.error.URLError``, and other ``OSError``-family failures from
+    the fetch.  The message is exactly
+    ``{ClassName} while contacting {host} after {timeout}s``, where
+    *ClassName* is the original exception class name, *host* is the request
+    URL's hostname (userinfo never included) or ``<unknown>``, and
+    *timeout* is the timeout value passed to :func:`fetch_bytes` in
+    seconds.  Credentials, headers, response bodies, and raw exception
+    text are never included.
     """
 
 
@@ -276,6 +308,50 @@ def credential_for_url(url: str) -> dict | None:
     return row
 
 
+DEFAULT_FETCH_TIMEOUT_SECONDS = 30
+MIN_FETCH_TIMEOUT_SECONDS = 1
+MAX_FETCH_TIMEOUT_SECONDS = 600
+
+
+def resolve_fetch_timeout(timeout_seconds: int | None) -> int:
+    """Resolve a source connection's stored fetch timeout to seconds.
+
+    ``None`` (a NULL ``source_connections.timeout_seconds``) resolves to
+    the 30-second default.  A set value must be an integer in [1, 600];
+    any other value (zero, negative, out of range, non-integer, or
+    boolean) raises ``ValueError`` naming the ``timeout_seconds`` field.
+    The stored value is never echoed in the message, so hostile input
+    cannot inject text into the error.
+    """
+    if timeout_seconds is None:
+        return DEFAULT_FETCH_TIMEOUT_SECONDS
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, int)
+        or not MIN_FETCH_TIMEOUT_SECONDS <= timeout_seconds <= MAX_FETCH_TIMEOUT_SECONDS
+    ):
+        raise ValueError(
+            "source_connections.timeout_seconds must be an integer between "
+            f"{MIN_FETCH_TIMEOUT_SECONDS} and {MAX_FETCH_TIMEOUT_SECONDS}"
+        )
+    return timeout_seconds
+
+
+def _transport_error(url: str, timeout: int, exc: Exception) -> EgressTransportError:
+    """Build the typed transport error for *exc* raised while fetching *url*.
+
+    The message is exactly
+    ``{exc.__class__.__name__} while contacting {host} after {timeout}s``
+    where *host* is the request URL's hostname (userinfo never included)
+    or ``<unknown>`` when the URL has none.  No credentials, headers,
+    response bodies, or raw exception text appear in the result.
+    """
+    host = urllib.parse.urlparse(url).hostname or "<unknown>"
+    return EgressTransportError(
+        f"{exc.__class__.__name__} while contacting {host} after {timeout}s"
+    )
+
+
 def fetch_bytes(url: str, timeout: int = 30) -> bytes:
     """Fetch *url* and return the response body as bytes.
 
@@ -295,6 +371,9 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
 
     Raises:
         EgressAuthError: on HTTP 401 or 403.
+        EgressTransportError: on a timeout or transport failure
+        (``TimeoutError``, ``socket.timeout``, non-HTTP ``urllib.error.URLError``,
+        or other ``OSError``).
         EgressError: on too many redirects or other HTTP errors.
     """
     validate_destination(url)
@@ -370,4 +449,6 @@ def fetch_bytes(url: str, timeout: int = 30) -> bytes:
                 ) from exc
             raise EgressError(f"HTTP {exc.code} — {exc.reason}") from exc
         except urllib.error.URLError as exc:
-            raise EgressError(f"URL error: {exc.reason}") from exc
+            raise _transport_error(url, timeout, exc) from exc
+        except (TimeoutError, OSError) as exc:
+            raise _transport_error(url, timeout, exc) from exc
