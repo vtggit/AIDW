@@ -4,23 +4,33 @@
 API in worker mode); ``execute_run`` atomically claims (pending→running) and executes: bootstrap a
 delta_cursor on first run (first non-key temporal field, kind ``timestamp``; datasets with no
 temporal field ingest full pages each run — the op-log unique key keeps that idempotent), build
-the watermark page URL, fetch + apply through the fixture-tested mapper/filters/cursor modules,
-finalize the run, and on success fire the §6 automatic pass: profile + re-score this source's
-suggestions. ``start_run`` composes both for the interim in-API executor; the worker
-(``app.worker``) calls the same ``execute_run`` — identical rows either way, so nothing is thrown
-away when execution moves out of the API. Fetch is factored out so tests substitute a fixture
-without the network.
+the watermark page URL (``ge`` filter — rows sharing the watermark are re-read, and the
+business-key upsert keeps that duplicate-free), then fetch + apply page by page through the
+fixture-tested mapper/filters/cursor modules: every page is fetched through the egress module
+(destination policy and credentials apply to each page), ``@odata.nextLink`` is followed until a
+page has none or the run has read ``INGEST_MAX_ROWS_PER_RUN`` rows (read from the environment at
+call time; a nextLink off the endpoint's origin fails the run before that page is requested),
+and the watermark advances only once, after every page of the run has been stored — to the last
+fully exhausted cursor value, never to or past a tie group cut by the row cap or by a full
+final page; a run that fails part-way leaves the watermark unchanged. It then finalizes the run,
+and on success fires the §6 automatic
+pass: profile + re-score this source's suggestions. ``start_run`` composes both for the interim
+in-API executor; the worker (``app.worker``) calls the same ``execute_run`` — identical rows
+either way, so nothing is thrown away when execution moves out of the API. Fetch is factored
+out so tests substitute a fixture without the network.
 """
 
+import json
 import logging
+import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.db.connection import get_cursor
-from app.egress.http import fetch_bytes, resolve_fetch_timeout
-from app.ingest.cursor import apply_rows
+from app.egress.http import _effective_origin, fetch_bytes, resolve_fetch_timeout
+from app.ingest.cursor import _acceptable, _later, apply_rows
 from app.ingest.filters import build_page_url
-from app.ingest.mapper import extract_entries
+from app.ingest.mapper import business_key, extract_entries, normalize_cursor_value
 from app.profiling.service import profile_source
 from app.repositories.runs_postgres_repository import RunPostgresRepository
 
@@ -28,6 +38,9 @@ logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 500
 _TEMPORAL_MARKERS = ("date", "time")
+
+_MAX_ROWS_ENV = "INGEST_MAX_ROWS_PER_RUN"
+_DEFAULT_MAX_ROWS_PER_RUN = 50000
 
 
 class IngestError(Exception):
@@ -50,6 +63,126 @@ def _fetch_timeout_for(connection: dict) -> int | None:
 def _fetch_page(url: str, timeout: int = 30) -> bytes:
     """Fetch a raw data page. Factored out so tests can substitute a fixture without the network."""
     return fetch_bytes(url, timeout=timeout)
+
+
+def _max_rows_per_run() -> int:
+    """The run's row cap, read from the environment at call time (a change takes effect on the
+    next run without a restart). A non-integer or non-positive value falls back to the default
+    rather than failing the run."""
+    raw = os.environ.get(_MAX_ROWS_ENV)
+    if raw is None:
+        return _DEFAULT_MAX_ROWS_PER_RUN
+    try:
+        limit = int(raw)
+    except ValueError:
+        return _DEFAULT_MAX_ROWS_PER_RUN
+    return limit if limit > 0 else _DEFAULT_MAX_ROWS_PER_RUN
+
+
+def _page_next_link(raw: bytes) -> str | None:
+    """The page's ``@odata.nextLink`` continuation pointer, or None when this page ends the set.
+    A link that is present but not a non-empty string is hostile payload — fail loud (the run
+    lands status=failed and the watermark stays put) rather than guess at a URL."""
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        return None
+    link = data.get("@odata.nextLink")
+    if link is None:
+        return None
+    if not isinstance(link, str):
+        raise IngestError("@odata.nextLink is not a string")
+    link = link.strip()
+    return link or None
+
+
+def _check_next_link(endpoint: str, next_link: str) -> None:
+    """Fail the run, BEFORE the page is requested, when a nextLink leaves the connection
+    endpoint's origin — its scheme, host, and effective port must all match (default ports
+    normalized, like the egress origin checks). The destination policy and the credential were
+    resolved for the endpoint, not for an arbitrary host the payload may point at."""
+    source = _effective_origin(endpoint)
+    if source is None:
+        raise IngestError(
+            "connection endpoint is not a fetchable http(s) URL — cannot validate nextLink"
+        )
+    target = _effective_origin(next_link)
+    if target is None:
+        raise IngestError("nextLink is not a fetchable http(s) URL")
+    if source[0] != target[0]:
+        raise IngestError(
+            f"nextLink scheme differs from connection endpoint: "
+            f"'{target[0]}' != '{source[0]}'"
+        )
+    if source[1] != target[1]:
+        raise IngestError(
+            f"nextLink host differs from connection endpoint: "
+            f"'{target[1]}' != '{source[1]}'"
+        )
+    if source[2] != target[2]:
+        raise IngestError(
+            f"nextLink port differs from connection endpoint: "
+            f"{target[2]} != {source[2]}"
+        )
+
+
+def _max_of(values: list[str], cursor_kind: str | None) -> str:
+    """The greatest of *values* under the kind-aware ordering (cursor._later)."""
+    best = values[0]
+    for value in values[1:]:
+        if _later(value, best, cursor_kind):
+            best = value
+    return best
+
+
+def _run_watermark(
+    page_values: list[list[str]],
+    current: str | None,
+    cursor_kind: str | None,
+    capped: bool,
+    last_page_full: bool,
+) -> str | None:
+    """The run's watermark after ALL of its pages have been stored — the advance lands once, at
+    the end of the run, so a run that fails part-way leaves the watermark unchanged. An
+    exhausted set whose last page was not full means every read row is fully ingested: the
+    watermark is the greatest value read. When the run stopped on a CUT final page — the row cap
+    hit with a nextLink still pending, or a FULL page (a full page may have cut its max value's
+    tie group at the $top boundary) — the last page's greatest value may be a partially read tie
+    group: the watermark then advances only to the last fully exhausted timestamp, the greatest
+    read value strictly below that cut, never to or past it (the at-or-after filter re-reads the
+    cut group next run; upserts keep it duplicate-free). When the cut page yielded no admissible
+    cursor value at all, the cut value is unknown (a keyless or unnormalizable row at the cut
+    may share the last read row's value, whose tie group then continues past the cut), so no tie
+    group can be proven fully exhausted — the watermark is left unchanged rather than risk
+    landing on or past a partially read value. Never regresses a later watermark; a run with no
+    admissible values leaves it unchanged."""
+    all_values = [v for values in page_values for v in values]
+    if not all_values:
+        return current
+    if capped or last_page_full:
+        if not page_values[-1]:
+            # the cut page yielded no admissible cursor values — the cut value is unknown (a
+            # keyless row at the cut may share the value of the last read row, whose tie group
+            # then continues past the cut), so nothing is provably exhausted
+            return current
+        cut = _max_of(page_values[-1], cursor_kind)
+        candidates = [v for v in all_values if _later(cut, v, cursor_kind)]
+        if not candidates:
+            # every read value sits at the cut — the tie group continues past the cut and no
+            # lower value was read, so the watermark cannot advance
+            logger.warning(
+                "run stopped on a cut page tied at cursor value %r with no lower value read "
+                "— watermark cannot advance (the tie group continues past the cut)",
+                cut,
+            )
+            return current
+        candidate = _max_of(candidates, cursor_kind)
+    else:
+        candidate = _max_of(all_values, cursor_kind)
+    return (
+        candidate
+        if (current is None or _later(candidate, current, cursor_kind))
+        else current
+    )
 
 
 def _load_context(pipeline_id: str) -> dict:
@@ -243,46 +376,101 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
             watermark,
             cursor_kind,
         )
-        # page_full must count entries AS FETCHED — a junk (non-dict) entry still occupied a
-        # $top slot, so judging fullness on the dict-filtered rows would miss a capped page
-        if ctx["fetch_timeout"] is None:
-            entries = extract_entries(_fetch_page(url))
-        else:
-            entries = extract_entries(_fetch_page(url, timeout=ctx["fetch_timeout"]))
-        rows = [r for r in entries if isinstance(r, dict)]
-        with get_cursor() as cur:
-            result = apply_rows(
-                cur,
-                run_id,
-                dataset["id"],
-                rows,
-                [f["name"] for f in ctx["key_fields"]],
-                cursor_field_name,
-                watermark,
-                cursor_kind,
-                now=now,
-                page_full=len(entries) >= _PAGE_SIZE,
+        key_names = [f["name"] for f in ctx["key_fields"]]
+        max_rows = _max_rows_per_run()
+        rows_read = rows_written = skipped_no_key = rows_suppressed = 0
+        inserts = updates = 0
+        page_values: list[list[str]] = []
+        capped = False
+        last_page_full = False
+        while True:
+            raw = (
+                _fetch_page(url)
+                if ctx["fetch_timeout"] is None
+                else _fetch_page(url, timeout=ctx["fetch_timeout"])
             )
-            finished = datetime.now(timezone.utc)
-            # status guard: if the reaper (or an admin) finalized this run while we executed,
-            # the terminal state wins — a zombie executor must not resurrect a reaped row,
-            # and its watermark advance must not land either (the op-log rows it wrote are
-            # idempotent upserts and stay, which is safe)
+            entries = extract_entries(raw)
+            # the cap bounds rows READ: entries beyond the remaining budget are never read, so
+            # they count for nothing; page_full below still counts entries AS FETCHED (a junk
+            # (non-dict) entry occupied a $top slot
+            remaining = max_rows - rows_read
+            if remaining < len(entries):
+                entries = entries[:remaining]
+            rows = [r for r in entries if isinstance(r, dict)]
+            page_full = len(entries) >= _PAGE_SIZE
+            last_page_full = page_full
+            with get_cursor() as cur:
+                result = apply_rows(
+                    cur,
+                    run_id,
+                    dataset["id"],
+                    rows,
+                    key_names,
+                    cursor_field_name,
+                    watermark,
+                    cursor_kind,
+                    now=now,
+                    page_full=page_full,
+                )
+            rows_read += result["rows_read"]
+            rows_written += result["rows_written"]
+            skipped_no_key += result["skipped_no_key"]
+            rows_suppressed += result["rows_suppressed"]
+            inserts += result["inserts"]
+            updates += result["updates"]
+            if cursor_field_name is not None:
+                # mirror apply_rows' candidacy exactly: a keyless row never advances the
+                # watermark, a suppressed (erased-subject) row still counts
+                values: list[str] = []
+                for row in rows:
+                    if business_key(row, key_names) is None:
+                        continue
+                    value = normalize_cursor_value(row.get(cursor_field_name))
+                    if value is not None and _acceptable(value, cursor_kind):
+                        values.append(value)
+                page_values.append(values)
+            next_link = _page_next_link(raw)
+            if rows_read >= max_rows:
+                capped = next_link is not None
+                break
+            if next_link is None:
+                break
+            if not rows:
+                # no dict row to read, yet the page claims a nextLink — following it would
+                # spin forever; fail loud (the watermark stays put, the run is visible)
+                raise IngestError(
+                    "page without ingestable rows still carries @odata.nextLink — "
+                    "stopping to avoid a paging loop"
+                )
+            _check_next_link(ctx["connection"]["endpoint"], next_link)
+            url = next_link
+        # the watermark advance lands ONCE, after every page of the run has been stored — a
+        # run that failed part-way (caught below) never reaches this point, so its watermark
+        # is left unchanged
+        new_watermark = _run_watermark(
+            page_values, watermark, cursor_kind, capped, last_page_full
+        )
+        finished = datetime.now(timezone.utc)
+        with get_cursor() as cur:
             cur.execute(
                 "UPDATE runs SET status = %s, rows_read = %s, rows_written = %s, "
                 "rows_suppressed = %s, "
                 "finished_at = %s, updated_at = %s WHERE id = %s AND status = 'running'",
                 (
                     "succeeded",
-                    result["rows_read"],
-                    result["rows_written"],
-                    result["rows_suppressed"],
+                    rows_read,
+                    rows_written,
+                    rows_suppressed,
                     finished,
                     finished,
                     run_id,
                 ),
             )
             if cur.rowcount == 0:
+                # status guard: if the reaper (or an admin) finalized this run while we
+                # executed, the terminal state wins — a zombie executor must not resurrect a
+                # reaped row, and its watermark advance must not land either (the op-log rows
+                # it wrote are idempotent upserts and stay, which is safe)
                 logger.warning(
                     "run %s was finalized externally while executing — discarding this "
                     "executor's bookkeeping (op-log upserts already applied, idempotent)",
@@ -291,20 +479,21 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
                 return _run_body(
                     repo,
                     run_id,
-                    inserts=result["inserts"],
-                    updates=result["updates"],
-                    skipped_no_key=result["skipped_no_key"],
+                    inserts=inserts,
+                    updates=updates,
+                    skipped_no_key=skipped_no_key,
                 )
             if cursor_row is not None and cursor_field_name is not None:
                 cur.execute(
                     "UPDATE delta_cursors SET cursor_value = %s, last_run_id = %s, "
                     "updated_at = %s WHERE id = %s",
-                    (result["new_watermark"], run_id, finished, cursor_row["id"]),
+                    (new_watermark, run_id, finished, cursor_row["id"]),
                 )
     except Exception as exc:
-        # any failure after the claim — fetch, parse, watermark rendering, or the apply
-        # transaction (rolled back by get_cursor) — must land ON the run, never leave it
-        # stuck at status='running'
+        # any failure after the claim — context drift, fetch, parse, nextLink validation,
+        # watermark rendering, or an apply transaction (rolled back by get_cursor) — must
+        # land ON the run, never leave it stuck at status='running'; the watermark advance
+        # happens only in the final bookkeeping, so a failed run leaves it unchanged
         return _finalize_failed(repo, run_id, exc)
 
     # §6 automatic trigger: on ingest-run success, a profile + re-score pass. Best-effort — a
@@ -322,10 +511,10 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
     body = _run_body(
         repo,
         run_id,
-        inserts=result["inserts"],
-        updates=result["updates"],
-        skipped_no_key=result["skipped_no_key"],
-        cursor_value=result["new_watermark"],
+        inserts=inserts,
+        updates=updates,
+        skipped_no_key=skipped_no_key,
+        cursor_value=new_watermark,
     )
     if profile is not None:
         body["profile"] = profile
