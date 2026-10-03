@@ -56,20 +56,29 @@ def build_page_url(
     cursor_field: str | None = None,
     watermark: str | None = None,
     cursor_kind: str | None = None,
+    key_fields: list[str] | None = None,
+    skip: int | None = None,
 ) -> str:
     """Build the data-page URL for one ingest fetch. With no cursor field the page is a plain
-    ``$top`` sample of the set; with a cursor field the page is ordered by it ascending and, once
-    a watermark exists, filtered to rows at-or-after the watermark. That at-or-after (``ge``)
-    comparison is rendered as ``field gt X or field eq X`` — OData comparison operators bind
-    tighter than ``or``, so it selects exactly the rows ``ge X`` would: rows sharing the
-    watermark value are re-read rather than skipped. Safe because records upsert by business
-    key, so the re-read adds no duplicates while a tie group at the watermark can never be lost
-    to the filter."""
+    ``$top`` sample of the set; with a cursor field the page is ordered by it ascending — the
+    business-key fields following it (``$orderby=<cursor> asc,<key1> asc,...``) so rows sharing
+    a cursor value keep one stable order across ``$skip`` pages — and, once a watermark exists,
+    filtered to rows at-or-after the watermark. That at-or-after (``ge``) comparison is rendered
+    as ``field gt X or field eq X`` — OData comparison operators bind tighter than ``or``, so it
+    selects exactly the rows ``ge X`` would: rows sharing the watermark value are re-read rather
+    than skipped. Safe because records upsert by business key, so the re-read adds no duplicates
+    while a tie group at the watermark can never be lost to the filter. ``skip``, when given,
+    appends ``$skip=<n>`` — the client-side continuation of a FULL page that carried no
+    ``@odata.nextLink``; with no key fields, or with no cursor field, the URL is unchanged from
+    the no-skip form."""
     base = endpoint.rstrip("/")
     parts = [f"$top={int(top)}", "$format=json"]
     if cursor_field:
+        order = [f"{cursor_field} asc"]
+        for key_field in key_fields or []:
+            order.append(f"{key_field} asc")
         parts.append(
-            "$orderby=" + urllib.parse.quote(f"{cursor_field} asc", safe=_QUERY_SAFE)
+            "$orderby=" + urllib.parse.quote(",".join(order), safe=_QUERY_SAFE)
         )
         if watermark is not None and watermark != "":
             literal = _filter_literal(watermark, cursor_kind, protocol_version)
@@ -80,4 +89,6 @@ def build_page_url(
                     safe=_QUERY_SAFE,
                 )
             )
+    if skip is not None:
+        parts.append(f"$skip={int(skip)}")
     return f"{base}/{urllib.parse.quote(entity_set)}?{'&'.join(parts)}"
