@@ -56,6 +56,8 @@ def build_page_url(
     cursor_field: str | None = None,
     watermark: str | None = None,
     cursor_kind: str | None = None,
+    key_fields: list[str] | None = None,
+    skip: int | None = None,
 ) -> str:
     """Build the data-page URL for one ingest fetch. With no cursor field the page is a plain
     ``$top`` sample of the set; with a cursor field the page is ordered by it ascending and, once
@@ -64,12 +66,26 @@ def build_page_url(
     tighter than ``or``, so it selects exactly the rows ``ge X`` would: rows sharing the
     watermark value are re-read rather than skipped. Safe because records upsert by business
     key, so the re-read adds no duplicates while a tie group at the watermark can never be lost
-    to the filter."""
+    to the filter.
+
+    ``key_fields`` (the dataset's business-key field names, in order) are appended to
+    ``$orderby`` after the cursor field (``$orderby=<cursor> asc,<key1> asc,...``) so rows
+    sharing a cursor value keep one stable order across ``$skip`` pages; with no key fields —
+    or with no cursor field — the URL is unchanged. ``skip`` renders ``$skip=<n>`` so the
+    caller can re-request this same page (same ``$filter``/``$orderby``/``$top``) at a
+    served-entry offset — the run's self-pagination when a page ends without
+    ``@odata.nextLink`` yet still holds a full ``$top``."""
     base = endpoint.rstrip("/")
-    parts = [f"$top={int(top)}", "$format=json"]
+    parts = [f"$top={int(top)}"]
+    if skip is not None:
+        parts.append(f"$skip={int(skip)}")
+    parts.append("$format=json")
     if cursor_field:
+        order = [f"{cursor_field} asc"]
+        for key in key_fields or []:
+            order.append(f"{key} asc")
         parts.append(
-            "$orderby=" + urllib.parse.quote(f"{cursor_field} asc", safe=_QUERY_SAFE)
+            "$orderby=" + urllib.parse.quote(",".join(order), safe=_QUERY_SAFE)
         )
         if watermark is not None and watermark != "":
             literal = _filter_literal(watermark, cursor_kind, protocol_version)
