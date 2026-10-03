@@ -11,7 +11,7 @@ from app.auth.authorization import ROLE_ADMIN, require_role
 from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.db.connection import get_cursor
-from app.egress.http import EgressAuthError
+from app.egress.http import EgressAuthError, EgressTransportError, resolve_fetch_timeout
 from app.egress.policy import EgressDestinationDenied
 from app.egress.secrets import SecretRefInvalid, SecretUnavailable
 from app.models.connection_tests import (
@@ -81,7 +81,7 @@ def run_connection_test(
 
     with get_cursor() as cur:
         cur.execute(
-            "SELECT endpoint FROM source_connections WHERE source_id = %s "
+            "SELECT endpoint, timeout_seconds FROM source_connections WHERE source_id = %s "
             "ORDER BY created_at LIMIT 1",
             (source_id,),
         )
@@ -99,6 +99,14 @@ def run_connection_test(
             detail=f"ConnectionTest '{entity_id}' has no source connection endpoint.",
         )
 
+    try:
+        fetch_timeout = resolve_fetch_timeout(connection_row.get("timeout_seconds"))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
     endpoint = str(connection_row["endpoint"]).rstrip("/")
     metadata_path = (config_row or {}).get("metadata_path") or "$metadata"
     metadata_path = str(metadata_path).lstrip("/")
@@ -106,7 +114,7 @@ def run_connection_test(
 
     started = time.monotonic()
     try:
-        egress_http.fetch_bytes(metadata_url)
+        egress_http.fetch_bytes(metadata_url, timeout=fetch_timeout)
         result_status = "ok"
         message = "Connection test succeeded."
     except EgressAuthError:
@@ -118,6 +126,9 @@ def run_connection_test(
     except (SecretUnavailable, SecretRefInvalid):
         result_status = "unreachable"
         message = "Credential unavailable for this source."
+    except EgressTransportError:
+        result_status = "unreachable"
+        message = "Source endpoint is unreachable."
     except (urllib.error.URLError, TimeoutError):
         result_status = "unreachable"
         message = "Source endpoint is unreachable."

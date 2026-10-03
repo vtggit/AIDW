@@ -19,6 +19,7 @@ from app.egress.http import (
     SecretRefInvalidAuthError,
     SecretUnavailableAuthError,
     fetch_bytes,
+    resolve_fetch_timeout,
 )
 from app.egress.policy import EgressDestinationDenied
 from app.pii.service import scan_pii_for_source
@@ -31,11 +32,24 @@ class DiscoveryError(Exception):
     """A discovery precondition failed (e.g. the source has no connection endpoint)."""
 
 
-def _fetch_metadata(url: str) -> bytes:
+def _fetch_timeout_for(conn: dict) -> int | None:
+    """The connection's fetch timeout: None when ``timeout_seconds`` is NULL,
+    else the stored value validated against 1-600. Raises DiscoveryError
+    naming the ``timeout_seconds`` field for a stored value out of range."""
+    stored = conn.get("timeout_seconds")
+    if stored is None:
+        return None
+    try:
+        return resolve_fetch_timeout(stored)
+    except ValueError as exc:
+        raise DiscoveryError(str(exc)) from exc
+
+
+def _fetch_metadata(url: str, timeout: int = 30) -> bytes:
     """Fetch the raw $metadata document. Factored out so tests can substitute a fixture without
     hitting the network."""
     try:
-        return fetch_bytes(url, timeout=30)
+        return fetch_bytes(url, timeout=timeout)
     except (SecretUnavailableAuthError, SecretRefInvalidAuthError) as exc:
         raise DiscoveryError("credential unavailable for this source") from exc
     except EgressAuthError as exc:
@@ -69,11 +83,15 @@ def discover_source(source_id: str) -> dict:
 
     if conn is None or not (conn.get("endpoint") or "").strip():
         raise DiscoveryError("source has no source_connections endpoint to discover")
+    fetch_timeout = _fetch_timeout_for(conn)
     metadata_path = ((odata or {}).get("metadata_path") or "$metadata").lstrip("/")
     url = conn["endpoint"].rstrip("/") + "/" + metadata_path
 
     reader = get_reader(source.get("type") or "odata")
-    datasets = reader.read(_fetch_metadata(url))
+    if fetch_timeout is None:
+        datasets = reader.read(_fetch_metadata(url))
+    else:
+        datasets = reader.read(_fetch_metadata(url, timeout=fetch_timeout))
 
     now = datetime.now(timezone.utc)
     created_ds = created_f = updated_f = 0

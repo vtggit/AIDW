@@ -22,6 +22,12 @@ Exceptions
     Raised when a well-formed secret reference names an environment variable
     that is unset or empty.  The message names the variable but never a
     resolved value.
+
+HTTP transport failures (timeouts, connection errors) raised by
+``app.egress.http.fetch_bytes`` surface as ``EgressTransportError``
+(defined in ``app.egress.http``), which subclasses this package's
+``EgressError`` — so catching the base exported here also handles
+transport failures.
 """
 
 __all__ = ["EgressError", "SecretRefInvalid", "SecretUnavailable"]
