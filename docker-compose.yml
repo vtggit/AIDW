@@ -62,6 +62,7 @@ services:
     environment:
       # Database
       DB_HOST: db
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-}   # #302: empty = no timeout
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
@@ -140,6 +141,7 @@ services:
     command: ["python", "-m", "app.worker"]
     environment:
       DB_HOST: db
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-}   # #302: empty = no timeout
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
