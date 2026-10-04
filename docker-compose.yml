@@ -53,8 +53,12 @@ services:
     tmpfs:
       - /tmp
     restart: unless-stopped
+    # #302: the API is served to users through nginx (frontend /api/ and the TLS proxy), which
+    # enforces the request-body ceiling. The direct backend port is bound to loopback so it cannot
+    # be reached off-host around nginx; set BACKEND_BIND_HOST=0.0.0.0 to expose it deliberately.
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
     ports:
-      - "${BACKEND_PORT_HOST:-9000}:9000"
+      - "${BACKEND_BIND_HOST:-127.0.0.1}:${BACKEND_PORT_HOST:-9000}:9000"
     environment:
       # Database
       DB_HOST: db
@@ -132,6 +136,7 @@ services:
     tmpfs:
       - /tmp
     restart: unless-stopped
+    mem_limit: ${WORKER_MEM_LIMIT:-1g}            # #302: a resource ceiling per process
     command: ["python", "-m", "app.worker"]
     environment:
       DB_HOST: db
