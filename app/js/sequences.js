@@ -7,7 +7,7 @@ const Sequences = {
   },
 
   renderList(sequences) {
-    const createBtn = Auth.isAdmin() ? '<button data-testid="sequence-create">Create sequence</button>' : '';
+    const createBtn = Auth.isAdmin() ? '<button data-testid="sequence-create" data-requires-role="admin">Create sequence</button>' : '';
     if (!sequences || sequences.length === 0) {
       return '<input data-testid="sequence-name-input" placeholder="Sequence name">' + createBtn + '<div data-testid="sequences-empty">No load sequences yet.</div>';
     }
