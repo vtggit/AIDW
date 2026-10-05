@@ -219,12 +219,18 @@ def _field_identifiers(fields: list[dict]) -> list[str]:
     by an earlier field — whether as a base or as a generated suffix — is
     skipped, so the emitted identifiers are always globally unique: the CSDL
     carries at most one ``<Property>`` per identifier and no field's data is
-    shadowed in the entity render. The mapping is deterministic and stable
-    across schema reads, and is shared by ``$metadata`` generation and the
-    entity render.
+    shadowed in the entity render. ``business_key`` is always reserved, so a
+    field that sanitizes to the key property's own identifier is
+    disambiguated exactly like a field-to-field collision. The mapping is
+    deterministic and stable across schema reads, and is shared by
+    ``$metadata`` generation and the entity render.
     """
     identifiers: list[str] = []
-    used: set[str] = set()
+    # ``business_key`` is reserved: it names the key property every entity
+    # carries, so a field that sanitizes to the same identifier takes a
+    # numeric suffix instead of shadowing the key in entity payloads, the
+    # CSDL and ``$filter``/``$orderby``.
+    used: set[str] = {"business_key"}
     for field in fields:
         base = odata_identifier(field["name"])
         candidate = base
@@ -382,6 +388,153 @@ def _parse_orderby(
     return items
 
 
+# Largest value a PostgreSQL ``LIMIT``/``OFFSET`` argument may hold (bigint).
+_INT8_MAX = 2**63 - 1
+
+
+def _load_payload_page(
+    dataset_id: str, skip: int, top: int | None, page_size: int
+) -> tuple[list[dict], bool] | None:
+    """Fetch one page of a dataset's payloads with a single LIMIT/OFFSET query.
+
+    Unfiltered, unsorted reads never materialise the whole dataset: the page
+    holds at most the page capacity — the page size, or ``min(page size,
+    $top)`` when ``$top`` is given — rows starting at ``$skip`` in
+    ``business_key`` order, and the query asks for one extra (probe) row
+    beyond the capacity. The probe row decides the returned ``more_rows``
+    flag and is never returned itself.
+
+    A ``$skip`` beyond the largest SQL ``OFFSET`` is served as an empty page
+    (``([], False)``) without any query: no table can hold that many rows, so
+    no payload sits at such an offset and nothing remains past it — the exact
+    body the full-read path would produce, without fetching the dataset.
+
+    Returns ``(page_rows, more_rows)``, or ``None`` only when the probe limit
+    itself does not fit in a SQL ``bigint`` (a page size beyond bigint, which
+    only an operator can configure) so the caller can fall back to the
+    full-read path instead of raising.
+    """
+    capacity = page_size if top is None else min(page_size, top)
+    if skip > _INT8_MAX:
+        return [], False
+    if capacity + 1 > _INT8_MAX:
+        return None
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT business_key, payload FROM ingested_payloads "
+            "WHERE dataset_id = %s ORDER BY business_key "
+            "LIMIT %s OFFSET %s",
+            (dataset_id, capacity + 1, skip),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    more_rows = len(rows) > capacity
+    return rows[:capacity], more_rows
+
+
+def _count_dataset_payloads(dataset_id: str) -> int:
+    """Return the number of ingested payloads stored for a dataset."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS total FROM ingested_payloads " "WHERE dataset_id = %s",
+            (dataset_id,),
+        )
+        row = cur.fetchone()
+    return int(row["total"])
+
+
+def _render_entities(
+    rows: list[dict], fields: list[dict], identifiers: list[str]
+) -> list[dict]:
+    """Render payload rows to their full entity dicts.
+
+    Each row becomes ``business_key`` plus one key per declared field, named
+    by its disambiguated OData identifier and valued by the original field
+    name in the payload.
+    """
+    entities: list[dict] = []
+    for row in rows:
+        payload = row.get("payload") or {}
+        entity: dict = {"business_key": row.get("business_key")}
+        for field, identifier in zip(fields, identifiers):
+            entity[identifier] = payload.get(field["name"])
+        entities.append(entity)
+    return entities
+
+
+def _render_page_response(
+    page: list[dict],
+    selected: list[str] | None,
+    skip: int,
+    top: int | None,
+    total: int,
+    count: bool,
+    request: Request,
+    entity_set: str,
+    select_raw: str | None,
+    orderby_raw: str | None,
+    filter_raw: str | None,
+) -> JSONResponse:
+    """Render a page of entity dicts into the entity-set JSON response.
+
+    Shared by the SQL page query (unfiltered/unsorted reads) and the
+    full-read path (``$filter``/``$orderby``) so both produce byte-for-byte
+    identical bodies: the same ``value`` (including any ``$select``
+    projection), the same ``@odata.count`` when requested, and the same
+    ``@odata.nextLink`` budgeting — emitted only while rows remain past the
+    page and the ``$top`` budget (when present) still has room, and carrying
+    the remaining budget plus ``$skip``, ``$count``, ``$select`` and
+    ``$orderby`` through to the next page.
+    """
+    value = []
+    for entity in page:
+        if selected is None:
+            value.append(entity)
+        else:
+            projected = {}
+            for property_name in selected:
+                projected[property_name] = entity.get(property_name)
+            value.append(projected)
+
+    base_url = _external_base_url(request)
+    body: dict = {
+        "@odata.context": f"{base_url}/api/feed/v4/$metadata#{entity_set}",
+        "value": value,
+    }
+    if count:
+        body["@odata.count"] = total
+
+    # Emit a nextLink only while the budget is not exhausted and more rows
+    # remain. With $top the budget is the remaining total (the request's $top
+    # minus the rows this page delivers); without it the budget is unbounded.
+    # The link carries the remaining budget as $top.
+    if top is not None:
+        more_rows = skip + len(page) < total
+        budget_left = top - len(page)
+        emit_next = more_rows and budget_left > 0
+        next_top = budget_left if emit_next else None
+    else:
+        emit_next = len(page) > 0 and skip + len(page) < total
+        next_top = None
+
+    if emit_next:
+        body["@odata.nextLink"] = _build_next_link(
+            base_url,
+            entity_set,
+            skip + len(page),
+            next_top,
+            count,
+            select=select_raw,
+            orderby=orderby_raw,
+            filter_text=filter_raw,
+        )
+
+    return JSONResponse(
+        content=body,
+        media_type="application/json;odata.metadata=minimal",
+        headers=_odata_headers(),
+    )
+
+
 @router.get("")
 @router.get("/")
 def service_document(
@@ -503,6 +656,15 @@ def read_entity_set(
     and each emitted link carries ``$top`` equal to the remaining budget
     (the request's ``$top`` minus the rows this page delivers). Once the
     budget is spent no nextLink is emitted.
+
+    Unfiltered, unsorted reads never materialise the whole dataset: they are
+    served by a single SQL page query (``LIMIT <capacity + 1> OFFSET $skip``
+    with capacity the page size or ``min(page size, $top)``; the extra probe
+    row only decides whether a next page exists and is never returned), and
+    ``COUNT(*)`` runs only when ``$count=true``. A ``$skip`` beyond the
+    largest SQL ``OFFSET`` serves an empty page without fetching any payload
+    row (no table can hold that many rows). A ``$filter`` or ``$orderby``
+    request keeps the full-read path.
     """
     datasets = _load_datasets()
     sets = entity_set_names(datasets)
@@ -547,7 +709,6 @@ def read_entity_set(
     count = request.query_params.get("$count", "").lower() == "true"
 
     fields = _load_fields(dataset_id)
-    payloads = _load_payloads(dataset_id)
 
     identifiers = _field_identifiers(fields)
     properties = _advertised_properties(fields, identifiers)
@@ -596,20 +757,46 @@ def read_entity_set(
                         "direction.",
                     )
 
+    filter_raw = request.query_params.get("$filter")
+
+    if filter_raw is None and orderby_raw is None:
+        page = _load_payload_page(dataset_id, skip, top, page_size)
+        if page is not None:
+            page_rows, more_rows = page
+            # The synthetic total (offset, page rows, probe row) reproduces
+            # the full-read path's nextLink semantics; $count=true uses the
+            # real COUNT(*) instead.
+            total = skip + len(page_rows) + (1 if more_rows else 0)
+            if count:
+                total = _count_dataset_payloads(dataset_id)
+            return _render_page_response(
+                _render_entities(page_rows, fields, identifiers),
+                selected,
+                skip,
+                top,
+                total,
+                count,
+                request,
+                entity_set,
+                select_raw,
+                orderby_raw,
+                filter_raw,
+            )
+        # The probe limit does not fit a SQL LIMIT (a page size beyond
+        # bigint, which only an operator can configure): fall through to the
+        # full-read path below, which serves the request exactly as before
+        # instead of erroring. A hostile $skip never reaches this —
+        # _load_payload_page serves it as an empty page.
+
+    payloads = _load_payloads(dataset_id)
+
     # Render every landed payload to its full entity dict (business_key plus
     # one key per declared field, named by its disambiguated OData identifier
     # and valued by the original field name in the payload).
-    entities: list[dict] = []
-    for row in payloads:
-        payload = row.get("payload") or {}
-        entity: dict = {"business_key": row.get("business_key")}
-        for field, identifier in zip(fields, identifiers):
-            entity[identifier] = payload.get(field["name"])
-        entities.append(entity)
+    entities = _render_entities(payloads, fields, identifiers)
 
     # Apply $filter (if any) to each rendered entity BEFORE $orderby, $skip,
     # $top and any $select projection.
-    filter_raw = request.query_params.get("$filter")
     if filter_raw is not None:
         try:
             filter_ast = parse_filter(filter_raw)
@@ -641,51 +828,16 @@ def read_entity_set(
     else:
         page = entities[skip : skip + page_size]
 
-    value = []
-    for entity in page:
-        if selected is None:
-            value.append(entity)
-        else:
-            projected = {}
-            for property_name in selected:
-                projected[property_name] = entity.get(property_name)
-            value.append(projected)
-
-    base_url = _external_base_url(request)
-    body: dict = {
-        "@odata.context": f"{base_url}/api/feed/v4/$metadata#{entity_set}",
-        "value": value,
-    }
-    if count:
-        body["@odata.count"] = total
-
-    # Emit a nextLink only while the budget is not exhausted and more rows
-    # remain. With $top the budget is the remaining total (the request's $top
-    # minus the rows this page delivers); without it the budget is unbounded.
-    # The link carries the remaining budget as $top.
-    if top is not None:
-        more_rows = skip + len(page) < total
-        budget_left = top - len(page)
-        emit_next = more_rows and budget_left > 0
-        next_top = budget_left if emit_next else None
-    else:
-        emit_next = len(page) > 0 and skip + len(page) < total
-        next_top = None
-
-    if emit_next:
-        body["@odata.nextLink"] = _build_next_link(
-            base_url,
-            entity_set,
-            skip + len(page),
-            next_top,
-            count,
-            select=select_raw,
-            orderby=orderby_raw,
-            filter_text=filter_raw,
-        )
-
-    return JSONResponse(
-        content=body,
-        media_type="application/json;odata.metadata=minimal",
-        headers=_odata_headers(),
+    return _render_page_response(
+        page,
+        selected,
+        skip,
+        top,
+        total,
+        count,
+        request,
+        entity_set,
+        select_raw,
+        orderby_raw,
+        filter_raw,
     )
