@@ -90,7 +90,7 @@ const SequenceRuns = {
       // Render history + execute button (admin-only)
       let html = this.renderRuns(filteredRuns);
       if (Auth.isAdmin()) {
-        html += `<button data-testid="sequence-execute">Execute</button>`;
+        html += `<button data-testid="sequence-execute" data-requires-role="admin">Execute</button>`;
       }
       container.innerHTML = html;
 

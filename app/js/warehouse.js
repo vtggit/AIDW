@@ -205,7 +205,7 @@ const Warehouse = {
         const effStart = (S === 'auto') ? 1 : S;
         const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin();
         const editorHtml = (isAdmin && String(i.id) === String(editingId))
-            ? `<div class="wh-layout-editor">
+            ? `<div class="wh-layout-editor" data-requires-role="admin">
       <input type="number" data-testid="layout-col-start" min="1" max="${C}" value="${effStart}">
       <input type="number" data-testid="layout-col-span" min="1" max="${C}" value="${W}">
       <input type="number" data-testid="layout-row-span" min="1" max="6" value="${R}">
@@ -213,7 +213,7 @@ const Warehouse = {
       <button type="button" class="btn btn-sm" data-action="cancel-layout">Cancel</button>
     </div>`
             : '';
-        const editBtn = isAdmin ? `<button type="button" class="btn btn-sm" data-action="edit-layout">Edit layout</button>` : '';
+        const editBtn = isAdmin ? `<button type="button" class="btn btn-sm" data-action="edit-layout" data-requires-role="admin">Edit layout</button>` : '';
         return `<div class="wh-item" data-testid="dashboard-item" data-id="${Warehouse._attr(i.id)}" style="${style}">
       <span class="badge wh-chart">${Warehouse._chartLabel(i.item_type)}</span>
       <span class="wh-title">${Warehouse._esc(i.title || i.name || '')}</span>
