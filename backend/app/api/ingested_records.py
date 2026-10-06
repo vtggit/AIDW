@@ -1,5 +1,7 @@
 """IngestedRecord API routes (the CDC op-log)."""
 
+# parity: backend-only ingest internals: the CDC op-log, browsed through datasets and dashboards
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role

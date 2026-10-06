@@ -1,5 +1,7 @@
 """SourceCredential API routes."""
 
+# parity: backend-only secret material, never listed in a browser
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role

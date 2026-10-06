@@ -1,5 +1,7 @@
 """DashboardItemField API routes."""
 
+# parity: backend-only child records of a dashboard item, shown through the Dashboard
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role

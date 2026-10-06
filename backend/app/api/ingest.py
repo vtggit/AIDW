@@ -12,6 +12,8 @@ Admin-only; 404 unknown pipeline, 422 failed preconditions — in both modes, ch
 run row exists.
 """
 
+# parity: backend-only machine endpoint that starts pipeline runs (scheduler and automation)
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role

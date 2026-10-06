@@ -1,5 +1,7 @@
 """FieldProfile API routes."""
 
+# parity: backend-only child records of a source, shown through the Sources screen
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role
