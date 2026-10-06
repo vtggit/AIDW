@@ -6,6 +6,19 @@
     <title>AIDW — Studio</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/warehouse.css">
+    <style>
+        /* Data retention panel (issue #689) */
+        .wh-retention-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
+        .wh-retention-table th,
+        .wh-retention-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+        .wh-retention-table thead th { color: var(--text-secondary); font-weight: 600; }
+        .wh-retention-row { cursor: pointer; }
+        .wh-retention-row:hover,
+        .wh-retention-row-selected { background: var(--accent-light); }
+        .retention-runs { margin-top: 1rem; font-size: 0.875rem; }
+        .wh-retention-run-row { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+        .wh-retention-run-error { margin: 0 0 0.5rem 1rem; color: #c0392b; font-size: 0.8125rem; white-space: pre-wrap; }
+    </style>
 </head>
 <body>
 <header class="wh-header">
@@ -120,6 +133,15 @@
         <div data-panel="sequence-runs" data-testid="sequence-runs">Select a load sequence to see its runs.</div>
     </section>
 
+    <section class="wh-panel" data-panel="retention">
+        <div class="wh-panel-head">
+            <h2>Data retention</h2>
+            <p class="wh-sub">Review retention policies and inspect their sweep runs.</p>
+        </div>
+        <div id="retention-policy-table-wrap" class="retention-table-wrap" data-testid="retention-policy-table-wrap"></div>
+        <div id="retention-runs" class="retention-runs" data-testid="retention-runs">Select a policy to see its runs.</div>
+    </section>
+
     <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
 </main>
 
@@ -131,6 +153,7 @@
 <script src="js/wizard.js"></script>
 <script src="js/sequences.js"></script>
 <script src="js/sequence_runs.js"></script>
+<script src="js/retention.js"></script>
 <!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
 <script src="/assistant/panel.js" defer></script>
 <script>
@@ -151,6 +174,7 @@ document.addEventListener('DOMContentLoaded', function () {
         Wizard.init();
         Sequences.init();
         SequenceRuns.init();
+        Retention.init();
     }).catch(function (err) {
         var el = document.getElementById('auth-status');
         el.textContent = 'Authentication failed: ' + (err && err.message ? err.message : 'unknown error');
