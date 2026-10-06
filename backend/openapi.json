@@ -820,6 +820,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DiscoverRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -13504,6 +13521,27 @@
         ],
         "title": "DependencyStatus",
         "description": "Status of a single dependency (e.g. database)."
+      },
+      "DiscoverRequest": {
+        "properties": {
+          "entity_sets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Sets"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverRequest",
+        "description": "Optional discovery body: ``entity_sets`` restricts the run to the named entity sets."
       },
       "DiscoveredFieldCreate": {
         "properties": {
