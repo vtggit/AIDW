@@ -60,9 +60,31 @@ def _fetch_metadata(url: str, timeout: int = 30) -> bytes:
         raise DiscoveryError("source endpoint unreachable") from exc
 
 
-def discover_source(source_id: str) -> dict:
-    """Discover the schema of one source into datasets/discovered_fields. Raises LookupError if the
-    source doesn't exist, DiscoveryError if it isn't discoverable."""
+def _select_entity_sets(datasets: list, entity_sets: list[str]) -> list:
+    """Restrict the read entity sets to the requested names, in the order the reader read them.
+    Raises ValueError naming every requested name absent from the metadata, before the caller
+    has written anything."""
+    available = {d.name for d in datasets}
+    missing = [n for n in dict.fromkeys(entity_sets) if n not in available]
+    if missing:
+        raise ValueError(
+            "entity sets not found in source $metadata: " + ", ".join(missing)
+        )
+    wanted = set(entity_sets)
+    return [d for d in datasets if d.name in wanted]
+
+
+def discover_source(source_id: str, entity_sets: list[str] | None = None) -> dict:
+    """Discover the schema of one source into datasets/discovered_fields.
+
+    ``entity_sets`` optionally restricts the run to the named entity sets of the source's
+    ``$metadata``: only those sets get datasets/discovered_fields rows, and the response
+    counts report only those sets. A requested name absent from the metadata raises ValueError
+    naming every missing name, before anything is written. Omitted, behaviour is unchanged
+    (every set of the source).
+
+    Raises LookupError if the source doesn't exist, DiscoveryError if it isn't discoverable.
+    """
     with get_cursor() as cur:
         cur.execute("SELECT * FROM sources WHERE id = %s", (source_id,))
         source = cur.fetchone()
@@ -83,6 +105,8 @@ def discover_source(source_id: str) -> dict:
 
     if conn is None or not (conn.get("endpoint") or "").strip():
         raise DiscoveryError("source has no source_connections endpoint to discover")
+    if entity_sets is not None and not entity_sets:
+        raise ValueError("entity_sets must not be empty")
     fetch_timeout = _fetch_timeout_for(conn)
     metadata_path = ((odata or {}).get("metadata_path") or "$metadata").lstrip("/")
     url = conn["endpoint"].rstrip("/") + "/" + metadata_path
@@ -92,6 +116,8 @@ def discover_source(source_id: str) -> dict:
         datasets = reader.read(_fetch_metadata(url))
     else:
         datasets = reader.read(_fetch_metadata(url, timeout=fetch_timeout))
+    if entity_sets is not None:
+        datasets = _select_entity_sets(datasets, entity_sets)
 
     now = datetime.now(timezone.utc)
     created_ds = created_f = updated_f = 0
