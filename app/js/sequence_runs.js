@@ -101,6 +101,11 @@ const SequenceRuns = {
       executeBtn.addEventListener('click', async () => {
         this._clearPolling();
 
+        if (!Auth.isAdmin()) {
+          container.innerHTML += '<div data-testid="runs-error">Not authorized to execute runs.</div>';
+          return;
+        }
+
         // Create run
         const createRes = await ApiClient.post('/sequence-runs', {
           name: 'run-' + Date.now(),
