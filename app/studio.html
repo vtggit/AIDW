@@ -18,6 +18,17 @@
         .retention-runs { margin-top: 1rem; font-size: 0.875rem; }
         .wh-retention-run-row { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
         .wh-retention-run-error { margin: 0 0 0.5rem 1rem; color: #c0392b; font-size: 0.8125rem; white-space: pre-wrap; }
+        /* Ingestion panel (issue #692) */
+        .wh-ingestion-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
+        .wh-ingestion-table th,
+        .wh-ingestion-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+        .wh-ingestion-table thead th { color: var(--text-secondary); font-weight: 600; }
+        .wh-ingestion-row { cursor: pointer; }
+        .wh-ingestion-row:hover,
+        .wh-ingestion-row-selected { background: var(--accent-light); }
+        .ingestion-runs { margin-top: 1rem; font-size: 0.875rem; }
+        .wh-ingestion-run-row { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+        .wh-ingestion-run-error { margin: 0 0 0.5rem 1rem; color: #c0392b; font-size: 0.8125rem; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -142,6 +153,15 @@
         <div id="retention-runs" class="retention-runs" data-testid="retention-runs">Select a policy to see its runs.</div>
     </section>
 
+    <section class="wh-panel" data-panel="ingestion">
+        <div class="wh-panel-head">
+            <h2>Ingestion</h2>
+            <p class="wh-sub">Review pipelines and inspect their runs.</p>
+        </div>
+        <div id="ingestion-pipeline-table-wrap" class="ingestion-table-wrap" data-testid="ingestion-pipeline-table-wrap"></div>
+        <div id="ingestion-runs" class="ingestion-runs" data-testid="ingestion-runs">Select a pipeline to see its runs.</div>
+    </section>
+
     <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
 </main>
 
@@ -154,6 +174,7 @@
 <script src="js/sequences.js"></script>
 <script src="js/sequence_runs.js"></script>
 <script src="js/retention.js"></script>
+<script src="js/ingestion.js"></script>
 <!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
 <script src="/assistant/panel.js" defer></script>
 <script>
@@ -175,6 +196,7 @@ document.addEventListener('DOMContentLoaded', function () {
         Sequences.init();
         SequenceRuns.init();
         Retention.init();
+        Ingestion.init();
     }).catch(function (err) {
         var el = document.getElementById('auth-status');
         el.textContent = 'Authentication failed: ' + (err && err.message ? err.message : 'unknown error');
