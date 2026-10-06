@@ -1,5 +1,7 @@
 """workflows workflow proxy endpoints (engine-generated: sidecar-proxy lane)."""
 
+# parity: backend-only process-engine sidecar proxy, called by the engine integration
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field

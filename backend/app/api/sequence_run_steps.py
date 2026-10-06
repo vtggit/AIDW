@@ -1,5 +1,7 @@
 """SequenceRunStep API routes."""
 
+# parity: backend-only child records of a load sequence, shown through the Sequences section
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role

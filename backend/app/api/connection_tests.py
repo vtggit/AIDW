@@ -1,5 +1,7 @@
 """ConnectionTest API routes."""
 
+# parity: backend-only run history of the Sources screen's Test action
+
 import time
 import urllib.error
 from datetime import datetime, timezone

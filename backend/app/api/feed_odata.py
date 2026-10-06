@@ -23,6 +23,8 @@ identifiers are always globally unique. The same mapping is shared by
 shadowed in entity payloads or ``$filter``/``$orderby``.
 """
 
+# parity: backend-only consumed by Excel and BI clients over OData v4, never a browser screen
+
 import os
 from datetime import datetime, timezone
 from decimal import Decimal

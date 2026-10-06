@@ -1,5 +1,7 @@
 """DeltaCursor API routes."""
 
+# parity: backend-only ingest internals: change-data-capture positions
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role
