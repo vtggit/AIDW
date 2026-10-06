@@ -94,7 +94,7 @@ def health_check():
     payload: dict = {
         "status": "ok",
         "app_version": APP_VERSION,
-        "service": "aicrm-backend",
+        "service": "aidw-backend",
     }
     if GIT_SHA:
         payload["git_sha"] = GIT_SHA
@@ -122,7 +122,7 @@ def readiness_check():
     payload: dict = {
         "status": overall_status,
         "app_version": APP_VERSION,
-        "service": "aicrm-backend",
+        "service": "aidw-backend",
         "dependencies": dependencies,
     }
     if GIT_SHA:
