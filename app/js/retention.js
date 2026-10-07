@@ -37,6 +37,25 @@
  *     {"is_enabled": <the opposite value>} and reloads the table; a
  *     failure shows "Could not update the policy." in the row.  A
  *     non-admin row shows only the "Enabled"/"Disabled" text.
+ *   • a "Run sweep now" button (data-requires-role="admin") in each
+ *     enabled row's actions cell (issue #703) that opens the row's
+ *     confirmation area (data-testid="retention-sweep-confirm"): a
+ *     purge policy reads "This permanently deletes <table class>
+ *     records older than <n> days. Type the policy name to confirm.",
+ *     an anonymize policy "This anonymizes ...", and a null/empty
+ *     policy name "Policy name is required to run a sweep." with the
+ *     "Run sweep" button disabled forever (a null/empty name never
+ *     matches); "Run sweep" (enabled only when the typed name equals
+ *     the policy's name exactly) POSTs
+ *     /api/retention-policies/<id>/sweep with no body while disabled,
+ *     shows "Sweep <status>: <n> purged, <n> anonymized" on a 200
+ *     (plus the run's error_detail when present) and then selects the
+ *     row and reloads its runs, shows "A sweep for this policy is
+ *     already running." on a 409 and the response's detail (or
+ *     "Could not run the sweep.") on any other failure; "Cancel"
+ *     closes the area without a request.  No "Run sweep now" button
+ *     for a non-admin or a disabled policy, and clicking the button
+ *     never selects the row.
  *
  * Every free-text value from the backend passes through
  * _esc() before it is embedded in innerHTML, so hostile payloads render as
@@ -200,6 +219,13 @@ const Retention = {
             + ' data-testid="retention-policy-delete" data-requires-role="admin">Delete</button>';
     },
 
+    /** The row's "Run sweep now" button (admin only, issue #703);
+     *  rendered only for an enabled policy. */
+    _renderSweepNowButton() {
+        return ' <button type="button" data-action="sweep-now"'
+            + ' data-testid="retention-policy-sweep-now" data-requires-role="admin">Run sweep now</button>';
+    },
+
     /** The row's "Edit" button (admin only, issue #699). */
     _renderEditButton() {
         return '<button type="button" data-action="edit"'
@@ -207,11 +233,17 @@ const Retention = {
     },
 
     /** The row's full admin actions cell: the "Edit" then "Delete"
-     *  buttons (issue #729/#699).  The delete confirm UI temporarily
-     *  replaces this cell, and Cancel and a failed delete restore it
-     *  complete, so the Edit button is never lost from the row. */
-    _renderRowActions() {
-        return this._renderEditButton() + this._renderDeleteButton();
+     *  buttons (issue #729/#699) and, for an enabled policy, the
+     *  "Run sweep now" button (issue #703).  The delete confirm UI
+     *  temporarily replaces this cell, and Cancel and a failed delete
+     *  restore it complete, so the Edit button is never lost from the
+     *  row. */
+    _renderRowActions(policy) {
+        let html = this._renderEditButton() + this._renderDeleteButton();
+        if (this._enabledBoolean(policy && policy.is_enabled)) {
+            html += this._renderSweepNowButton();
+        }
+        return html;
     },
 
     /** The row's "Enable"/"Disable" toggle (admin only, issue #699):
@@ -235,6 +267,73 @@ const Retention = {
             + ' data-testid="retention-policy-delete-confirm">Confirm delete</button> '
             + '<button type="button" data-action="delete-cancel"'
             + ' data-testid="retention-policy-delete-cancel">Cancel</button>';
+    },
+
+    /** The sweep confirmation sentence for a policy with a non-empty
+     *  name (issue #703): "This permanently deletes <table class>
+     *  records older than <n> days. Type the policy name to confirm."
+     *  for a purge policy, "This anonymizes ..." for an anonymize
+     *  one, and a neutral "This sweeps ..." for any other (hostile or
+     *  missing) action value.  A null table class or period renders as
+     *  empty text without throwing. */
+    _sweepConfirmSentence(policy) {
+        const action = policy && typeof policy.action === 'string'
+            ? policy.action
+            : '';
+        const verb = action === 'purge'
+            ? 'permanently deletes'
+            : action === 'anonymize'
+                ? 'anonymizes'
+                : 'sweeps';
+        return 'This ' + verb + ' '
+            + this._text(policy.table_class)
+            + ' records older than '
+            + this._text(policy.retention_period_days)
+            + ' days. Type the policy name to confirm.';
+    },
+
+    /** The row's sweep confirmation area (issue #703): the confirm
+     *  sentence (or "Policy name is required to run a sweep." when the
+     *  policy's name is null/empty), the name input, the "Run sweep"
+     *  button (disabled until the input equals the policy's name
+     *  exactly; a null/empty name never matches) and the "Cancel"
+     *  button. */
+    _renderSweepConfirm(policy) {
+        const name = policy && policy.name !== null && policy.name !== undefined
+            ? String(policy.name)
+            : '';
+        const sentence = name === ''
+            ? 'Policy name is required to run a sweep.'
+            : this._sweepConfirmSentence(policy);
+        return '<div class="wh-retention-sweep-confirm" data-testid="retention-sweep-confirm">'
+            + '<span data-testid="retention-sweep-confirm-text">'
+            + this._esc(sentence) + '</span> '
+            + '<input type="text" data-testid="retention-sweep-name"'
+            + ' aria-label="Policy name" autocomplete="off" spellcheck="false"> '
+            + '<button type="button" data-action="sweep-run"'
+            + ' data-testid="retention-sweep-run" disabled>Run sweep</button> '
+            + '<button type="button" data-action="sweep-cancel"'
+            + ' data-testid="retention-sweep-cancel">Cancel</button>'
+            + '</div>';
+    },
+
+    /** The row's sweep result note after a 200 (issue #703):
+     *  "Sweep <status>: <n> purged, <n> anonymized" from the returned
+     *  run's status, records_purged and records_anonymized, plus its
+     *  error_detail as a second line when present. */
+    _renderSweepResult(run) {
+        const detail = this._text(run && run.error_detail);
+        return '<span data-testid="retention-sweep-result">Sweep '
+            + this._esc(this._text(run && run.status))
+            + ': '
+            + this._esc(this._text(run && run.records_purged))
+            + ' purged, '
+            + this._esc(this._text(run && run.records_anonymized))
+            + ' anonymized</span>'
+            + (detail === ''
+                ? ''
+                : '<div class="wh-retention-run-error" data-testid="retention-sweep-error">'
+                    + this._esc(detail) + '</div>');
     },
 
     /** Options for the dataset select: each dataset's name as label with
@@ -448,7 +547,7 @@ const Retention = {
                 + (admin ? this._renderToggleEnabledButton(policy) : '')
                 + '</td>'
                 + '<td data-testid="retention-policy-actions">'
-                + (admin ? this._renderRowActions() : '')
+                + (admin ? this._renderRowActions(policy) : '')
                 + '</td>'
                 + '</tr>';
         }
@@ -600,7 +699,7 @@ const Retention = {
         const cancelDelete = (row) => {
             const cell = actionsCellOf(row);
             if (!cell) return;
-            cell.innerHTML = this._renderRowActions();
+            cell.innerHTML = this._renderRowActions(policyFromId(row.dataset.id));
         };
 
         const confirmDelete = async (row) => {
@@ -618,7 +717,7 @@ const Retention = {
             if (cell && cell.isConnected) {
                 cell.innerHTML = '<span data-testid="retention-policy-delete-error">'
                     + this._esc('Could not delete the policy.') + '</span> '
-                    + this._renderRowActions();
+                    + this._renderRowActions(policyFromId(row.dataset.id));
             }
         };
 
@@ -646,6 +745,111 @@ const Retention = {
             }
             if (button && button.isConnected) button.disabled = false;
         };
+
+        const selectRow = (row) => {
+            const rows = tableHost.querySelectorAll('[data-testid="retention-policy-row"]');
+            for (let i = 0; i < rows.length; i++) {
+                const selected = rows[i] === row;
+                rows[i].classList.toggle('wh-retention-row-selected', selected);
+                if (selected) {
+                    rows[i].setAttribute('data-selected', 'true');
+                    rows[i].setAttribute('aria-selected', 'true');
+                } else {
+                    rows[i].removeAttribute('data-selected');
+                    rows[i].removeAttribute('aria-selected');
+                }
+            }
+        };
+
+        // ---- sweep controls (issue #703) ----------------------------------
+
+        /** Enable/disable the open confirmation's "Run sweep" button from
+         *  the typed name: enabled only while the row is not busy and the
+         *  input equals the policy's name exactly (a null/empty name
+         *  never matches, so the button stays disabled). */
+        const syncSweepRunState = (row) => {
+            const confirmEl = row.querySelector('[data-testid="retention-sweep-confirm"]');
+            if (!confirmEl) return;
+            const input = confirmEl.querySelector('[data-testid="retention-sweep-name"]');
+            const runBtn = confirmEl.querySelector('[data-action="sweep-run"]');
+            if (!input || !runBtn) return;
+            if (row.dataset.sweepBusy === 'true') {
+                runBtn.disabled = true;
+                return;
+            }
+            const policy = policyFromId(row.dataset.id);
+            const name = policy && policy.name !== null && policy.name !== undefined
+                ? String(policy.name)
+                : '';
+            runBtn.disabled = name === '' || input.value !== name;
+        };
+
+        const startSweep = (row) => {
+            const cell = actionsCellOf(row);
+            if (!cell) return;
+            cell.innerHTML = this._renderSweepConfirm(policyFromId(row.dataset.id));
+            syncSweepRunState(row);
+        };
+
+        const cancelSweep = (row) => {
+            const cell = actionsCellOf(row);
+            if (!cell) return;
+            cell.innerHTML = this._renderRowActions(policyFromId(row.dataset.id));
+        };
+
+        const showSweepError = (row, message) => {
+            const confirmEl = row.querySelector('[data-testid="retention-sweep-confirm"]');
+            if (!confirmEl) return;
+            const existing = confirmEl.querySelector('[data-testid="retention-sweep-error"]');
+            if (existing) existing.remove();
+            const note = document.createElement('span');
+            note.className = 'wh-retention-run-error';
+            note.setAttribute('data-testid', 'retention-sweep-error');
+            note.textContent = message;
+            confirmEl.appendChild(note);
+        };
+
+        const runSweep = async (row) => {
+            const confirmEl = row.querySelector('[data-testid="retention-sweep-confirm"]');
+            const runBtn = confirmEl
+                ? confirmEl.querySelector('[data-action="sweep-run"]')
+                : null;
+            if (!confirmEl || !runBtn || runBtn.disabled) return;
+            runBtn.disabled = true;
+            row.dataset.sweepBusy = 'true';
+            const res = await ApiClient.post(
+                '/retention-policies/' + encodeURIComponent(row.dataset.id) + '/sweep'
+            );
+            delete row.dataset.sweepBusy;
+            if (!confirmEl.isConnected) return;
+            if (res.ok) {
+                const run = res.data && typeof res.data === 'object' && !Array.isArray(res.data)
+                    ? res.data
+                    : {};
+                const cell = actionsCellOf(row);
+                if (cell) cell.innerHTML = this._renderSweepResult(run);
+                // The sweep just ran for this policy: select it and
+                // reload its runs so the new run is shown.
+                selectRow(row);
+                await renderRuns(row.dataset.id);
+                return;
+            }
+            const message = res.status === 409
+                ? 'A sweep for this policy is already running.'
+                : (() => {
+                      const detail = this._detailText(res._responseBody);
+                      return detail !== '' ? detail : 'Could not run the sweep.';
+                  })();
+            showSweepError(row, message);
+            syncSweepRunState(row);
+        };
+
+        tableHost.addEventListener('input', (event) => {
+            const target = event.target;
+            if (!target || target.getAttribute('data-testid') !== 'retention-sweep-name') return;
+            const row = target.closest('[data-testid="retention-policy-row"]');
+            if (row) syncSweepRunState(row);
+        });
 
         tableHost.addEventListener('click', async (event) => {
             const target = event.target;
@@ -682,23 +886,28 @@ const Retention = {
                     cancelDelete(actionRow);
                     return;
                 }
+                if (action === 'sweep-now') {
+                    startSweep(actionRow);
+                    return;
+                }
+                if (action === 'sweep-run') {
+                    await runSweep(actionRow);
+                    return;
+                }
+                if (action === 'sweep-cancel') {
+                    cancelSweep(actionRow);
+                    return;
+                }
             }
+
+            // A click inside an open sweep confirmation (the confirm
+            // sentence or the name input) never selects the row either.
+            if (target.closest('[data-testid="retention-sweep-confirm"]')) return;
 
             const row = target.closest('[data-testid="retention-policy-row"]');
             if (!row) return;
             const policyId = row.dataset.id;
-            const rows = tableHost.querySelectorAll('[data-testid="retention-policy-row"]');
-            for (let i = 0; i < rows.length; i++) {
-                const selected = rows[i] === row;
-                rows[i].classList.toggle('wh-retention-row-selected', selected);
-                if (selected) {
-                    rows[i].setAttribute('data-selected', 'true');
-                    rows[i].setAttribute('aria-selected', 'true');
-                } else {
-                    rows[i].removeAttribute('data-selected');
-                    rows[i].removeAttribute('aria-selected');
-                }
-            }
+            selectRow(row);
             await renderRuns(policyId);
         });
 
