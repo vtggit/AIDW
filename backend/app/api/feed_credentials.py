@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from app.auth.authorization import ROLE_ADMIN, require_role
-from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.models.feed_credentials import (
     FeedCredentialCreate,
@@ -41,7 +40,7 @@ def _strip_key_material(entity: dict) -> dict:
 
 @router.get("")
 def list_feed_credentials(
-    _user: AuthUser = Depends(require_authenticated_user),
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: FeedCredentialService = Depends(get_service),
 ):
     entities = service.list_feed_credentials()
@@ -100,7 +99,7 @@ def rotate_feed_credential(
 @router.get("/{entity_id}")
 def get_feed_credential(
     entity_id: str,
-    _user: AuthUser = Depends(require_authenticated_user),
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: FeedCredentialService = Depends(get_service),
 ):
     entity = service.get_feed_credential(entity_id)
