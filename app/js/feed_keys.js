@@ -22,6 +22,17 @@
  * key stops the current key from working." with "Confirm" and "Cancel".
  * "Confirm" sends POST /api/feed-credentials/<id>/rotate; "Cancel" sends
  * nothing.
+ * Every row carries a "Delete" button (data-requires-role="admin");
+ * clicking it shows "Delete <name>?" with "Confirm delete" and
+ * "Cancel".  "Confirm delete" sends DELETE /feed-credentials/<id> and
+ * reloads the table; a failure shows "Could not delete the key." in the
+ * row; "Cancel" sends nothing.  Every credential that is not revoked
+ * additionally carries a "Revoke" button (data-requires-role="admin");
+ * clicking it shows "Revoke <name>? Tools using this key will stop
+ * working." with "Confirm revoke" and "Cancel".  "Confirm revoke" sends
+ * PUT /feed-credentials/<id> with only {"revoked": true} and reloads the
+ * table; a failure shows "Could not revoke the key." in the row;
+ * "Cancel" sends nothing.
  *
  * The one-time key: the rotate response's `key` is shown exactly once, in
  * a reveal box (data-testid="feedkey-reveal") with the text "Copy this key
@@ -424,18 +435,29 @@ const FeedKeys = {
         slot.appendChild(box);
     },
 
-    /** One row's action cell: an "Issue new key" button (with
-     *  data-requires-role="admin") for every credential that is not
-     *  revoked and carries a usable id; an empty cell otherwise. */
+    /** One row's action cell: for every credential that carries a
+     *  usable id, a "Delete" button (with data-requires-role="admin");
+     *  for every credential that is additionally not revoked, an
+     *  "Issue new key" button and a "Revoke" button (both with
+     *  data-requires-role="admin"); an empty cell for a row without a
+     *  usable id. */
     _renderActionsCell(record) {
         const td = document.createElement('td');
         td.setAttribute('data-testid', 'feedkeys-actions');
         const id = this._text(record.id).trim();
-        if (record.revoked === true || id === '') {
+        if (id === '') {
             return td;
         }
-        td.appendChild(this._roleButton('feedkeys-rotate-btn', 'Issue new key', 'btn btn-secondary btn-sm', () => {
-            this._startRotate(td, record);
+        if (record.revoked !== true) {
+            td.appendChild(this._roleButton('feedkeys-rotate-btn', 'Issue new key', 'btn btn-secondary btn-sm', () => {
+                this._startRotate(td, record);
+            }, true));
+            td.appendChild(this._roleButton('feedkeys-revoke-btn', 'Revoke', 'btn btn-secondary btn-sm', () => {
+                this._startRevoke(td, record);
+            }, true));
+        }
+        td.appendChild(this._roleButton('feedkeys-delete-btn', 'Delete', 'btn btn-danger btn-sm', () => {
+            this._startDelete(td, record);
         }, true));
         return td;
     },
@@ -500,6 +522,129 @@ const FeedKeys = {
         }
         this._setError(this._detail(res) || 'Could not issue a new key.');
         restore();
+    },
+
+    /** Rebuild the row's action cell in place and return the new
+     *  cell.  Restores the row's buttons after a confirmation (or a
+     *  failed action) without sending anything. */
+    _restoreActions(cell, record) {
+        const fresh = this._renderActionsCell(record);
+        cell.replaceWith(fresh);
+        return fresh;
+    },
+
+    /** Show a one-line error inside the row's action cell after a
+     *  failed revoke or delete.  Written with textContent (inert); the
+     *  row's buttons stay visible so the action can be retried. */
+    _rowActionError(td, testid, text) {
+        const err = document.createElement('span');
+        err.setAttribute('data-testid', testid);
+        err.style.color = '#c0392b';
+        err.textContent = text;
+        td.appendChild(err);
+    },
+
+    /** Replace the row's action cell with the revoke confirmation:
+     *  "Revoke <name>? Tools using this key will stop working." plus
+     *  "Confirm revoke" and "Cancel" buttons.  "Cancel" restores the
+     *  row's buttons and sends nothing; "Confirm revoke" sends
+     *  PUT /feed-credentials/<id> with only {"revoked": true}. */
+    _startRevoke(cell, record) {
+        cell.textContent = '';
+        const wrap = document.createElement('span');
+        wrap.setAttribute('data-testid', 'feedkeys-revoke-confirm');
+        const note = document.createElement('span');
+        note.setAttribute('data-testid', 'feedkeys-revoke-note');
+        note.textContent =
+            'Revoke ' + this._text(record.name) + '? Tools using this key will stop working.';
+
+        const ok = this._roleButton('feedkeys-revoke-confirm-ok', 'Confirm revoke', 'btn btn-primary btn-sm', () => {
+            this._confirmRevoke(record, cell);
+        });
+
+        const cancel = this._roleButton('feedkeys-revoke-confirm-cancel', 'Cancel', 'btn btn-secondary btn-sm', () => {
+            this._restoreActions(cell, record);
+        });
+
+        wrap.appendChild(note);
+        wrap.appendChild(ok);
+        wrap.appendChild(cancel);
+        cell.appendChild(wrap);
+    },
+
+    /** Confirm a revoke: PUT /feed-credentials/<id> with only
+     *  {"revoked": true}, then reload the table; on failure show
+     *  "Could not revoke the key." in the row and restore the
+     *  buttons. */
+    async _confirmRevoke(record, cell) {
+        const id = this._text(record.id).trim();
+        if (id === '') {
+            this._restoreActions(cell, record);
+            return;
+        }
+        let res;
+        try {
+            res = await ApiClient.put('/feed-credentials/' + encodeURIComponent(id), {
+                revoked: true,
+            });
+        } catch (e) {
+            res = null;
+        }
+        if (res && res.ok) {
+            this._loadTable();
+            return;
+        }
+        const td = this._restoreActions(cell, record);
+        this._rowActionError(td, 'feedkeys-revoke-error', 'Could not revoke the key.');
+    },
+
+    /** Replace the row's action cell with the delete confirmation:
+     *  "Delete <name>?" plus "Confirm delete" and "Cancel" buttons.
+     *  "Cancel" restores the row's buttons and sends nothing;
+     *  "Confirm delete" sends DELETE /feed-credentials/<id>. */
+    _startDelete(cell, record) {
+        cell.textContent = '';
+        const wrap = document.createElement('span');
+        wrap.setAttribute('data-testid', 'feedkeys-delete-confirm');
+        const note = document.createElement('span');
+        note.setAttribute('data-testid', 'feedkeys-delete-note');
+        note.textContent = 'Delete ' + this._text(record.name) + '?';
+
+        const ok = this._roleButton('feedkeys-delete-confirm-ok', 'Confirm delete', 'btn btn-primary btn-sm', () => {
+            this._confirmDelete(record, cell);
+        });
+
+        const cancel = this._roleButton('feedkeys-delete-confirm-cancel', 'Cancel', 'btn btn-secondary btn-sm', () => {
+            this._restoreActions(cell, record);
+        });
+
+        wrap.appendChild(note);
+        wrap.appendChild(ok);
+        wrap.appendChild(cancel);
+        cell.appendChild(wrap);
+    },
+
+    /** Confirm a delete: DELETE /feed-credentials/<id>, then reload
+     *  the table; on failure show "Could not delete the key." in the
+     *  row and restore the buttons. */
+    async _confirmDelete(record, cell) {
+        const id = this._text(record.id).trim();
+        if (id === '') {
+            this._restoreActions(cell, record);
+            return;
+        }
+        let res;
+        try {
+            res = await ApiClient.delete('/feed-credentials/' + encodeURIComponent(id));
+        } catch (e) {
+            res = null;
+        }
+        if (res && res.ok) {
+            this._loadTable();
+            return;
+        }
+        const td = this._restoreActions(cell, record);
+        this._rowActionError(td, 'feedkeys-delete-error', 'Could not delete the key.');
     },
 
     /** One <tr> per credential.  Reads only id, name, principal,
