@@ -29,6 +29,13 @@
         .ingestion-runs { margin-top: 1rem; font-size: 0.875rem; }
         .wh-ingestion-run-row { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
         .wh-ingestion-run-error { margin: 0 0 0.5rem 1rem; color: #c0392b; font-size: 0.8125rem; white-space: pre-wrap; }
+        /* Feed keys panel (issue #740) */
+        .feedkeys-meta { margin: 0 0 0.25rem; font-size: 0.875rem; }
+        .feedkeys-note { margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--text-secondary); }
+        .wh-feedkeys-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.875rem; }
+        .wh-feedkeys-table th,
+        .wh-feedkeys-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+        .wh-feedkeys-table thead th { color: var(--text-secondary); font-weight: 600; }
     </style>
 </head>
 <body>
@@ -162,6 +169,16 @@
         <div id="ingestion-runs" class="ingestion-runs" data-testid="ingestion-runs">Select a pipeline to see its runs.</div>
     </section>
 
+    <section class="wh-panel" data-panel="feedkeys" data-requires-role="admin">
+        <div class="wh-panel-head">
+            <h2>Feed keys</h2>
+            <p class="wh-sub">Keys that external tools use to read the feed.</p>
+        </div>
+        <p class="feedkeys-meta">Feed address: <code data-testid="feedkeys-address">/api/feed/v4</code></p>
+        <p class="feedkeys-note" data-testid="feedkeys-note">Excel and BI tools read the feed with a key sent as the X-Api-Key header.</p>
+        <div id="feedkeys-table-wrap" data-testid="feedkeys-table-wrap"></div>
+    </section>
+
     <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
 </main>
 
@@ -175,6 +192,7 @@
 <script src="js/sequence_runs.js"></script>
 <script src="js/retention.js"></script>
 <script src="js/ingestion.js"></script>
+<script src="js/feed_keys.js"></script>
 <!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
 <script src="/assistant/panel.js" defer></script>
 <script>
@@ -197,6 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
         SequenceRuns.init();
         Retention.init();
         Ingestion.init();
+        FeedKeys.init();
     }).catch(function (err) {
         var el = document.getElementById('auth-status');
         el.textContent = 'Authentication failed: ' + (err && err.message ? err.message : 'unknown error');
