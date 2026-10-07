@@ -53,7 +53,7 @@ def test_feed_credentials_crud(client, admin_headers, user_headers):
     entity_id = created["id"]
     assert created["name"] == "v1"
     assert created["principal"] == "v1"
-    assert created["key_hash"] == "v1"
+    assert "key_hash" not in created
     assert created["key_prefix"] == "v1"
     assert created["revoked"] is True
     got = client.get(f"/api/feed-credentials/{entity_id}", headers=user_headers)

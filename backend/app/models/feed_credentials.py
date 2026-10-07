@@ -24,12 +24,15 @@ class FeedCredentialUpdate(BaseModel):
 
 
 class FeedCredentialResponse(BaseModel):
-    """Response model for a feed_credential record."""
+    """Response model for a feed_credential record.
+
+    ``key_hash`` is intentionally absent: key material is never returned to
+    any caller, admin included.
+    """
 
     id: str
     name: str
     principal: str | None = None
-    key_hash: str | None = None
     key_prefix: str | None = None
     revoked: bool | None = None
     created_at: str
