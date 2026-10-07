@@ -22,6 +22,12 @@
 //         strings "null"/"undefined"); numeric created_at renders with any
 //         non-empty representation; the window.Retention global is NOT
 //         required (the AC mandates only the module + init() on boot)
+//   V     non-admin pass (issue #699 supersedes this spec and its criteria
+//         concern roles): a role 'user' identity booted the production way
+//         (the token in the URL hash as #access_token=...) still renders the
+//         panel, but with no admin-only control -- no "Add policy", no
+//         per-row Edit/toggle/Delete buttons, and the Enabled/Disabled cell
+//         holds only the "Enabled"/"Disabled" text
 
 const { test, expect } = require('@playwright/test');
 
@@ -53,6 +59,10 @@ const AUTH_CONFIG = { auth_mode: 'development' };
 const AUTH_ME = {
   authenticated: true,
   user: { id: 1, username: 'admin', roles: ['admin'] },
+};
+const USER_ME = {
+  authenticated: true,
+  user: { id: 9, username: 'user', roles: ['user'] },
 };
 
 const POLICIES = [
@@ -220,7 +230,9 @@ test('issue689 freeform', async ({ page }) => {
   await expect(row1.locator('td[data-testid="retention-policy-action"]')).toHaveText('purge');
   await expect(row1.locator('td[data-testid="retention-policy-period"]')).toHaveText('30 days');
   await expect(row1.locator('td[data-testid="retention-policy-scope"]')).toHaveText('rows');
-  await expect(row1.locator('td[data-testid="retention-policy-enabled"]')).toHaveText('Enabled');
+  // The Enabled/Disabled text renders in the label span: for this admin
+  // boot the cell also carries the issue #699 toggle button.
+  await expect(row1.locator('td[data-testid="retention-policy-enabled"] [data-testid="retention-policy-enabled-label"]')).toHaveText('Enabled');
 
   await expect(row2.locator('td[data-testid="retention-policy-name"]')).toHaveText('Anonymize export PII');
   await expect(row2.locator('td[data-testid="retention-policy-dataset"]')).toHaveText('ds-exports');
@@ -228,7 +240,7 @@ test('issue689 freeform', async ({ page }) => {
   await expect(row2.locator('td[data-testid="retention-policy-action"]')).toHaveText('anonymize');
   await expect(row2.locator('td[data-testid="retention-policy-period"]')).toHaveText('90 days');
   await expect(row2.locator('td[data-testid="retention-policy-scope"]')).toHaveText('columns');
-  await expect(row2.locator('td[data-testid="retention-policy-enabled"]')).toHaveText('Disabled');
+  await expect(row2.locator('td[data-testid="retention-policy-enabled"] [data-testid="retention-policy-enabled-label"]')).toHaveText('Disabled');
 
   // AC-2: nothing selected yet -> runs area shows the placeholder.
   const runsArea = page.locator('[data-testid="retention-runs"]');
@@ -489,7 +501,9 @@ test('issue689 freeform', async ({ page }) => {
   const ebRows = page.locator('[data-testid="retention-policy-row"]');
   await expect(ebRows).toHaveCount(5);
   const ebEnabledTexts = await ebRows
-    .locator('td[data-testid="retention-policy-enabled"]')
+    .locator(
+      'td[data-testid="retention-policy-enabled"] [data-testid="retention-policy-enabled-label"]'
+    )
     .allTextContents();
   expect(ebEnabledTexts).toEqual([
     'Enabled', 'Enabled', 'Disabled', 'Disabled', 'Disabled',
@@ -554,4 +568,89 @@ test('issue689 freeform', async ({ page }) => {
   expect(tsCreatedTexts[3]).toMatch(PLACEHOLDER_RE);
   expect(tsCreatedTexts[3].toLowerCase()).not.toBe('null');
   expect(tsCreatedTexts[3].toLowerCase()).not.toBe('undefined');
+});
+
+// Boot the page the production way for a given identity: the auth
+// endpoints are mocked for `me`, the retention endpoints for POLICIES
+// and RUNS (every other /api/** an empty list), and the token rides the
+// URL hash fragment (#access_token=...).  The boot proves the token was
+// picked up the production way: Auth.init() migrates it into
+// sessionStorage and it arrives as the Authorization header on
+// /api/auth/me.
+async function bootAs(page, me, token, url = '/studio.html?panel=retention') {
+  const meAuthorizations = [];
+  await page.unrouteAll();
+  await page.route('**/api/**', (route) => {
+    const request = route.request();
+    const url = request.url();
+    if (url.includes('/api/auth/config')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(AUTH_CONFIG),
+      });
+    }
+    if (url.includes('/api/auth/me')) {
+      const auth = request.headers()['authorization'];
+      if (auth) meAuthorizations.push(auth);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(me),
+      });
+    }
+    if (url.includes('/api/retention-policies')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(POLICIES),
+      });
+    }
+    if (url.includes('/api/retention-runs')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(RUNS),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.goto(url + '#access_token=' + encodeURIComponent(token));
+  await expect.poll(() => meAuthorizations).toContain('Bearer ' + token);
+}
+
+test('issue689 freeform (viewer)', async ({ page }) => {
+  // Non-admin pass (issue #699 supersedes this spec and its criteria
+  // concern roles): boot the production way for a role 'user' identity --
+  // the token in the URL hash, /api/auth/config and /api/auth/me mocked
+  // for that user -- and prove the panel still renders while no
+  // admin-only control exists.
+  await bootAs(page, USER_ME, 'user-token-689');
+
+  const section = page.locator('section[data-panel="retention"]');
+  await expect(section).toBeVisible();
+  await expect(section.locator('h2')).toHaveText('Data retention');
+  const policyTable = page.locator('[data-testid="retention-policy-table"]');
+  await expect(policyTable).toBeVisible();
+  const rows = page.locator('[data-testid="retention-policy-row"]');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator('td[data-testid="retention-policy-name"]')).toHaveText('Purge stale audit rows');
+  await expect(rows.nth(1).locator('td[data-testid="retention-policy-name"]')).toHaveText('Anonymize export PII');
+
+  // No admin-only control is rendered for a non-admin: no "Add policy"
+  // toolbar button, no per-row Edit/toggle/Delete buttons, and nothing in
+  // the panel carries the admin role marker.
+  await expect(page.locator('[data-testid="retention-add-policy"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="retention-policy-edit"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="retention-policy-toggle"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="retention-policy-delete"]')).toHaveCount(0);
+  await expect(page.locator('[data-panel="retention"] [data-requires-role="admin"]')).toHaveCount(0);
+
+  // The Enabled/Disabled cell holds only the text -- no button in the cell.
+  const enabledCell0 = rows.nth(0).locator('td[data-testid="retention-policy-enabled"]');
+  await expect(enabledCell0).toHaveText('Enabled');
+  await expect(enabledCell0.locator('button')).toHaveCount(0);
+  const enabledCell1 = rows.nth(1).locator('td[data-testid="retention-policy-enabled"]');
+  await expect(enabledCell1).toHaveText('Disabled');
+  await expect(enabledCell1.locator('button')).toHaveCount(0);
 });

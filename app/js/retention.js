@@ -14,10 +14,29 @@
  *     reloads the policies table; a failure keeps the form open and shows
  *     the response's detail (or "Could not save the policy.").
  *   • a "Delete" button (data-requires-role="admin") per policy row;
- *     clicking it replaces the button with "Delete <name>?" plus
+ *     clicking it replaces the row's actions with "Delete <name>?" plus
  *     "Confirm delete" and "Cancel".  Confirm sends
  *     DELETE /api/retention-policies/<id> and reloads the table; Cancel
- *     restores the row unchanged without sending a request.
+ *     restores the row unchanged without sending a request.  Cancel and
+ *     a failed delete both restore the row's full actions, so the Edit
+ *     button is never lost from the row.
+ *   • an "Edit" button (data-requires-role="admin") per policy row
+ *     (issue #699) that opens the same
+ *     data-testid="retention-policy-form" as "Add policy", pre-filled
+ *     with the policy's current name, table class, action, retention
+ *     period, scope, dataset and enabled state; saving puts
+ *     PUT /api/retention-policies/<id> with exactly the fields the
+ *     create request sends; success closes the form and reloads the
+ *     table, a failure keeps it open and shows the same
+ *     data-testid="retention-form-error" as on create; the click never
+ *     selects the row.
+ *   • an "Enable"/"Disable" toggle (data-requires-role="admin") in
+ *     each row's Enabled/Disabled cell (issue #699), labelled "Disable"
+ *     for an enabled policy and "Enable" for a disabled one; clicking
+ *     puts PUT /api/retention-policies/<id> with only
+ *     {"is_enabled": <the opposite value>} and reloads the table; a
+ *     failure shows "Could not update the policy." in the row.  A
+ *     non-admin row shows only the "Enabled"/"Disabled" text.
  *
  * Every free-text value from the backend passes through
  * _esc() before it is embedded in innerHTML, so hostile payloads render as
@@ -96,24 +115,27 @@ const Retention = {
         });
     },
 
-    /** Enabled/Disabled label for a truthy/falsy, boolean-ish is_enabled:
-     *  true/1/"true"/"yes"/"1"/"enabled" -> Enabled; everything else
-     *  (false, 0, null, missing, "false", ...) -> Disabled. Never throws. */
-    _enabledLabel(value) {
-        if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled';
-        if (typeof value === 'number') return value !== 0 ? 'Enabled' : 'Disabled';
+    /** Boolean form of a truthy/falsy, boolean-ish is_enabled:
+     *  true/1/"true"/"yes"/"1"/"enabled" -> true; everything else
+     *  (false, 0, null, missing, "false", ...) -> false. Never throws. */
+    _enabledBoolean(value) {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'number') return value !== 0;
         if (typeof value === 'string') {
             const normalized = value.trim().toLowerCase();
-            if (
+            return (
                 normalized === 'true' ||
                 normalized === 'yes' ||
                 normalized === '1' ||
                 normalized === 'enabled'
-            ) {
-                return 'Enabled';
-            }
+            );
         }
-        return 'Disabled';
+        return false;
+    },
+
+    /** "Enabled"/"Disabled" label for a boolean-ish is_enabled. */
+    _enabledLabel(value) {
+        return this._enabledBoolean(value) ? 'Enabled' : 'Disabled';
     },
 
     /** True when the current user holds the admin role (guarded so the
@@ -176,6 +198,31 @@ const Retention = {
     _renderDeleteButton() {
         return '<button type="button" data-action="delete"'
             + ' data-testid="retention-policy-delete" data-requires-role="admin">Delete</button>';
+    },
+
+    /** The row's "Edit" button (admin only, issue #699). */
+    _renderEditButton() {
+        return '<button type="button" data-action="edit"'
+            + ' data-testid="retention-policy-edit" data-requires-role="admin">Edit</button> ';
+    },
+
+    /** The row's full admin actions cell: the "Edit" then "Delete"
+     *  buttons (issue #729/#699).  The delete confirm UI temporarily
+     *  replaces this cell, and Cancel and a failed delete restore it
+     *  complete, so the Edit button is never lost from the row. */
+    _renderRowActions() {
+        return this._renderEditButton() + this._renderDeleteButton();
+    },
+
+    /** The row's "Enable"/"Disable" toggle (admin only, issue #699):
+     *  "Disable" when the policy is enabled, "Enable" when disabled. */
+    _renderToggleEnabledButton(policy) {
+        const label = this._enabledBoolean(policy && policy.is_enabled)
+            ? 'Disable'
+            : 'Enable';
+        return ' <button type="button" data-action="toggle-enabled"'
+            + ' data-testid="retention-policy-toggle" data-requires-role="admin">'
+            + label + '</button>';
     },
 
     /** Inline delete confirmation: the text "Delete <name>?" plus the
@@ -250,14 +297,68 @@ const Retention = {
             + '<div class="wh-retention-form-error" data-testid="retention-form-error" hidden></div>';
     },
 
-    /** Handle an add-policy form submission: validate (empty name, period
-     *  below 1, unavailable datasets), then POST exactly
-     *  { name, table_class, action, retention_period_days (number), scope,
-     *  dataset_id, is_enabled }.  On success the form is closed and the
-     *  table reloaded via onSaved(); on failure the form stays open and the
+    /** Pre-fill the add/edit form with the policy's current values
+     *  (issue #699): name, table class, action, retention period, scope,
+     *  dataset and enabled state.  The fixed-option selects (table class,
+     *  action) offer the policy's actual value when it is not among their
+     *  options (e.g. a legacy value), so the form stays consistent with
+     *  the policy and a save cannot substitute another value; the other
+     *  selects keep their current choice when the policy's value has no
+     *  matching option (e.g. a deleted dataset). */
+    _prefillForm(form, policy) {
+        /** Set `select` to `value` when an option matches it.  With
+         *  offerMissing, a non-empty value with no matching option is
+         *  offered as a new option and selected (property assignment, so
+         *  hostile values stay inert text). */
+        const setSelect = (selector, value, offerMissing) => {
+            const select = form.querySelector(selector);
+            if (!select || value === null || value === undefined) return;
+            const wanted = String(value);
+            for (let i = 0; i < select.options.length; i++) {
+                if (select.options[i].value === wanted) {
+                    select.value = wanted;
+                    return;
+                }
+            }
+            if (!offerMissing || wanted === '') return;
+            const option = document.createElement('option');
+            option.value = wanted;
+            option.textContent = wanted;
+            select.appendChild(option);
+            select.value = wanted;
+        };
+        const nameInput = form.querySelector('[data-testid="retention-form-name"]');
+        if (nameInput) nameInput.value = this._text(policy && policy.name);
+        const periodInput = form.querySelector('[data-testid="retention-form-period"]');
+        if (periodInput) {
+            periodInput.value = this._text(policy && policy.retention_period_days);
+        }
+        // The table class and action are fixed option lists: the policy's
+        // actual value is offered when it is not among them, so the form
+        // shows what the policy holds and a save preserves it.
+        setSelect('[data-testid="retention-form-table-class"]', policy && policy.table_class, true);
+        setSelect('[data-testid="retention-form-action"]', policy && policy.action, true);
+        setSelect(
+            '[data-testid="retention-form-scope"]',
+            policy && policy.scope === 'dataset' ? 'dataset' : 'class'
+        );
+        setSelect('[data-testid="retention-form-dataset"]', policy && policy.dataset_id);
+        const enabledInput = form.querySelector('[data-testid="retention-form-enabled"]');
+        if (enabledInput) {
+            enabledInput.checked = this._enabledBoolean(policy && policy.is_enabled);
+        }
+    },
+
+    /** Handle an add-policy or edit-policy form submission: validate
+     *  (empty name, period below 1, unavailable datasets), then send
+     *  exactly { name, table_class, action, retention_period_days (number),
+     *  scope, dataset_id, is_enabled } -- POST /api/retention-policies to
+     *  create, or (issue #699) PUT /api/retention-policies/<id> when
+     *  policyId is present.  On success the form is closed and the table
+     *  reloaded via onSaved(); on failure the form stays open and the
      *  response's detail (or "Could not save the policy.") is shown in the
      *  error note.  Never throws on hostile input. */
-    async _savePolicy(form, errEl, datasetsFailed, onSaved) {
+    async _savePolicy(form, errEl, datasetsFailed, onSaved, policyId) {
         const nameInput = form.querySelector('[data-testid="retention-form-name"]');
         const tableClassSel = form.querySelector('[data-testid="retention-form-table-class"]');
         const actionSel = form.querySelector('[data-testid="retention-form-action"]');
@@ -293,10 +394,20 @@ const Retention = {
             action: actionSel ? actionSel.value : '',
             retention_period_days: period,
             scope: scope,
-            dataset_id: scope === 'dataset' && datasetSel ? datasetSel.value : null,
+            dataset_id:
+                scope === 'dataset' && datasetSel && datasetSel.value !== ''
+                    ? datasetSel.value
+                    : null,
             is_enabled: enabledInput ? enabledInput.checked === true : false,
         };
-        const res = await ApiClient.post('/retention-policies', body);
+        // Create POSTs to the collection; edit PUTs to the policy with
+        // exactly the same fields (issue #699).
+        const res = policyId
+            ? await ApiClient.put(
+                  '/retention-policies/' + encodeURIComponent(policyId),
+                  body
+              )
+            : await ApiClient.post('/retention-policies', body);
         if (res.ok) {
             if (typeof onSaved === 'function') await onSaved();
             return;
@@ -332,9 +443,12 @@ const Retention = {
                 + '<td data-testid="retention-policy-period">' + this._esc(this._periodLabel(policy.retention_period_days)) + '</td>'
                 + '<td data-testid="retention-policy-scope">' + this._esc(this._text(policy.scope)) + '</td>'
                 + '<td data-testid="retention-policy-enabled">'
-                + this._enabledLabel(policy.is_enabled) + '</td>'
+                + '<span data-testid="retention-policy-enabled-label">'
+                + this._enabledLabel(policy.is_enabled) + '</span>'
+                + (admin ? this._renderToggleEnabledButton(policy) : '')
+                + '</td>'
                 + '<td data-testid="retention-policy-actions">'
-                + (admin ? this._renderDeleteButton() : '')
+                + (admin ? this._renderRowActions() : '')
                 + '</td>'
                 + '</tr>';
         }
@@ -445,11 +559,14 @@ const Retention = {
 
         // ---- admin add/delete control wiring (issue #729) ------------------
 
-        const openForm = () => {
+        const openForm = (policy) => {
             tableHost.innerHTML = this._renderForm(datasets, datasetsFailed);
             const form = tableHost.querySelector('[data-testid="retention-policy-form"]');
             const errEl = tableHost.querySelector('[data-testid="retention-form-error"]');
             if (!form || !errEl) return;
+            if (policy) {
+                this._prefillForm(form, policy);
+            }
             const scopeSel = form.querySelector('[data-testid="retention-form-scope"]');
             const datasetWrap = form.querySelector('[data-testid="retention-form-dataset-wrap"]');
             if (scopeSel && datasetWrap) {
@@ -457,11 +574,17 @@ const Retention = {
                     datasetWrap.hidden = scopeSel.value !== 'dataset';
                 };
                 scopeSel.addEventListener('change', syncScope);
+                // Re-sync after pre-filling: a dataset-scoped edit must
+                // reveal the dataset select without a change event.
                 syncScope();
             }
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
-                this._savePolicy(form, errEl, datasetsFailed, reloadTable);
+                const policyId =
+                    policy && policy.id !== null && policy.id !== undefined
+                        ? String(policy.id)
+                        : null;
+                this._savePolicy(form, errEl, datasetsFailed, reloadTable, policyId);
             });
         };
 
@@ -477,7 +600,7 @@ const Retention = {
         const cancelDelete = (row) => {
             const cell = actionsCellOf(row);
             if (!cell) return;
-            cell.innerHTML = this._renderDeleteButton();
+            cell.innerHTML = this._renderRowActions();
         };
 
         const confirmDelete = async (row) => {
@@ -495,16 +618,41 @@ const Retention = {
             if (cell && cell.isConnected) {
                 cell.innerHTML = '<span data-testid="retention-policy-delete-error">'
                     + this._esc('Could not delete the policy.') + '</span> '
-                    + this._renderDeleteButton();
+                    + this._renderRowActions();
             }
+        };
+
+        const toggleEnabled = async (row) => {
+            const policy = policyFromId(row.dataset.id);
+            const cell = row.querySelector('[data-testid="retention-policy-enabled"]');
+            const button = cell
+                ? cell.querySelector('[data-action="toggle-enabled"]')
+                : null;
+            if (button) button.disabled = true;
+            const opposite = !this._enabledBoolean(policy && policy.is_enabled);
+            const res = await ApiClient.put(
+                '/retention-policies/' + encodeURIComponent(row.dataset.id),
+                { is_enabled: opposite }
+            );
+            if (res.ok) {
+                await reloadTable();
+                return;
+            }
+            if (cell && cell.isConnected) {
+                const note = document.createElement('span');
+                note.setAttribute('data-testid', 'retention-policy-update-error');
+                note.textContent = 'Could not update the policy.';
+                cell.appendChild(note);
+            }
+            if (button && button.isConnected) button.disabled = false;
         };
 
         tableHost.addEventListener('click', async (event) => {
             const target = event.target;
             if (!target || typeof target.closest !== 'function') return;
 
-            // Admin controls (add policy, delete flow) are handled here and
-            // never select the row.
+            // Admin controls (add policy, edit, toggle, delete flow) are
+            // handled here and never select the row.
             const actionEl = target.closest('[data-action]');
             if (actionEl) {
                 const action = actionEl.getAttribute('data-action') || '';
@@ -514,6 +662,14 @@ const Retention = {
                     return;
                 }
                 if (!actionRow) return;
+                if (action === 'edit') {
+                    openForm(policyFromId(actionRow.dataset.id));
+                    return;
+                }
+                if (action === 'toggle-enabled') {
+                    await toggleEnabled(actionRow);
+                    return;
+                }
                 if (action === 'delete') {
                     startDelete(actionRow);
                     return;
