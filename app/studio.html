@@ -217,6 +217,7 @@ document.addEventListener('DOMContentLoaded', function () {
     authPromise.then(function () {
         var user = Auth.getCurrentUser();
         if (user === null && Auth.isProductionAuth()) {
+            Auth._setToken(null);
             window.location.href = 'index.html';
             return;
         }
