@@ -23,4 +23,5 @@ regexes = [
 paths = [
   '''(^|/)\.github/workflows/.*''',
   '''(^|/)backend/tests/.*''',
+  '''(^|/)app/tests/.*''',
 ]
