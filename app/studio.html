@@ -179,6 +179,16 @@
         <div id="feedkeys-table-wrap" data-testid="feedkeys-table-wrap"></div>
     </section>
 
+    <section class="wh-panel" data-panel="audit">
+        <div class="wh-panel-head">
+            <h2>Audit history</h2>
+            <p class="wh-sub">Recent audit events across the warehouse.</p>
+        </div>
+        <div id="audit-body" class="audit-body" data-testid="audit-body">
+            <p class="audit-note" data-testid="audit-admin-only-note">Audit history is available to administrators.</p>
+        </div>
+    </section>
+
     <div id="toast" class="wh-toast" data-testid="toast" hidden></div>
 </main>
 
@@ -193,6 +203,7 @@
 <script src="js/retention.js"></script>
 <script src="js/ingestion.js"></script>
 <script src="js/feed_keys.js"></script>
+<script src="js/audit.js"></script>
 <!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
 <script src="/assistant/panel.js" defer></script>
 <script>
@@ -216,6 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
         Retention.init();
         Ingestion.init();
         FeedKeys.init();
+        AuditView.init();
     }).catch(function (err) {
         var el = document.getElementById('auth-status');
         el.textContent = 'Authentication failed: ' + (err && err.message ? err.message : 'unknown error');
