@@ -3,7 +3,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.authorization import ROLE_ADMIN, require_role
-from app.auth.dependencies import require_authenticated_user
 from app.auth.models import AuthUser
 from app.models.retention_policies import (
     RetentionPolicyCreate,
@@ -27,7 +26,7 @@ def get_service() -> RetentionPolicyService:
 
 @router.get("", response_model=list[RetentionPolicyResponse])
 def list_retention_policies(
-    _user: AuthUser = Depends(require_authenticated_user),
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: RetentionPolicyService = Depends(get_service),
 ):
     return service.list_retention_policies()
@@ -48,9 +47,14 @@ def create_retention_policy(
 @router.get("/{entity_id}", response_model=RetentionPolicyResponse)
 def get_retention_policy(
     entity_id: str,
-    _user: AuthUser = Depends(require_authenticated_user),
+    _user: AuthUser = Depends(require_role(ROLE_ADMIN)),
     service: RetentionPolicyService = Depends(get_service),
 ):
+    if "\x00" in entity_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RetentionPolicy '{entity_id}' not found.",
+        )
     entity = service.get_retention_policy(entity_id)
     if entity is None:
         raise HTTPException(
