@@ -41,6 +41,8 @@ _DATE_SHAPES = (
     re.compile(r"^\d{1,2}[-./]\d{1,2}[-./]\d{4}$"),
     re.compile(r"^\d{5}-\d{4}$"),
 )
+# a plain decimal number (optional sign, digits, one dot, digits) is not a phone
+_PLAIN_DECIMAL_RE = re.compile(r"^[+-]?\d+\.\d+$")
 _SSN_RE = re.compile(r"^\d{3}-\d{2}-\d{4}$")
 _IBAN_RE = re.compile(r"^[A-Z]{2}\d{2}[A-Za-z0-9]{11,30}$")
 _CARD_STRIP_RE = re.compile(r"[ \-]")
@@ -52,6 +54,8 @@ def _is_email(s: str) -> bool:
 
 def _is_phone(s: str) -> bool:
     if any(shape.match(s) for shape in _DATE_SHAPES):
+        return False
+    if _PLAIN_DECIMAL_RE.match(s):
         return False
     if not _PHONE_RE.match(s):
         return False
@@ -133,16 +137,21 @@ def value_category_ratios(values: list) -> dict[str, float]:
     """Per-category match ratio over the non-null str()-projected sample. Categories with a
     zero ratio are omitted; an empty/all-null sample yields {} (no evidence, not evidence of
     absence)."""
-    sample = [
-        str(v).strip() for v in (values or []) if v is not None and str(v).strip()
+    projected = [
+        (str(v).strip(), isinstance(v, (int, float, bool)))
+        for v in (values or [])
+        if v is not None and str(v).strip()
     ]
-    if not sample:
+    if not projected:
         return {}
     counts: dict[str, int] = {}
-    for s in sample:
-        for category in _value_categories(s):
+    for s, is_numeric in projected:
+        cats = _value_categories(s)
+        if is_numeric:
+            cats.discard("contact")
+        for category in cats:
             counts[category] = counts.get(category, 0) + 1
-    return {c: n / len(sample) for c, n in sorted(counts.items())}
+    return {c: n / len(projected) for c, n in sorted(counts.items())}
 
 
 def categories_above_floor(
