@@ -1,12 +1,25 @@
 /**
- * Data retention — Studio panel (read-only).
+ * Data retention — Studio panel.
  *
  * Renders retention policies in a table (GET /api/retention-policies) and,
  * when a policy row is selected, that policy's sweep runs
  * (GET /api/retention-runs, filtered by policy_id, newest created_at first).
  *
- * This module never mutates data: it only performs GET requests through the
- * shared ApiClient.  Every free-text value from the backend passes through
+ * Admin controls (issue #729, rendered only when Auth.isAdmin() is true):
+ *   • "Add policy" button (data-requires-role="admin") that opens the form
+ *     data-testid="retention-policy-form"; saving posts
+ *     POST /api/retention-policies with exactly { name, table_class,
+ *     action, retention_period_days, scope, dataset_id, is_enabled }
+ *     (dataset_id is null when scope is "class"), then closes the form and
+ *     reloads the policies table; a failure keeps the form open and shows
+ *     the response's detail (or "Could not save the policy.").
+ *   • a "Delete" button (data-requires-role="admin") per policy row;
+ *     clicking it replaces the button with "Delete <name>?" plus
+ *     "Confirm delete" and "Cancel".  Confirm sends
+ *     DELETE /api/retention-policies/<id> and reloads the table; Cancel
+ *     restores the row unchanged without sending a request.
+ *
+ * Every free-text value from the backend passes through
  * _esc() before it is embedded in innerHTML, so hostile payloads render as
  * inert text.  Null or missing fields render as empty text without raising.
  */
@@ -103,9 +116,199 @@ const Retention = {
         return 'Disabled';
     },
 
+    /** True when the current user holds the admin role (guarded so the
+     *  panel degrades to read-only when Auth is unavailable). */
+    _isAdmin() {
+        return (
+            typeof Auth !== 'undefined' &&
+            typeof Auth.isAdmin === 'function' &&
+            Auth.isAdmin()
+        );
+    },
+
+    /** The response's `detail` as display text: a non-empty string passes
+     *  through, FastAPI validation arrays are joined with "; ", anything
+     *  else -> ''.  Never throws on odd bodies. */
+    _detailText(body) {
+        if (!body || typeof body !== 'object') return '';
+        const detail = body.detail;
+        if (typeof detail === 'string') return detail.trim();
+        if (Array.isArray(detail)) {
+            const parts = [];
+            for (let i = 0; i < detail.length; i++) {
+                const entry = detail[i];
+                if (
+                    entry &&
+                    typeof entry === 'object' &&
+                    entry.msg !== null &&
+                    entry.msg !== undefined
+                ) {
+                    const part = String(entry.msg).trim();
+                    if (part !== '') parts.push(part);
+                }
+            }
+            return parts.join('; ');
+        }
+        return '';
+    },
+
+    // ---- admin controls (issue #729) ----------------------------------------
+
+    _TABLE_CLASSES: [
+        'connection_tests',
+        'runs',
+        'discovery_runs',
+        'ingested_records',
+        'field_profiles',
+    ],
+    _ACTIONS: ['purge', 'anonymize'],
+    _SCOPES: ['class', 'dataset'],
+
+    /** "Add policy" toolbar button (admin only, rendered by init()). */
+    _renderAddButton() {
+        return '<div class="wh-retention-toolbar">'
+            + '<button type="button" data-action="add-policy"'
+            + ' data-testid="retention-add-policy" data-requires-role="admin">Add policy</button>'
+            + '</div>';
+    },
+
+    /** The row's "Delete" button (admin only). */
+    _renderDeleteButton() {
+        return '<button type="button" data-action="delete"'
+            + ' data-testid="retention-policy-delete" data-requires-role="admin">Delete</button>';
+    },
+
+    /** Inline delete confirmation: the text "Delete <name>?" plus the
+     *  "Confirm delete" and "Cancel" buttons (name escaped). */
+    _renderDeleteConfirm(policy) {
+        const name = this._text(policy && policy.name);
+        return '<span data-testid="retention-policy-delete-text">Delete '
+            + this._esc(name) + '?</span> '
+            + '<button type="button" data-action="delete-confirm"'
+            + ' data-testid="retention-policy-delete-confirm">Confirm delete</button> '
+            + '<button type="button" data-action="delete-cancel"'
+            + ' data-testid="retention-policy-delete-cancel">Cancel</button>';
+    },
+
+    /** Options for the dataset select: each dataset's name as label with
+     *  its id as value (both escaped); entries without an id are skipped. */
+    _renderDatasetOptions(datasets) {
+        if (!Array.isArray(datasets)) return '';
+        let html = '';
+        for (let i = 0; i < datasets.length; i++) {
+            const dataset = datasets[i];
+            if (!dataset || typeof dataset !== 'object') continue;
+            if (dataset.id === null || dataset.id === undefined) continue;
+            const id = String(dataset.id);
+            const name = dataset.name === null || dataset.name === undefined
+                ? ''
+                : String(dataset.name);
+            const label = name !== '' ? name : id;
+            html += '<option value="' + this._esc(id) + '">'
+                + this._esc(label) + '</option>';
+        }
+        return html;
+    },
+
+    /** The add-policy form plus its (initially hidden) error note.
+     *  `datasetsFailed` (GET /api/datasets failed) disables the dataset
+     *  select; scope=class stays usable.  The form is novalidate so the
+     *  JS validation below surfaces problems in
+     *  data-testid="retention-form-error" instead of a native bubble. */
+    _renderForm(datasets, datasetsFailed) {
+        const optionHtml = (values) => values
+            .map(
+                (value) =>
+                    '<option value="' + this._esc(value) + '">'
+                    + this._esc(value) + '</option>'
+            )
+            .join('');
+        const datasetDisabled = datasetsFailed ? ' disabled' : '';
+        const datasetOptions = datasetsFailed ? '' : this._renderDatasetOptions(datasets);
+        return '<form class="wh-retention-form" data-testid="retention-policy-form" novalidate>'
+            + '<div class="wh-retention-field"><label>Policy name'
+            + '<input type="text" data-testid="retention-form-name" required></label></div>'
+            + '<div class="wh-retention-field"><label>Table class'
+            + '<select data-testid="retention-form-table-class">'
+            + optionHtml(this._TABLE_CLASSES) + '</select></label></div>'
+            + '<div class="wh-retention-field"><label>Action'
+            + '<select data-testid="retention-form-action">'
+            + optionHtml(this._ACTIONS) + '</select></label></div>'
+            + '<div class="wh-retention-field"><label>Retention period (days)'
+            + '<input type="number" data-testid="retention-form-period" required min="1"></label></div>'
+            + '<div class="wh-retention-field"><label>Scope'
+            + '<select data-testid="retention-form-scope">'
+            + optionHtml(this._SCOPES) + '</select></label></div>'
+            + '<div class="wh-retention-field" data-testid="retention-form-dataset-wrap" hidden>'
+            + '<label>Dataset'
+            + '<select data-testid="retention-form-dataset"' + datasetDisabled + '>'
+            + datasetOptions + '</select></label></div>'
+            + '<div class="wh-retention-field"><label><input type="checkbox"'
+            + ' data-testid="retention-form-enabled" checked> Enabled</label></div>'
+            + '<button type="submit" data-testid="retention-form-save">Save policy</button>'
+            + '</form>'
+            + '<div class="wh-retention-form-error" data-testid="retention-form-error" hidden></div>';
+    },
+
+    /** Handle an add-policy form submission: validate (empty name, period
+     *  below 1, unavailable datasets), then POST exactly
+     *  { name, table_class, action, retention_period_days (number), scope,
+     *  dataset_id, is_enabled }.  On success the form is closed and the
+     *  table reloaded via onSaved(); on failure the form stays open and the
+     *  response's detail (or "Could not save the policy.") is shown in the
+     *  error note.  Never throws on hostile input. */
+    async _savePolicy(form, errEl, datasetsFailed, onSaved) {
+        const nameInput = form.querySelector('[data-testid="retention-form-name"]');
+        const tableClassSel = form.querySelector('[data-testid="retention-form-table-class"]');
+        const actionSel = form.querySelector('[data-testid="retention-form-action"]');
+        const periodInput = form.querySelector('[data-testid="retention-form-period"]');
+        const scopeSel = form.querySelector('[data-testid="retention-form-scope"]');
+        const datasetSel = form.querySelector('[data-testid="retention-form-dataset"]');
+        const enabledInput = form.querySelector('[data-testid="retention-form-enabled"]');
+
+        const showError = (message) => {
+            errEl.innerHTML = this._esc(message);
+            errEl.hidden = false;
+        };
+
+        const name = (nameInput && nameInput.value ? nameInput.value : '').trim();
+        if (name === '') {
+            showError('Name is required.');
+            return;
+        }
+        const periodRaw = (periodInput && periodInput.value ? periodInput.value : '').trim();
+        const period = Number(periodRaw);
+        if (periodRaw === '' || !Number.isFinite(period) || period < 1) {
+            showError('Retention period must be at least 1 day.');
+            return;
+        }
+        const scope = scopeSel && scopeSel.value === 'dataset' ? 'dataset' : 'class';
+        if (scope === 'dataset' && datasetsFailed) {
+            showError('Could not load datasets.');
+            return;
+        }
+        const body = {
+            name: name,
+            table_class: tableClassSel ? tableClassSel.value : '',
+            action: actionSel ? actionSel.value : '',
+            retention_period_days: period,
+            scope: scope,
+            dataset_id: scope === 'dataset' && datasetSel ? datasetSel.value : null,
+            is_enabled: enabledInput ? enabledInput.checked === true : false,
+        };
+        const res = await ApiClient.post('/retention-policies', body);
+        if (res.ok) {
+            if (typeof onSaved === 'function') await onSaved();
+            return;
+        }
+        const detail = this._detailText(res._responseBody);
+        showError(detail !== '' ? detail : 'Could not save the policy.');
+    },
+
     // ---- renderers (data -> HTML) ------------------------------------------
 
-    _renderPolicyTable(policies) {
+    _renderPolicyTable(policies, isAdmin) {
+        const admin = isAdmin === true;
         let html = '<table class="wh-retention-table" data-testid="retention-policy-table">';
         html += '<thead><tr>'
             + '<th>Name</th>'
@@ -115,6 +318,7 @@ const Retention = {
             + '<th>Retention period</th>'
             + '<th>Scope</th>'
             + '<th>Status</th>'
+            + '<th>' + (admin ? 'Actions' : '') + '</th>'
             + '</tr></thead>';
         html += '<tbody>';
         for (let i = 0; i < policies.length; i++) {
@@ -129,6 +333,9 @@ const Retention = {
                 + '<td data-testid="retention-policy-scope">' + this._esc(this._text(policy.scope)) + '</td>'
                 + '<td data-testid="retention-policy-enabled">'
                 + this._enabledLabel(policy.is_enabled) + '</td>'
+                + '<td data-testid="retention-policy-actions">'
+                + (admin ? this._renderDeleteButton() : '')
+                + '</td>'
                 + '</tr>';
         }
         html += '</tbody></table>';
@@ -160,8 +367,10 @@ const Retention = {
     // ---- init ----------------------------------------------------------------
 
     /**
-     * Boot the panel: load the policy list and wire row selection.
-     * Called from studio.html on DOMContentLoaded like the other Studio modules.
+     * Boot the panel: load the policy list (and, for an admin, the dataset
+     * list for the add-policy form), wire row selection plus the admin
+     * add/delete controls.  Called from studio.html on DOMContentLoaded like
+     * the other Studio modules.
      */
     async init() {
         const section = document.querySelector('[data-panel="retention"]');
@@ -170,7 +379,41 @@ const Retention = {
         const runsHost = section.querySelector('[data-testid="retention-runs"]');
         if (!tableHost || !runsHost) return;
 
+        const isAdmin = this._isAdmin();
+        let datasets = [];
+        let datasetsFailed = false;
+        let policyById = new Map();
+
         let renderSeq = 0;
+
+        const policyFromId = (id) => policyById.get(String(id)) || {};
+
+        const renderTable = (policies) => {
+            policyById = new Map();
+            for (let i = 0; i < policies.length; i++) {
+                const policy = policies[i];
+                if (policy && policy.id !== null && policy.id !== undefined) {
+                    policyById.set(String(policy.id), policy);
+                }
+            }
+            const toolbar = isAdmin ? this._renderAddButton() : '';
+            if (policies.length === 0) {
+                tableHost.innerHTML = toolbar
+                    + '<div data-testid="retention-policies-empty">No retention policies yet.</div>';
+                return;
+            }
+            tableHost.innerHTML = toolbar + this._renderPolicyTable(policies, isAdmin);
+        };
+
+        const reloadTable = async () => {
+            const res = await ApiClient.get('/retention-policies');
+            if (!res.ok) {
+                tableHost.innerHTML = (isAdmin ? this._renderAddButton() : '')
+                    + '<div data-testid="retention-policies-error">Could not load retention policies.</div>';
+                return;
+            }
+            renderTable(Array.isArray(res.data) ? res.data : []);
+        };
 
         const renderRuns = async (policyId) => {
             const seq = ++renderSeq;
@@ -200,9 +443,91 @@ const Retention = {
                 : '<div data-testid="retention-runs-empty">No runs for this policy yet.</div>';
         };
 
+        // ---- admin add/delete control wiring (issue #729) ------------------
+
+        const openForm = () => {
+            tableHost.innerHTML = this._renderForm(datasets, datasetsFailed);
+            const form = tableHost.querySelector('[data-testid="retention-policy-form"]');
+            const errEl = tableHost.querySelector('[data-testid="retention-form-error"]');
+            if (!form || !errEl) return;
+            const scopeSel = form.querySelector('[data-testid="retention-form-scope"]');
+            const datasetWrap = form.querySelector('[data-testid="retention-form-dataset-wrap"]');
+            if (scopeSel && datasetWrap) {
+                const syncScope = () => {
+                    datasetWrap.hidden = scopeSel.value !== 'dataset';
+                };
+                scopeSel.addEventListener('change', syncScope);
+                syncScope();
+            }
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                this._savePolicy(form, errEl, datasetsFailed, reloadTable);
+            });
+        };
+
+        const actionsCellOf = (row) =>
+            row.querySelector('[data-testid="retention-policy-actions"]');
+
+        const startDelete = (row) => {
+            const cell = actionsCellOf(row);
+            if (!cell) return;
+            cell.innerHTML = this._renderDeleteConfirm(policyFromId(row.dataset.id));
+        };
+
+        const cancelDelete = (row) => {
+            const cell = actionsCellOf(row);
+            if (!cell) return;
+            cell.innerHTML = this._renderDeleteButton();
+        };
+
+        const confirmDelete = async (row) => {
+            const cell = actionsCellOf(row);
+            const buttons = row.querySelectorAll(
+                '[data-action="delete-confirm"], [data-action="delete-cancel"]'
+            );
+            for (let i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+            const id = row.dataset.id;
+            const res = await ApiClient.delete('/retention-policies/' + encodeURIComponent(id));
+            if (res.ok) {
+                await reloadTable();
+                return;
+            }
+            if (cell && cell.isConnected) {
+                cell.innerHTML = '<span data-testid="retention-policy-delete-error">'
+                    + this._esc('Could not delete the policy.') + '</span> '
+                    + this._renderDeleteButton();
+            }
+        };
+
         tableHost.addEventListener('click', async (event) => {
             const target = event.target;
             if (!target || typeof target.closest !== 'function') return;
+
+            // Admin controls (add policy, delete flow) are handled here and
+            // never select the row.
+            const actionEl = target.closest('[data-action]');
+            if (actionEl) {
+                const action = actionEl.getAttribute('data-action') || '';
+                const actionRow = actionEl.closest('[data-testid="retention-policy-row"]');
+                if (action === 'add-policy') {
+                    openForm();
+                    return;
+                }
+                if (!actionRow) return;
+                if (action === 'delete') {
+                    startDelete(actionRow);
+                    return;
+                }
+                if (action === 'delete-confirm') {
+                    await confirmDelete(actionRow);
+                    return;
+                }
+                if (action === 'delete-cancel') {
+                    cancelDelete(actionRow);
+                    return;
+                }
+            }
+
             const row = target.closest('[data-testid="retention-policy-row"]');
             if (!row) return;
             const policyId = row.dataset.id;
@@ -221,17 +546,29 @@ const Retention = {
             await renderRuns(policyId);
         });
 
-        const res = await ApiClient.get('/retention-policies');
-        if (!res.ok) {
-            tableHost.innerHTML = '<div data-testid="retention-policies-error">Could not load retention policies.</div>';
+        // ---- initial load ---------------------------------------------------
+
+        const policiesPromise = ApiClient.get('/retention-policies');
+        let datasetsPromise = null;
+        if (isAdmin) {
+            datasetsPromise = ApiClient.get('/datasets');
+        }
+        const policiesRes = await policiesPromise;
+        if (isAdmin) {
+            const datasetsRes = await datasetsPromise;
+            if (!datasetsRes.ok || !Array.isArray(datasetsRes.data)) {
+                datasetsFailed = true;
+                datasets = [];
+            } else {
+                datasets = datasetsRes.data;
+            }
+        }
+        if (!policiesRes.ok) {
+            tableHost.innerHTML = (isAdmin ? this._renderAddButton() : '')
+                + '<div data-testid="retention-policies-error">Could not load retention policies.</div>';
             return;
         }
-        const policies = Array.isArray(res.data) ? res.data : [];
-        if (policies.length === 0) {
-            tableHost.innerHTML = '<div data-testid="retention-policies-empty">No retention policies yet.</div>';
-            return;
-        }
-        tableHost.innerHTML = this._renderPolicyTable(policies);
+        renderTable(Array.isArray(policiesRes.data) ? policiesRes.data : []);
     },
 };
 
