@@ -16,9 +16,9 @@ Identity (per task): the criteria concern roles, so the proof also runs a
 non-admin pass (role 'user') — the backend equivalent of booting the
 feed-credentials page the production way for a role 'user' identity (the
 token in the URL hash, /api/auth/config and /api/auth/me resolved to that
-user): the page's data calls (list/get) still render (200, no ``key_hash``
-in the bodies) while every admin-only control (create, update, rotate,
-delete) is absent — denied with the standard 403 role message.
+user): the page still renders, and every feed-credentials control — since
+#741 including the page's data calls (list/get) — is absent for the
+non-admin, denied with the standard 403 role message.
 """
 
 import hashlib
@@ -92,18 +92,19 @@ def test_issue724_freeform(client, admin_headers, user_headers):
     assert get_resp.json()["id"] == entity_id
 
     # ------------------------------------------------------------------
-    # Viewer pass (role 'user'): the page still renders (list/get 200, no
-    # key_hash in the bodies) while every admin-only control is absent.
+    # Viewer pass (role 'user'): the page still renders, but since #741
+    # even the page's data calls (list/get) are admin-only, denied with
+    # the standard 403 role message and no key material in the bodies.
     # ------------------------------------------------------------------
     viewer_list = client.get("/api/feed-credentials", headers=user_headers)
-    assert viewer_list.status_code == 200, viewer_list.text
+    assert viewer_list.status_code == 403, viewer_list.text
+    assert viewer_list.json()["detail"] == ROLE_DENIED
     assert "key_hash" not in viewer_list.text
-    assert any(x["id"] == entity_id for x in viewer_list.json())
 
     viewer_get = client.get(f"/api/feed-credentials/{entity_id}", headers=user_headers)
-    assert viewer_get.status_code == 200, viewer_get.text
+    assert viewer_get.status_code == 403, viewer_get.text
+    assert viewer_get.json()["detail"] == ROLE_DENIED
     assert "key_hash" not in viewer_get.text
-    assert viewer_get.json()["id"] == entity_id
 
     create_deny = client.post(
         "/api/feed-credentials", json={"name": "viewer"}, headers=user_headers

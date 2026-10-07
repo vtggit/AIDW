@@ -56,7 +56,7 @@ def test_feed_credentials_crud(client, admin_headers, user_headers):
     assert "key_hash" not in created
     assert created["key_prefix"] == "v1"
     assert created["revoked"] is True
-    got = client.get(f"/api/feed-credentials/{entity_id}", headers=user_headers)
+    got = client.get(f"/api/feed-credentials/{entity_id}", headers=admin_headers)
     assert got.status_code == 200 and got.json()["id"] == entity_id
     upd = client.put(
         f"/api/feed-credentials/{entity_id}",
@@ -66,7 +66,7 @@ def test_feed_credentials_crud(client, admin_headers, user_headers):
     assert upd.status_code == 200
     updated = upd.json()
     assert updated["name"] == "n2" and updated["principal"] == "v2"
-    listing = client.get("/api/feed-credentials", headers=user_headers)
+    listing = client.get("/api/feed-credentials", headers=admin_headers)
     assert any(x["id"] == entity_id for x in listing.json())
     dele = client.delete(f"/api/feed-credentials/{entity_id}", headers=admin_headers)
     assert dele.status_code == 204

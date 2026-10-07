@@ -3,8 +3,8 @@
 Proves the three #513 acceptance criteria against the live API:
 
 1. Callers cannot obtain ``key_hash`` (or any equivalent key material) from
-   the feed-credentials API — list/get are open to authenticated users but
-   no response (admin or non-admin) contains a ``key_hash``; the stored hash
+   the feed-credentials API — since #741 list/get are admin-only, and no
+   response (admin or non-admin) contains a ``key_hash``; the stored hash
    is verified directly from the ``feed_credentials`` table.
 2. A valid ``X-Api-Key`` authenticates even when an unrelated (non-Basic)
    ``Authorization`` header is also present, while a valid Basic
@@ -54,17 +54,15 @@ def test_issue513_freeform(client, admin_headers, user_headers):
         cur.execute("SELECT key_hash FROM feed_credentials WHERE id = %s", (entity_id,))
         assert cur.fetchone()["key_hash"] == "deadbeef"
 
-    # Non-admins can read the record but the response contains no key_hash.
+    # Since #741 the read routes are admin-only: non-admins cannot read the
+    # record at all, so they cannot obtain key_hash from it.
     non_admin_get = client.get(
         f"/api/feed-credentials/{entity_id}", headers=user_headers
     )
-    assert non_admin_get.status_code == 200, non_admin_get.text
-    assert "key_hash" not in non_admin_get.json()
+    assert non_admin_get.status_code == 403, non_admin_get.text
 
     non_admin_list = client.get("/api/feed-credentials", headers=user_headers)
-    assert non_admin_list.status_code == 200, non_admin_list.text
-    for item in non_admin_list.json():
-        assert "key_hash" not in item
+    assert non_admin_list.status_code == 403, non_admin_list.text
 
     # ------------------------------------------------------------------
     # Criterion 2 — X-Api-Key works alongside an unrelated Authorization
