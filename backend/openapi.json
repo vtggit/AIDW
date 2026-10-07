@@ -14128,17 +14128,6 @@
             ],
             "title": "Principal"
           },
-          "key_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Key Hash"
-          },
           "key_prefix": {
             "anyOf": [
               {
@@ -14178,7 +14167,7 @@
           "updated_at"
         ],
         "title": "FeedCredentialResponse",
-        "description": "Response model for a feed_credential record."
+        "description": "Response model for a feed_credential record.\n\n``key_hash`` is intentionally absent: key material is never returned to\nany caller, admin included."
       },
       "FeedCredentialUpdate": {
         "properties": {

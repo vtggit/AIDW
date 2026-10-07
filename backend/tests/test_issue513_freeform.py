@@ -2,10 +2,10 @@
 
 Proves the three #513 acceptance criteria against the live API:
 
-1. Non-admin callers cannot obtain ``key_hash`` (or any equivalent key
-   material) from the feed-credentials API — list/get are open to
-   authenticated users but the response returned to a non-admin contains no
-   ``key_hash`` (admins still see the full record).
+1. Callers cannot obtain ``key_hash`` (or any equivalent key material) from
+   the feed-credentials API — list/get are open to authenticated users but
+   no response (admin or non-admin) contains a ``key_hash``; the stored hash
+   is verified directly from the ``feed_credentials`` table.
 2. A valid ``X-Api-Key`` authenticates even when an unrelated (non-Basic)
    ``Authorization`` header is also present, while a valid Basic
    ``Authorization`` header still authenticates.
@@ -46,10 +46,13 @@ def test_issue513_freeform(client, admin_headers, user_headers):
     assert created.status_code == 201, created.text
     entity_id = created.json()["id"]
 
-    # Admins still see the full record (including key material).
+    # No caller receives key_hash from the API; the stored hash is verified
+    # straight from the feed_credentials table.
     admin_get = client.get(f"/api/feed-credentials/{entity_id}", headers=admin_headers)
     assert admin_get.status_code == 200, admin_get.text
-    assert admin_get.json()["key_hash"] == "deadbeef"
+    with get_cursor() as cur:
+        cur.execute("SELECT key_hash FROM feed_credentials WHERE id = %s", (entity_id,))
+        assert cur.fetchone()["key_hash"] == "deadbeef"
 
     # Non-admins can read the record but the response contains no key_hash.
     non_admin_get = client.get(

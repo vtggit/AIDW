@@ -8,6 +8,7 @@ the plaintext key exactly once.
 
 import hashlib
 
+from app.db.connection import get_cursor
 from app.repositories.feed_credentials_postgres_repository import (
     FeedCredentialPostgresRepository,
 )
@@ -68,12 +69,17 @@ def test_issue455_freeform(client, admin_headers, user_headers, monkeypatch):
     assert data["key_prefix"] == key[:8]
     assert key not in data.values(), "plaintext key must not be persisted"
 
-    # A subsequent GET returns the stored hash and no plaintext key field.
+    # A subsequent GET returns the record without a plaintext key field; the
+    # stored hash is verified from the feed_credentials table.
     get_resp = client.get(
         f"/api/feed-credentials/{entity_id}",
         headers=admin_headers,
     )
     assert get_resp.status_code == 200, get_resp.text
     stored = get_resp.json()
-    assert stored["key_hash"] == hashlib.sha256(key.encode()).hexdigest()
     assert "key" not in stored
+
+    with get_cursor() as cur:
+        cur.execute("SELECT key_hash FROM feed_credentials WHERE id = %s", (entity_id,))
+        stored_hash = cur.fetchone()["key_hash"]
+    assert stored_hash == hashlib.sha256(key.encode()).hexdigest()
