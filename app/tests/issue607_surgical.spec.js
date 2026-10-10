@@ -23,6 +23,51 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 
+// Non-admin identity for the viewer pass (the criteria concern roles): a
+// role 'user' identity booted the production way — the token in the URL
+// hash as #access_token=..., /api/auth/config and /api/auth/me mocked for
+// that user — proves the tool still renders while the admin-only control
+// is absent.
+const AUTH_CONFIG = { auth_mode: 'development' };
+const VIEWER_ME = { authenticated: true, user: { id: 9, username: 'user', roles: ['user'] } };
+const VIEWER_TOKEN = 'viewer-token-607';
+
+// Boot the page the production way for a given identity: /api/auth/config
+// and /api/auth/me mocked for `me`, one mocked load sequence with one run
+// for it (every other /api/** an empty list), and the token riding the URL
+// hash fragment (#access_token=...).  The boot proves the token was picked
+// up the production way: Auth.init() migrates it into sessionStorage and
+// it arrives as the Authorization header on /api/auth/me.
+async function bootAs(page, me, token, url) {
+  const meAuthorizations = [];
+  await page.unrouteAll();
+  await page.route('**/api/**', (route) => {
+    const request = route.request();
+    const reqUrl = request.url();
+    if (reqUrl.includes('/api/auth/config')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(AUTH_CONFIG) });
+    }
+    if (reqUrl.includes('/api/auth/me')) {
+      const auth = request.headers()['authorization'];
+      if (auth) meAuthorizations.push(auth);
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(me) });
+    }
+    if (reqUrl.includes('/api/load-sequences') && reqUrl.includes('/bpmn')) {
+      return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Not found' }) });
+    }
+    if (reqUrl.includes('/api/load-sequences')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'seq-1', name: 'Seq' }]) });
+    }
+    if (reqUrl.includes('/api/sequence-runs')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'run-1', name: 'Run 1', sequence_id: 'seq-1', status: 'completed' }]) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.goto(url + '#access_token=' + encodeURIComponent(token));
+  await expect.poll(() => meAuthorizations).toContain('Bearer ' + token);
+}
+
+
 test('issue607 surgical', async ({ page }) => {
   const mockApi = (roles) => {
     return async (route) => {
@@ -70,7 +115,7 @@ test('issue607 surgical', async ({ page }) => {
 
   // --- Pass 1: viewer (non-admin) — execute button must be ABSENT ---
   await page.route('**/api/**', mockApi(['viewer']));
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
 
   const seqRowViewer = page.locator('[data-testid="sequence-row"]');
   await expect(seqRowViewer).toBeVisible();
@@ -88,7 +133,7 @@ test('issue607 surgical', async ({ page }) => {
 
   // --- Pass 2: admin — execute button must be PRESENT ---
   await page.route('**/api/**', mockApi(['admin']));
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
 
   const seqRowAdmin = page.locator('[data-testid="sequence-row"]');
   await expect(seqRowAdmin).toBeVisible();
@@ -104,4 +149,30 @@ test('issue607 surgical', async ({ page }) => {
   const executeBtnAdmin = page.locator('[data-testid="sequence-execute"]');
   await expect(executeBtnAdmin).toHaveCount(1);
   await expect(executeBtnAdmin).toBeVisible();
+});
+
+test('issue607 surgical (viewer)', async ({ page }) => {
+  // Non-admin pass: boot the production way as a role 'user' identity
+  // (the token in the URL hash) and prove the tool still renders while
+  // the admin-only control is absent.
+  await bootAs(page, VIEWER_ME, VIEWER_TOKEN, '/studio.html?panel=sequences');
+
+  // The tool renders read-only for a non-admin: the sequence list shows,
+  // and after selecting it, its run history...
+  const seqRow = page.locator('[data-testid="sequence-row"]');
+  await expect(seqRow).toBeVisible();
+  await seqRow.click();
+  await expect(page.locator('[data-testid="run-row"]').first()).toBeVisible();
+  await expect(page.locator('[data-panel="sequence-runs"]')).toContainText('Run 1');
+  await expect(page.locator('[data-testid="sidebar"] [data-testid="auth-status"]')).toHaveText('Signed in · user');
+
+  // ...with the admin-only control absent: the Execute button is not
+  // rendered for a non-admin, the role-gated Feed keys nav item leaves the
+  // DOM, the Feed keys section is removed by its module, and the
+  // admin-only source form is gone.
+  await expect(page.locator('[data-testid="sequence-execute"]')).toHaveCount(0);
+  await expect(page.locator('.aidw-nav-item[data-nav-panel="feedkeys"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="sidebar-nav"] [data-requires-role="admin"]')).toHaveCount(0);
+  await expect(page.locator('[data-panel="feedkeys"]')).toHaveCount(0);
+  await expect(page.locator('#source-form')).toHaveCount(0);
 });

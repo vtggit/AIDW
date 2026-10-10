@@ -41,6 +41,68 @@ const ITEM_ID = 'item-572-accept';
 const ACCEPT_TITLE = `${MARK} Orders by ShipCountry`;
 const DISMISS_TITLE = `${MARK} Total Freight`;
 
+// Non-admin identity for the viewer pass (the criteria concern roles): a
+// role 'user' identity booted the production way — the token in the URL
+// hash as #access_token=..., /api/auth/config and /api/auth/me mocked for
+// that user — proves the inbox still renders (and still works) while the
+// admin-only controls are absent.
+const AUTH_CONFIG = { auth_mode: 'development' };
+const VIEWER_ME = { authenticated: true, user: { id: 9, username: 'user', roles: ['user'] } };
+const VIEWER_TOKEN = 'viewer-token-572-sug';
+
+// Boot the page the production way for a given identity: /api/auth/config
+// and /api/auth/me mocked for `me`, the same stateful suggestion inbox as
+// installRoutes (accept/dismiss remove the acted id), every other /api/**
+// an empty list, and the token riding the URL hash fragment
+// (#access_token=...).  The boot proves the token was picked up the
+// production way: Auth.init() migrates it into sessionStorage and it
+// arrives as the Authorization header on /api/auth/me.
+async function bootAs(page, me, token, url) {
+    const meAuthorizations = [];
+    // Stateful suggestion inbox: starts with two cards; accept/dismiss remove the acted id.
+    const inbox = new Set([ACCEPT_ID, DISMISS_ID]);
+
+    await page.unrouteAll();
+    await page.route('**/api/**', (route) => {
+        const request = route.request();
+        const reqUrl = request.url();
+        if (reqUrl.includes('/api/auth/config')) {
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(AUTH_CONFIG) });
+        }
+        if (reqUrl.includes('/api/auth/me')) {
+            const auth = request.headers()['authorization'];
+            if (auth) meAuthorizations.push(auth);
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(me) });
+        }
+        if (reqUrl.includes(`/api/suggestions/${ACCEPT_ID}/accept`)) {
+            inbox.delete(ACCEPT_ID);
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ id: ACCEPT_ID, status: 'accepted' }),
+            });
+        }
+        if (reqUrl.includes('/api/suggestions')) {
+            const body = [ACCEPT_ID, DISMISS_ID]
+                .filter((id) => inbox.has(id))
+                .map((id) => ({
+                    id,
+                    name: id === ACCEPT_ID ? ACCEPT_TITLE : DISMISS_TITLE,
+                    title: id === ACCEPT_ID ? ACCEPT_TITLE : DISMISS_TITLE,
+                    item_type: id === ACCEPT_ID ? 'bar' : 'kpi',
+                    aggregation: id === ACCEPT_ID ? 'count' : 'sum',
+                    status: 'suggested',
+                    strategy: 'schema-only',
+                    score: id === ACCEPT_ID ? 0.55 : 0.70,
+                }));
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+        }
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
+    await page.goto(url + '#access_token=' + encodeURIComponent(token));
+    await expect.poll(() => meAuthorizations).toContain('Bearer ' + token);
+}
+
 async function installRoutes(page) {
     // Stateful suggestion inbox: starts with two cards; accept/dismiss remove the acted id.
     const inbox = new Set([ACCEPT_ID, DISMISS_ID]);
@@ -123,7 +185,7 @@ test('inbox renders suggestions; accept lands one on a dashboard; dismiss remove
     await page.addInitScript((t) => { window.sessionStorage.setItem('aicrm_token', t); }, TOKEN);
 
     // Act on the inbox on the studio page.
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=suggestions');
     const inbox = page.getByTestId('inbox');
     await expect(inbox.getByText(ACCEPT_TITLE)).toBeVisible();
     await expect(inbox.getByText(DISMISS_TITLE)).toBeVisible();
@@ -153,7 +215,33 @@ test('inbox renders suggestions; accept lands one on a dashboard; dismiss remove
         .not.toBe('pending');
 
     // Dismiss -> the card leaves the inbox.
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=suggestions');
     await page.locator(`[data-testid="suggestion"][data-id="${DISMISS_ID}"] [data-action="dismiss"]`).click();
     await expect(page.locator(`[data-testid="suggestion"][data-id="${DISMISS_ID}"]`)).toHaveCount(0);
+});
+
+test('inbox renders suggestions; accept lands one on a dashboard; dismiss removes one (viewer)', async ({ page }) => {
+    // Non-admin pass: boot the production way as a role 'user' identity
+    // (the token in the URL hash) and prove the inbox still renders while
+    // the admin-only controls are absent.
+    await bootAs(page, VIEWER_ME, VIEWER_TOKEN, '/studio.html?panel=suggestions');
+
+    // The page renders for a non-admin: both suggestion cards show...
+    await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Suggestions');
+    await expect(page.locator(`[data-testid="suggestion"][data-id="${ACCEPT_ID}"]`)).toBeVisible();
+    await expect(page.locator(`[data-testid="suggestion"][data-id="${DISMISS_ID}"]`)).toBeVisible();
+    await expect(page.locator('[data-testid="sidebar"] [data-testid="auth-status"]')).toHaveText('Signed in · user');
+
+    // ...and the inbox still works for the viewer (accept is not an
+    // admin-only control): the acted card leaves the inbox.
+    await page.locator(`[data-testid="suggestion"][data-id="${ACCEPT_ID}"] [data-action="accept"]`).click();
+    await expect(page.locator(`[data-testid="suggestion"][data-id="${ACCEPT_ID}"]`)).toHaveCount(0);
+
+    // The admin-only controls are absent: the role-gated Feed keys nav item
+    // leaves the DOM, the Feed keys section is removed by its module, and
+    // the admin-only source form is gone.
+    await expect(page.locator('.aidw-nav-item[data-nav-panel="feedkeys"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="sidebar-nav"] [data-requires-role="admin"]')).toHaveCount(0);
+    await expect(page.locator('[data-panel="feedkeys"]')).toHaveCount(0);
+    await expect(page.locator('#source-form')).toHaveCount(0);
 });

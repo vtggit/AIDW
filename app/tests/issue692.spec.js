@@ -249,15 +249,6 @@ async function bootAs(page, me, token, url = '/studio.html?panel=ingestion') {
 }
 
 test('issue692 freeform', async ({ page }) => {
-  // Make the page taller than the viewport so the ingestion panel (the last
-  // section) sits below the fold and a successful deep-link scroll is
-  // observable.
-  await page.addInitScript(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-      document.body.style.minHeight = '3000px';
-    });
-  });
-
   // ------------------------------------------------------------------
   // Phase 1 — two pipelines, one dataset, three runs; deep link
   // ?panel=ingestion
@@ -342,36 +333,33 @@ test('issue692 freeform', async ({ page }) => {
   await expect(runsArea.locator('[data-testid="ingestion-run-error"]')).toHaveText('Connection refused by source');
   await expect(runsArea).not.toContainText('2026-10-01T02:00:00');
 
-  // AC-3: the panel=ingestion deep link scrolled the section into view.
-  await expect.poll(async () => page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBeGreaterThan(0);
-  await expect.poll(async () =>
-    page.evaluate(() => {
-      const rect = document.querySelector('[data-panel="ingestion"]').getBoundingClientRect();
-      return rect.top < window.innerHeight && rect.bottom > 0;
-    })
-  ).toBeTruthy();
+  // AC-3: the panel=ingestion deep link shows the ingestion tool in the
+  // main region — one tool at a time, so it sits at the top of the
+  // region and no scroll is needed.
+  await expect(section).toBeVisible();
+  expect(await page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBe(0);
 
   // ------------------------------------------------------------------
-  // Phase 2 — no deep link, empty pipeline list
+  // Phase 2 — empty pipeline list
   // ------------------------------------------------------------------
   await mockApi(page, [], 200, RUNS, 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=ingestion');
   await expect(page.locator('[data-testid="ingestion-pipelines-empty"]')).toHaveText('No pipelines yet.');
-  // Without panel=ingestion nothing scrolls the page.
+  // The shown tool fits the region: nothing scrolls.
   expect(await page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBe(0);
 
   // ------------------------------------------------------------------
   // Phase 3 — failed pipelines request
   // ------------------------------------------------------------------
   await mockApi(page, API_ERROR, 500, RUNS, 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=ingestion');
   await expect(page.locator('[data-testid="ingestion-pipelines-error"]')).toHaveText('Could not load pipelines.');
 
   // ------------------------------------------------------------------
   // Phase 4 — selected pipeline with no runs
   // ------------------------------------------------------------------
   await mockApi(page, [PIPELINES[0]], 200, [], 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=ingestion');
   const loneRow = page.locator('[data-testid="ingestion-pipeline-row"][data-id="pipe-1"]');
   await expect(loneRow).toBeVisible();
   await loneRow.click();
@@ -381,7 +369,7 @@ test('issue692 freeform', async ({ page }) => {
   // Phase 5 — failed runs request for the selected pipeline
   // ------------------------------------------------------------------
   await mockApi(page, [PIPELINES[0]], 200, API_ERROR, 500);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=ingestion');
   const loneRow2 = page.locator('[data-testid="ingestion-pipeline-row"][data-id="pipe-1"]');
   await expect(loneRow2).toBeVisible();
   await loneRow2.click();
@@ -428,7 +416,7 @@ test('issue692 freeform', async ({ page }) => {
     },
   ];
   await mockApi(page, [ghostPipeline], 200, ghostRuns, 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=ingestion');
 
   const ghostRow = page.locator('[data-testid="ingestion-pipeline-row"][data-id="pipe-ghost"]');
   await expect(ghostRow).toBeVisible();

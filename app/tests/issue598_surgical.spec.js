@@ -23,6 +23,45 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 
+// Non-admin identity for the viewer pass (the criteria concern roles): a
+// role 'user' identity booted the production way — the token in the URL
+// hash as #access_token=..., /api/auth/config and /api/auth/me mocked for
+// that user — proves the tool still renders while the admin-only control
+// is absent.
+const AUTH_CONFIG = { auth_mode: 'development' };
+const VIEWER_ME = { authenticated: true, user: { id: 9, username: 'user', roles: ['user'] } };
+const VIEWER_TOKEN = 'viewer-token-598';
+
+// Boot the page the production way for a given identity: /api/auth/config
+// and /api/auth/me mocked for `me`, one mocked load sequence (every other
+// /api/** an empty list), and the token riding the URL hash fragment
+// (#access_token=...).  The boot proves the token was picked up the
+// production way: Auth.init() migrates it into sessionStorage and it
+// arrives as the Authorization header on /api/auth/me.
+async function bootAs(page, me, token, url) {
+  const meAuthorizations = [];
+  await page.unrouteAll();
+  await page.route('**/api/**', (route) => {
+    const request = route.request();
+    const reqUrl = request.url();
+    if (reqUrl.includes('/api/auth/config')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(AUTH_CONFIG) });
+    }
+    if (reqUrl.includes('/api/auth/me')) {
+      const auth = request.headers()['authorization'];
+      if (auth) meAuthorizations.push(auth);
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(me) });
+    }
+    if (reqUrl.includes('/api/load-sequences')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, name: 'Test Seq' }]) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.goto(url + '#access_token=' + encodeURIComponent(token));
+  await expect.poll(() => meAuthorizations).toContain('Bearer ' + token);
+}
+
+
 test('issue598 surgical', async ({ page }) => {
   let authRole = 'viewer';
   const postCalls = [];
@@ -46,7 +85,7 @@ test('issue598 surgical', async ({ page }) => {
   });
 
   // --- Non-admin: create button absent from DOM, read-only content still renders ---
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
   await page.waitForSelector('[data-testid="sequence-row"]', { timeout: 5000 });
 
   const createBtnNonAdmin = await page.$('[data-testid="sequence-create"]');
@@ -58,7 +97,7 @@ test('issue598 surgical', async ({ page }) => {
 
   // --- Admin: create button present and functional ---
   authRole = 'admin';
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
   await page.waitForSelector('[data-testid="sequence-row"]', { timeout: 5000 });
 
   const createBtnAdmin = await page.$('[data-testid="sequence-create"]');
@@ -73,4 +112,27 @@ test('issue598 surgical', async ({ page }) => {
 
   expect(postCalls.length).toBe(1);
   expect(postCalls[0]).toContain('/api/load-sequences');
+});
+
+test('issue598 surgical (viewer)', async ({ page }) => {
+  // Non-admin pass: boot the production way as a role 'user' identity
+  // (the token in the URL hash) and prove the tool still renders while
+  // the admin-only control is absent.
+  await bootAs(page, VIEWER_ME, VIEWER_TOKEN, '/studio.html?panel=sequences');
+
+  // Read-only content still renders for a non-admin: the sequence list
+  // shows its row...
+  await expect(page.locator('[data-testid="sequence-row"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="sequence-row"]')).toContainText('Test Seq');
+  await expect(page.locator('[data-testid="sidebar"] [data-testid="auth-status"]')).toHaveText('Signed in · user');
+
+  // ...with the admin-only control absent: the create button is not
+  // rendered for a non-admin, the role-gated Feed keys nav item leaves the
+  // DOM, the Feed keys section is removed by its module, and the
+  // admin-only source form is gone.
+  await expect(page.locator('[data-testid="sequence-create"]')).toHaveCount(0);
+  await expect(page.locator('.aidw-nav-item[data-nav-panel="feedkeys"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="sidebar-nav"] [data-requires-role="admin"]')).toHaveCount(0);
+  await expect(page.locator('[data-panel="feedkeys"]')).toHaveCount(0);
+  await expect(page.locator('#source-form')).toHaveCount(0);
 });

@@ -222,7 +222,7 @@ test('issue767 freeform', async ({ page }) => {
   // is gone...
   expect(await page.evaluate(() => window.__issue767DashMarker)).toBeFalsy();
   // ...and Studio renders with the nav item current (not Dashboards)...
-  await expect(page.locator('.aidw-page-title')).toHaveText('Studio');
+  await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Ingestion');
   await expect(page.locator('.aidw-nav-item[data-nav-panel="ingestion"]')).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.aidw-nav-item[data-nav="dashboards"]')).not.toHaveAttribute('aria-current');
   // ...with the deep-linked panel in the main region's view.
@@ -252,17 +252,18 @@ test('issue767 freeform', async ({ page }) => {
     null, 'page', null, null, null, null, null, null, null, null,
   ]);
 
-  // Main area header: the Studio title + subtitle.
-  await expect(page.locator('.aidw-page-title')).toHaveText('Studio');
+  // Main area header: the Studio title + subtitle (the shown tool is
+  // Data sources, the first panel when no deep link is present).
+  await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Data sources');
   // The old "← Dashboard" header link is replaced by the sidebar.
   expect(await page.locator('a[data-testid="nav-dashboard"]').count()).toBe(0);
 
-  // The main content region scrolls (the Studio's panels overflow it)...
-  const region = await page.evaluate(() => {
+  // The main content region does not scroll (the shown tool, Data
+  // sources with an empty list, fits it)...
+  await expect.poll(async () => page.evaluate(() => {
     const el = document.querySelector('[data-testid="main-content"]');
-    return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
-  });
-  expect(region.scrollHeight).toBeGreaterThan(region.clientHeight);
+    return el.scrollHeight - el.clientHeight;
+  })).toBeLessThanOrEqual(0);
   // ...while the document itself does not scroll.
   await expectNoDocumentScroll(page);
 
@@ -398,7 +399,7 @@ test('issue767 freeform (viewer)', async ({ page }) => {
 
   // The page renders for a non-admin...
   await expect(page.locator('[data-testid="sidebar"]')).toBeVisible();
-  await expect(page.locator('.aidw-page-title')).toHaveText('Studio');
+  await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Data sources');
   await expect(page.locator('[data-panel="sources"]')).toBeVisible();
   // ...with the signed-in user at the sidebar bottom...
   await expect(page.locator('[data-testid="sidebar"] [data-testid="auth-status"]')).toHaveText('Signed in · user');

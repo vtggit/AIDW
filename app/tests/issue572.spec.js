@@ -39,6 +39,41 @@ const DASH_ID = 'dash-572-proof';
 const ITEM_ID = 'item-572-proof';
 const TITLE = `${MARK} Orders by Region`;
 
+// Non-admin identity for the viewer pass (the criteria concern roles): a
+// role 'user' identity booted the production way — the token in the URL
+// hash as #access_token=..., /api/auth/config and /api/auth/me mocked for
+// that user — proves the studio inbox still renders while the admin-only
+// controls are absent.
+const AUTH_CONFIG = { auth_mode: 'development' };
+const VIEWER_ME = { authenticated: true, user: { id: 9, username: 'user', roles: ['user'] } };
+const VIEWER_TOKEN = 'viewer-token-572';
+
+// Boot the page the production way for a given identity: /api/auth/config
+// and /api/auth/me mocked for `me`, every other /api/** an empty list, and
+// the token riding the URL hash fragment (#access_token=...).  The boot
+// proves the token was picked up the production way: Auth.init() migrates
+// it into sessionStorage and it arrives as the Authorization header on
+// /api/auth/me.
+async function bootAs(page, me, token, url) {
+    const meAuthorizations = [];
+    await page.unrouteAll();
+    await page.route('**/api/**', (route) => {
+        const request = route.request();
+        const reqUrl = request.url();
+        if (reqUrl.includes('/api/auth/config')) {
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(AUTH_CONFIG) });
+        }
+        if (reqUrl.includes('/api/auth/me')) {
+            const auth = request.headers()['authorization'];
+            if (auth) meAuthorizations.push(auth);
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(me) });
+        }
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
+    await page.goto(url + '#access_token=' + encodeURIComponent(token));
+    await expect.poll(() => meAuthorizations).toContain('Bearer ' + token);
+}
+
 async function installRoutes(page) {
     const inbox = new Set([SUG_ID]);
     // Stateful dashboard-items: the item only appears after a genuine accept.
@@ -112,7 +147,7 @@ test('issue572 freeform', async ({ page }) => {
     await page.addInitScript((t) => { window.sessionStorage.setItem('aicrm_token', t); }, TOKEN);
 
     // Open the studio and act on the inbox there.
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=suggestions');
     const card = page.locator(`[data-testid="suggestion"][data-id="${SUG_ID}"]`);
     await expect(card).toBeVisible();
     await expect(card.getByText(TITLE)).toBeVisible();
@@ -141,4 +176,25 @@ test('issue572 freeform', async ({ page }) => {
             return 'pending';
         }, { timeout: 10000 })
         .not.toBe('pending');
+});
+
+test('issue572 freeform (viewer)', async ({ page }) => {
+    // Non-admin pass: boot the production way as a role 'user' identity
+    // (the token in the URL hash) and prove the studio inbox still renders
+    // while the admin-only controls are absent.
+    await bootAs(page, VIEWER_ME, VIEWER_TOKEN, '/studio.html?panel=suggestions');
+
+    // The page renders for a non-admin: the Suggestions tool shows its
+    // inbox in a terminal state (the mocked list is empty)...
+    await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Suggestions');
+    await expect(page.locator('[data-testid="inbox"]')).toContainText('No pending suggestions.');
+    await expect(page.locator('[data-testid="sidebar"] [data-testid="auth-status"]')).toHaveText('Signed in · user');
+
+    // ...with the admin-only controls absent: the role-gated Feed keys nav
+    // item leaves the DOM, the Feed keys section is removed by its module,
+    // and the admin-only source form is gone.
+    await expect(page.locator('.aidw-nav-item[data-nav-panel="feedkeys"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="sidebar-nav"] [data-requires-role="admin"]')).toHaveCount(0);
+    await expect(page.locator('[data-panel="feedkeys"]')).toHaveCount(0);
+    await expect(page.locator('#source-form')).toHaveCount(0);
 });

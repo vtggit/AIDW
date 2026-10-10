@@ -90,7 +90,7 @@ test('issue697 surgical', async ({ page }) => {
     });
   });
 
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
 
   const seqRow = page.locator('[data-testid="sequence-row"]');
   await expect(seqRow).toBeVisible();
@@ -179,7 +179,7 @@ test('issue697 surgical (admin execute)', async ({ page }) => {
     });
   });
 
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
 
   const seqRow = page.locator('[data-testid="sequence-row"]');
   await expect(seqRow).toBeVisible();

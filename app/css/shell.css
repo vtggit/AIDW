@@ -163,6 +163,14 @@ header.wh-header {
     overflow-x: hidden;
 }
 
+/* Studio shows one tool at a time (issue #769): the shell owns the
+ * visibility of the .wh-panel sections — an inactive tool's section
+ * carries the hidden attribute and stays invisible even when a panel's
+ * own stylesheet (or inline style) sets an explicit display value. */
+body[data-aidw-page="studio"] main.wh-main > .wh-panel[hidden] {
+    display: none !important;
+}
+
 /* --- Narrow screens: the sidebar becomes a top bar ------------------ */
 
 @media (max-width: 900px) {

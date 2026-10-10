@@ -50,7 +50,7 @@ test('issue597 surgical', async ({ page }) => {
   });
 
   // --- Non-admin pass ---
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=wizard');
 
   // Wait for wizard init to complete (definition cards rendered into container)
   await page.waitForSelector('#wizard-definitions .wizard-card', { timeout: 5000 });
@@ -76,7 +76,7 @@ test('issue597 surgical', async ({ page }) => {
   // --- Admin pass (fresh navigation re-initializes all JS modules) ---
   currentMe = adminMe;
 
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=wizard');
 
   await page.waitForSelector('#wizard-definitions .wizard-card', { timeout: 5000 });
 
