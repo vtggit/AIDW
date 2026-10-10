@@ -275,7 +275,7 @@ test('issue689 freeform', async ({ page }) => {
   await expect(runsArea).not.toContainText('Weekly anonymize');
 
   // AC-3: the panel=retention deep link scrolled the section into view.
-  await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await expect.poll(async () => page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBeGreaterThan(0);
   await expect.poll(async () =>
     page.evaluate(() => {
       const rect = document.querySelector('[data-panel="retention"]').getBoundingClientRect();
@@ -290,7 +290,7 @@ test('issue689 freeform', async ({ page }) => {
   await page.goto('/studio.html');
   await expect(page.locator('[data-testid="retention-policies-empty"]')).toHaveText('No retention policies yet.');
   // Without panel=retention nothing scrolls the page.
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBe(0);
 
   // ------------------------------------------------------------------
   // Phase 3 — failed policies request

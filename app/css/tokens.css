@@ -1,0 +1,49 @@
+/* AIDW product family design tokens.
+ *
+ * The token set from docs/design/design-system.md, section "Tokens" —
+ * screens use these variables, never raw values.  The typefaces are
+ * IBM Plex Sans (UI text) and IBM Plex Mono (figures), loaded from
+ * Google Fonts by the pages' <head>; tabular numbers throughout.
+ */
+:root {
+    /* Type */
+    --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --font-feature-tabular: "tnum";
+
+    /* Colours */
+    --color-ground: #EEF1F4;
+    --color-surface: #FFFFFF;
+    --color-sidebar: #16212C;
+    --color-ink: #17212B;
+    --color-ink-secondary: #4A5865;
+    --color-border: #DDE3E9;
+    --color-border-subtle: #E6EAEE;
+    --color-accent: #1D4ED8;
+    --color-accent-contrast: #FFFFFF;
+    --color-risk: #8A3B05;
+    --color-risk-bg: #FDE8D3;
+
+    /* Shell (docs/design/design-system.md, "The application shell") */
+    --sidebar-width: 232px;
+    --detail-width: 440px;
+
+    /* Radii — 8 px for controls, 12 px for cards, 999 px for pills */
+    --radius-control: 8px;
+    --radius-card: 12px;
+    --radius-pill: 999px;
+
+    /* Spacing — 4 px steps; pages have 24-28 px padding */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 28px;
+    --page-padding: var(--space-6);
+
+    /* Sizes — touch targets at least 44 px, list rows at least 52 px */
+    --touch-min: 44px;
+    --row-min: 52px;
+}

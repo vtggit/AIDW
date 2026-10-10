@@ -6,6 +6,11 @@
     <title>AIDW — Studio</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/warehouse.css">
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/shell.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* Data retention panel (issue #689) */
         .wh-retention-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
@@ -38,7 +43,9 @@
         .wh-feedkeys-table thead th { color: var(--text-secondary); font-weight: 600; }
     </style>
 </head>
-<body>
+<body data-aidw-page="studio">
+<!-- Legacy top header: replaced by the shell sidebar (js/shell.js) on
+     boot — kept as the page's static fallback markup. -->
 <header class="wh-header">
     <div class="wh-brand">AIDW <span>· Studio</span></div>
     <a class="wh-nav" href="index.html" data-testid="nav-dashboard">← Dashboard</a>
@@ -204,6 +211,7 @@
 <script src="js/ingestion.js"></script>
 <script src="js/feed_keys.js"></script>
 <script src="js/audit.js"></script>
+<script src="js/shell.js"></script>
 <!-- AI assistant panel + deep-link handler (same as the Dashboard page). -->
 <script src="/assistant/panel.js" defer></script>
 <script>
@@ -221,6 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.href = 'index.html';
             return;
         }
+        Shell.roleGate();
         Warehouse.init().then(function () { Sources.init(); });
         Wizard.init();
         Sequences.init();
@@ -233,6 +242,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var el = document.getElementById('auth-status');
         el.textContent = 'Authentication failed: ' + (err && err.message ? err.message : 'unknown error');
         el.style.color = '#c0392b';
+        Shell.roleGate();
     });
 });
 </script>
