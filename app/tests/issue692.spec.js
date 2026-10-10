@@ -21,6 +21,12 @@
 //         texts each appear for their mocked responses (the failed-runs
 //         text is "Could not load runs."), and the panel=ingestion deep
 //         link boots the section into view
+//   V     non-admin pass (the criteria concern roles): a role 'user'
+//         identity booted the production way (the token in the URL hash as
+//         #access_token=..., /api/auth/config and /api/auth/me mocked for
+//         that user) still renders the panel, but with no admin-only
+//         control -- no per-row "Run now", no Enabled/Disabled toggle, and
+//         nothing in the panel carrying the admin role marker
 
 const { test, expect } = require('@playwright/test');
 
@@ -50,6 +56,10 @@ const AUTH_CONFIG = { auth_mode: 'development' };
 const AUTH_ME = {
   authenticated: true,
   user: { id: 1, username: 'admin', roles: ['admin'] },
+};
+const USER_ME = {
+  authenticated: true,
+  user: { id: 9, username: 'user', roles: ['user'] },
 };
 
 // One dataset; both pipelines point at it, so the dataset NAME (not the id)
@@ -182,6 +192,62 @@ async function mockApi(page, pipelines, pipelinesStatus, runs, runsStatus) {
   });
 }
 
+// Boot the page the production way for a given identity: the auth
+// endpoints are mocked for `me`, the ingestion endpoints for PIPELINES,
+// DATASETS and RUNS (every other /api/** an empty list), and the token
+// rides the URL hash fragment (#access_token=...).  The boot proves the
+// token was picked up the production way: Auth.init() migrates it into
+// sessionStorage and it arrives as the Authorization header on
+// /api/auth/me.
+async function bootAs(page, me, token, url = '/studio.html?panel=ingestion') {
+  const meAuthorizations = [];
+  await page.unrouteAll();
+  await page.route('**/api/**', (route) => {
+    const request = route.request();
+    const reqUrl = request.url();
+    if (reqUrl.includes('/api/auth/config')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(AUTH_CONFIG),
+      });
+    }
+    if (reqUrl.includes('/api/auth/me')) {
+      const auth = request.headers()['authorization'];
+      if (auth) meAuthorizations.push(auth);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(me),
+      });
+    }
+    if (reqUrl.includes('/api/pipelines')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(PIPELINES),
+      });
+    }
+    if (reqUrl.includes('/api/datasets')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(DATASETS),
+      });
+    }
+    if (reqUrl.includes('/api/runs')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(RUNS),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.goto(url + '#access_token=' + encodeURIComponent(token));
+  await expect.poll(() => meAuthorizations).toContain('Bearer ' + token);
+}
+
 test('issue692 freeform', async ({ page }) => {
   // Make the page taller than the viewport so the ingestion panel (the last
   // section) sits below the fold and a successful deep-link scroll is
@@ -277,7 +343,7 @@ test('issue692 freeform', async ({ page }) => {
   await expect(runsArea).not.toContainText('2026-10-01T02:00:00');
 
   // AC-3: the panel=ingestion deep link scrolled the section into view.
-  await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await expect.poll(async () => page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBeGreaterThan(0);
   await expect.poll(async () =>
     page.evaluate(() => {
       const rect = document.querySelector('[data-panel="ingestion"]').getBoundingClientRect();
@@ -292,7 +358,7 @@ test('issue692 freeform', async ({ page }) => {
   await page.goto('/studio.html');
   await expect(page.locator('[data-testid="ingestion-pipelines-empty"]')).toHaveText('No pipelines yet.');
   // Without panel=ingestion nothing scrolls the page.
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBe(0);
 
   // ------------------------------------------------------------------
   // Phase 3 — failed pipelines request
@@ -398,4 +464,46 @@ test('issue692 freeform', async ({ page }) => {
       return pwned || injected !== null;
     })
   ).toBe(false);
+});
+
+test('issue692 freeform (viewer)', async ({ page }) => {
+  // Non-admin pass: the criteria concern roles, so the proof also boots a
+  // role 'user' identity the production way (the token in the URL hash as
+  // #access_token=..., /api/auth/config and /api/auth/me mocked for that
+  // user) and proves the panel still renders while no admin-only control
+  // exists.
+  await bootAs(page, USER_ME, 'user-token-692');
+
+  const section = page.locator('section[data-panel="ingestion"]');
+  await expect(section).toBeVisible();
+  await expect(section.locator('h2')).toHaveText('Ingestion');
+  const pipelineTable = page.locator('[data-testid="ingestion-pipeline-table"]');
+  await expect(pipelineTable).toBeVisible();
+  const row1 = page.locator('[data-testid="ingestion-pipeline-row"][data-id="pipe-1"]');
+  const row2 = page.locator('[data-testid="ingestion-pipeline-row"][data-id="pipe-2"]');
+  await expect(row1).toBeVisible();
+  await expect(row2).toBeVisible();
+  await expect(row1.locator('td[data-testid="ingestion-pipeline-name"]')).toHaveText('Orders CDC');
+  await expect(row2.locator('td[data-testid="ingestion-pipeline-name"]')).toHaveText('Orders delta');
+
+  // No admin-only control is rendered for a non-admin: no "Run now"
+  // button, no per-row Actions cell, no Enable/Disable toggle, and
+  // nothing in the panel carries the admin role marker.
+  await expect(page.locator('[data-testid="ingestion-run-now"]')).toHaveCount(0);
+  await expect(page.locator('td[data-testid="ingestion-pipeline-actions"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="ingestion-enabled-toggle"]')).toHaveCount(0);
+  await expect(page.locator('[data-panel="ingestion"] [data-requires-role="admin"]')).toHaveCount(0);
+
+  // The Enabled/Disabled cell holds only the state word -- the admin-only
+  // toggle that would share it for admins is not there.
+  await expect(row1.locator('td[data-testid="ingestion-pipeline-enabled"]')).toHaveText('Enabled');
+  await expect(row1.locator('td[data-testid="ingestion-pipeline-enabled"] button')).toHaveCount(0);
+  await expect(row2.locator('td[data-testid="ingestion-pipeline-enabled"]')).toHaveText('Disabled');
+  await expect(row2.locator('td[data-testid="ingestion-pipeline-enabled"] button')).toHaveCount(0);
+
+  // The panel still functions for the viewer: selecting a pipeline shows
+  // its runs (read-only, no mutation control involved).
+  await row2.click();
+  await expect(page.locator('[data-testid="ingestion-runs"] [data-testid="ingestion-run-row"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="ingestion-runs"] [data-testid="ingestion-run-status"]')).toHaveText('completed');
 });

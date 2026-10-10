@@ -1,0 +1,238 @@
+/* AIDW application shell — the fixed-height two-column layout from
+ * docs/design/design-system.md ("The application shell" + "Narrow screens").
+ *
+ *   • height: 100vh, never taller: the document itself does not scroll
+ *     on a desktop screen; only the main content region (.aidw-scroll)
+ *     scrolls on its own
+ *   • two columns: the dark sidebar (--sidebar-width, 232 px) and the
+ *     main area (title + subtitle header, then the scrollable content)
+ *   • at 900 px and below the sidebar becomes a top bar and the page
+ *     may scroll vertically (never sideways)
+ */
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: var(--font-feature-tabular);
+}
+
+.aidw-shell {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--color-ground);
+}
+
+/* The legacy top header is replaced by the sidebar: invisible until
+ * js/shell.js removes it from the live DOM. */
+header.wh-header {
+    display: none;
+}
+
+/* --- Sidebar (dark, --sidebar-width) -------------------------------- */
+
+.aidw-sidebar {
+    flex: 0 0 var(--sidebar-width);
+    width: var(--sidebar-width);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-sidebar);
+    color: var(--color-surface);
+}
+
+.aidw-brand {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.aidw-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-control);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* The glyph is CSS content: the brand's DOM text stays exactly "AIDW"
+ * (the name) while the aria-hidden mark keeps its "A" badge. */
+.aidw-mark::before {
+    content: "A";
+}
+
+.aidw-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3);
+}
+
+.aidw-nav-item {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-control);
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.9375rem;
+    text-decoration: none;
+}
+
+.aidw-nav-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-surface);
+}
+
+.aidw-nav-item[aria-current="page"] {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-weight: 600;
+}
+
+.aidw-sidebar-foot {
+    flex: 0 0 auto;
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.aidw-sidebar-foot .wh-auth {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+/* --- Main area ------------------------------------------------------ */
+
+.aidw-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.aidw-main-header {
+    flex: 0 0 auto;
+    padding: var(--space-6) var(--space-7) var(--space-4);
+    border-bottom: 1px solid var(--color-border-subtle);
+    background: var(--color-surface);
+}
+
+.aidw-page-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-ink);
+}
+
+.aidw-page-subtitle {
+    margin: var(--space-1) 0 0;
+    font-size: 0.9375rem;
+    color: var(--color-ink-secondary);
+}
+
+/* The only part of a desktop screen that scrolls. */
+.aidw-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* --- Narrow screens: the sidebar becomes a top bar ------------------ */
+
+@media (max-width: 900px) {
+    body {
+        height: auto;
+        min-height: 100vh;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .aidw-shell {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .aidw-sidebar {
+        flex: none;
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+
+    .aidw-brand {
+        padding: var(--space-2) var(--space-3);
+        font-size: 1rem;
+    }
+
+    .aidw-nav {
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: var(--space-2);
+    }
+
+    .aidw-nav-item {
+        white-space: nowrap;
+    }
+
+    .aidw-sidebar-foot {
+        flex: 0 0 auto;
+        padding: var(--space-2) var(--space-3);
+        border-top: 0;
+    }
+
+    .aidw-main {
+        height: auto;
+        /* The narrow page may scroll vertically but never sideways:
+         * anything still wider than the viewport is clipped at the main
+         * area's boundary, so the document carries no horizontal
+         * scrollable overflow. */
+        overflow-x: hidden;
+    }
+
+    .aidw-main-header {
+        padding: var(--space-4);
+    }
+
+    .aidw-scroll {
+        overflow: visible;
+    }
+
+    main.wh-main {
+        max-width: none;
+        padding: var(--space-4);
+        gap: var(--space-5);
+    }
+}

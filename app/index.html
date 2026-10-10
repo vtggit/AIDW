@@ -6,8 +6,15 @@
   <title>AIDW — AI Data Warehouse</title>
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/warehouse.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/shell.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body data-aidw-page="dashboards">
+  <!-- Legacy top header: replaced by the shell sidebar (js/shell.js) on
+       boot — kept as the page's static fallback markup. -->
   <header class="wh-header">
     <div class="wh-brand">AIDW <span>· AI Data Warehouse</span></div>
     <a class="wh-nav btn btn-secondary" href="studio.html" data-testid="nav-studio">Configure</a>
@@ -38,11 +45,15 @@
   <script src="js/charts.js"></script>
   <script src="js/warehouse.js"></script>
   <script src="js/drilldown.js"></script>
+  <script src="js/shell.js"></script>
   <!-- AI assistant panel (Phase 1). Served same-origin under /assistant/ by nginx (see nginx.conf),
        so this is a relative path with no host/topology baked in. When the assistant service is not
        deployed (e.g. local dev), this 404s harmlessly and no panel is shown. -->
   <script src="/assistant/panel.js" defer></script>
-  <script>window.addEventListener('DOMContentLoaded', function () { Warehouse.init(); Drilldown.init(); });</script>
+  <script>window.addEventListener('DOMContentLoaded', function () {
+    Warehouse.init();
+    Drilldown.init();
+  });</script>
   <!-- Deep-link handler: focuses a view from ?item= / ?panel= on load (assistant navigation). -->
   <script src="js/deeplink.js"></script>
 </body>
