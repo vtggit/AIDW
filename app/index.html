@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/warehouse.css" />
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/shell.css" />
+  <link rel="stylesheet" href="css/dashboards.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,19 +23,28 @@
   </header>
 
   <main class="wh-main">
-    <section class="wh-panel">
-      <div class="wh-panel-head">
-        <h2>Dashboards</h2>
-        <p class="wh-sub">Accepted suggestions land here as dashboard items. Click a card to
-        open the data behind it. Configure sources, suggestions and processes in the Studio.</p>
-      </div>
-      <div id="dashboards" class="wh-dashboards" data-testid="dashboards"></div>
-    </section>
+    <!-- Split pane (AIDW#773): the tile grid scrolls on its own (left) and the
+         drill-down detail pane sits beside it (right, --detail-width). At 900 px
+         and below the pane stacks under the grid at full width. -->
+    <div class="dd-split">
+      <section class="wh-panel dd-grid-panel">
+        <div class="wh-panel-head">
+          <h2>Dashboards</h2>
+          <p class="wh-sub">Accepted suggestions land here as dashboard items. Click a card to
+          open the data behind it. Configure sources, suggestions and processes in the Studio.</p>
+        </div>
+        <div id="dashboards" class="wh-dashboards" data-testid="dashboards"></div>
+      </section>
 
-    <section class="wh-panel dd-panel" id="drilldown" data-testid="drilldown" hidden>
-      <button id="drilldown-close" class="btn btn-secondary" type="button">✕ Close</button>
-      <div id="drilldown-body" data-testid="drilldown-body"></div>
-    </section>
+      <section class="wh-panel dd-panel" id="drilldown" data-testid="drilldown" hidden
+               aria-label="Drill-down details">
+        <div class="dd-panel-head">
+          <h3 class="dd-panel-heading">Details</h3>
+          <button id="drilldown-close" class="btn btn-secondary" type="button">Close</button>
+        </div>
+        <div id="drilldown-body" data-testid="drilldown-body"></div>
+      </section>
+    </div>
   </main>
 
   <div id="toast" class="wh-toast" data-testid="toast" hidden></div>

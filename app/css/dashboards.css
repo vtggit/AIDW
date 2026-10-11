@@ -1,0 +1,208 @@
+/* Dashboards — split-pane main region (AIDW#773).
+ *
+ * The design-system "work queue" shape: on a desktop screen the main region
+ * is a fixed-height split pane — the tile grid on the left (scrolls on its
+ * own) and the drill-down detail pane on the right (--detail-width, 440 px,
+ * its body scrolls on its own). The document itself never scrolls; closing
+ * the pane gives the grid the full width back.
+ *
+ * At 900 px and below (the shell's narrow breakpoint) the pane stacks under
+ * the grid at full width; the page may then scroll vertically, never sideways.
+ *
+ * Colours, radii and spacing come from app/css/tokens.css — no raw values.
+ */
+
+/* The hidden attribute must beat any display rule at every width. */
+.dd-panel[hidden] {
+    display: none;
+}
+
+/* --- Pane chrome (every width) ----------------------------------------- */
+
+.dd-panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+}
+
+.dd-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.dd-panel-head h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+#drilldown-body {
+    padding: var(--space-4);
+    overflow-x: hidden;
+}
+
+#drilldown-body h3 {
+    margin: 0 0 var(--space-1);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    overflow-wrap: anywhere;
+}
+
+#drilldown-body .dd-provenance {
+    margin: 0 0 var(--space-3);
+    font-size: 0.8125rem;
+    color: var(--color-ink-secondary);
+}
+
+#drilldown-body .dd-note {
+    margin: var(--space-3) 0 0;
+    font-size: 0.8125rem;
+    color: var(--color-ink-secondary);
+}
+
+/* The detail chart scales into the narrow pane; the viewBox keeps the art. */
+#drilldown-body > svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* The data table sits in a card with a sticky header. */
+#drilldown-body .dd-card {
+    margin-top: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+
+#drilldown-body .dd-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8125rem;
+}
+
+#drilldown-body .dd-table th,
+#drilldown-body .dd-table td {
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+#drilldown-body .dd-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-ink-secondary);
+    font-weight: 600;
+}
+
+#drilldown-body .dd-table tbody td {
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+#drilldown-body .dd-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+/* The opened tile: the design system's 3 px accent bar on a surface tint. */
+.wh-item[aria-current="true"] {
+    background: var(--color-surface);
+    box-shadow: inset 3px 0 0 0 var(--color-accent);
+}
+
+/* --- Desktop (above the shell's 900 px narrow breakpoint) --------------- */
+
+@media (min-width: 901px) {
+    /* The split fills the main region exactly, so .aidw-scroll itself never
+     * scrolls: the two panes own their scrolling. */
+    body[data-aidw-page="dashboards"] .aidw-scroll {
+        overflow: hidden;
+    }
+
+    body[data-aidw-page="dashboards"] main.wh-main {
+        height: 100%;
+        max-width: none;
+        padding: var(--space-5);
+        gap: 0;
+    }
+
+    .dd-split {
+        display: flex;
+        align-items: stretch;
+        gap: var(--space-5);
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    /* Tile grid pane: fixed head, the grid scrolls on its own. */
+    .dd-grid-panel {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .dd-grid-panel > .wh-panel-head {
+        flex: 0 0 auto;
+    }
+
+    .dd-grid-panel #dashboards {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin-top: var(--space-3);
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: var(--space-1) var(--space-2) var(--space-2) 0;
+    }
+
+    /* Drill-down pane: fixed 440 px column; the body scrolls on its own. */
+    .dd-panel {
+        flex: 0 0 var(--detail-width);
+        width: var(--detail-width);
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .dd-panel-head {
+        flex: 0 0 auto;
+    }
+
+    #drilldown-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-anchor: none;
+    }
+}
+
+/* --- Narrow screens (900 px and below): the pane stacks under the grid -- */
+
+@media (max-width: 900px) {
+    .dd-split {
+        display: block;
+    }
+
+    .dd-grid-panel,
+    .dd-grid-panel #dashboards {
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .dd-panel {
+        width: 100%;
+        margin-top: var(--space-5);
+    }
+}
