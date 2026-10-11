@@ -123,7 +123,7 @@ test('inbox renders suggestions; accept lands one on a dashboard; dismiss remove
     await page.addInitScript((t) => { window.sessionStorage.setItem('aicrm_token', t); }, TOKEN);
 
     // Act on the inbox on the studio page.
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=suggestions');
     const inbox = page.getByTestId('inbox');
     await expect(inbox.getByText(ACCEPT_TITLE)).toBeVisible();
     await expect(inbox.getByText(DISMISS_TITLE)).toBeVisible();
@@ -153,7 +153,7 @@ test('inbox renders suggestions; accept lands one on a dashboard; dismiss remove
         .not.toBe('pending');
 
     // Dismiss -> the card leaves the inbox.
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=suggestions');
     await page.locator(`[data-testid="suggestion"][data-id="${DISMISS_ID}"] [data-action="dismiss"]`).click();
     await expect(page.locator(`[data-testid="suggestion"][data-id="${DISMISS_ID}"]`)).toHaveCount(0);
 });

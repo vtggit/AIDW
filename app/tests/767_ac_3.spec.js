@@ -219,7 +219,7 @@ test('767_ac_3_data_source (viewer)', async ({ page }) => {
   // one definition.
   await page.goto('/studio.html#access_token=' + encodeURIComponent('viewer-token-767'));
   await expect(page.locator('[data-testid="sidebar"]')).toBeVisible();
-  await expect(page.locator('.aidw-page-title')).toHaveText('Studio');
+  await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Data sources');
   await expect(page.locator('[data-panel="sources"]')).toBeVisible();
   await expect(page.locator('[data-testid="sidebar"] [data-testid="auth-status"]')).toHaveText('Signed in · user');
   await expect(page.locator('.aidw-nav-item[data-nav-panel="feedkeys"]')).toHaveCount(0);

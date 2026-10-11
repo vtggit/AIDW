@@ -155,6 +155,15 @@ header.wh-header {
     color: var(--color-ink-secondary);
 }
 
+/* The shell owns .wh-panel visibility on Studio: an inactive tool's
+ * full container is hidden no matter what display value the panel's
+ * own CSS sets.  js/shell.js carries the other half of the mechanism:
+ * when it hides a section it pins display:none inline, so the shell
+ * wins even against an !important display value from the panel CSS. */
+.wh-panel[hidden] {
+    display: none !important;
+}
+
 /* The only part of a desktop screen that scrolls. */
 .aidw-scroll {
     flex: 1 1 auto;

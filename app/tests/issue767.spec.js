@@ -77,8 +77,12 @@ const NAV = [
 // Mock every /api/** request for upcoming page loads: auth endpoints for
 // `me`, every other API call an empty JSON array (both pages' boot
 // fetches many lists on startup).
-async function mockApi(page, me) {
+async function mockApi(page, me, sourceCount = 0) {
   await page.unrouteAll();
+  const sources = [];
+  for (let i = 1; i <= sourceCount; i++) {
+    sources.push({ id: 'src-' + i, name: 'Source ' + i, type: 'odata' });
+  }
   await page.route('**/api/**', (route) => {
     const url = route.request().url();
     if (url.includes('/api/auth/config')) {
@@ -86,6 +90,9 @@ async function mockApi(page, me) {
     }
     if (url.includes('/api/auth/me')) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(me) });
+    }
+    if (url.includes('/api/sources')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sources) });
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
@@ -171,7 +178,7 @@ async function expectSidebar(page, { feedkeysVisible }) {
 
 test('issue767 freeform', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await mockApi(page, ADMIN_ME);
+  await mockApi(page, ADMIN_ME, 30);
 
   // ------------------------------------------------------------------
   // Dashboards (index.html) at 1440x900
@@ -222,7 +229,8 @@ test('issue767 freeform', async ({ page }) => {
   // is gone...
   expect(await page.evaluate(() => window.__issue767DashMarker)).toBeFalsy();
   // ...and Studio renders with the nav item current (not Dashboards)...
-  await expect(page.locator('.aidw-page-title')).toHaveText('Studio');
+  // ...and the title reads the shown tool (issue #769: one tool at a time).
+  await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Ingestion');
   await expect(page.locator('.aidw-nav-item[data-nav-panel="ingestion"]')).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.aidw-nav-item[data-nav="dashboards"]')).not.toHaveAttribute('aria-current');
   // ...with the deep-linked panel in the main region's view.
@@ -252,17 +260,26 @@ test('issue767 freeform', async ({ page }) => {
     null, 'page', null, null, null, null, null, null, null, null,
   ]);
 
-  // Main area header: the Studio title + subtitle.
-  await expect(page.locator('.aidw-page-title')).toHaveText('Studio');
+  // Main area header: the Studio title (the shown tool: Data sources)
+  // + subtitle.
+  await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Data sources');
   // The old "← Dashboard" header link is replaced by the sidebar.
   expect(await page.locator('a[data-testid="nav-dashboard"]').count()).toBe(0);
 
-  // The main content region scrolls (the Studio's panels overflow it)...
+  // The main content region scrolls only when the SHOWN tool is taller
+  // than it: Data sources with a long list is...
   const region = await page.evaluate(() => {
     const el = document.querySelector('[data-testid="main-content"]');
     return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
   });
-  expect(region.scrollHeight).toBeGreaterThan(region.clientHeight);
+  expect(region.scrollHeight, 'tall tool: the main region scrolls').toBeGreaterThan(region.clientHeight);
+  // ...a short tool (the empty PII flags panel) is not.
+  await page.click('.aidw-nav-item[data-nav-panel="pii"]');
+  const shortRegion = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="main-content"]');
+    return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+  });
+  expect(shortRegion.scrollHeight, 'short tool: the main region does not scroll').toBeLessThanOrEqual(shortRegion.clientHeight);
   // ...while the document itself does not scroll.
   await expectNoDocumentScroll(page);
 
@@ -396,9 +413,10 @@ test('issue767 freeform (viewer)', async ({ page }) => {
   await page.goto('/studio.html#access_token=' + encodeURIComponent(VIEWER_TOKEN));
   await expect.poll(() => meAuthorizations).toContain('Bearer ' + VIEWER_TOKEN);
 
-  // The page renders for a non-admin...
+  // The page renders for a non-admin... the title reads the shown
+  // tool (no deep link: Data sources)...
   await expect(page.locator('[data-testid="sidebar"]')).toBeVisible();
-  await expect(page.locator('.aidw-page-title')).toHaveText('Studio');
+  await expect(page.locator('.aidw-page-title')).toHaveText('Studio · Data sources');
   await expect(page.locator('[data-panel="sources"]')).toBeVisible();
   // ...with the signed-in user at the sidebar bottom...
   await expect(page.locator('[data-testid="sidebar"] [data-testid="auth-status"]')).toHaveText('Signed in · user');

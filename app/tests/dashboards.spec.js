@@ -107,7 +107,7 @@ test('accepting a suggestion on the studio inbox lands the item on a dashboard',
     await page.addInitScript((t) => { window.sessionStorage.setItem('aicrm_token', t); }, TOKEN);
 
     // Act on the inbox on the studio page.
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=suggestions');
     const card = page.locator(`[data-testid="suggestion"][data-id="${SUGGESTION_ID}"]`);
     await expect(card).toBeVisible();
     await expect(card.getByText(TITLE)).toBeVisible();

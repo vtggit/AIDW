@@ -260,9 +260,12 @@ test('issue740 freeform', async ({ page }) => {
   await page.evaluate(() => { sessionStorage.setItem('feedkeys-throw-admin', '1'); });
   feedCredentialRequests.length = 0;
   await page.goto('about:blank');
-  await page.goto('/studio.html?panel=feedkeys');
+  // One tool at a time: Data sources is the shown tool for this boot
+  // (the throwing Auth.isAdmin() only affects the Feed keys section,
+  // which fails closed and leaves the DOM regardless of the deep link).
+  await page.goto('/studio.html?panel=sources');
   await page.evaluate(() => { sessionStorage.removeItem('feedkeys-throw-admin'); });
-  // the page loaded (the other static panels are present) ...
+  // the page loaded with its shown tool visible ...
   await expect(page.locator('[data-panel="sources"]')).toBeVisible();
   // ... the Feed keys section is gone (FeedKeys.init() ran to its
   // synchronous non-admin exit, which happens before any request) ...

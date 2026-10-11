@@ -393,8 +393,9 @@ test('issue754 freeform', async ({ page }) => {
   await page.goto('/studio.html?panel=audit#access_token=user-token-754');
   // the hash token was picked up the production way and sent on /auth/me
   await expect.poll(() => meAuthorization).toContain('Bearer user-token-754');
-  // the page still renders its other panels ...
-  await expect(page.locator('[data-panel="sources"]')).toBeVisible();
+  // the page still renders — one tool at a time: Data sources is the
+  // hidden (but intact) container while Audit history is shown ...
+  await expect(page.locator('[data-panel="sources"]')).toBeHidden();
   await expect(page.locator('[data-testid="retention-policies-empty"]')).toHaveText(
     'No retention policies yet.'
   );
@@ -471,8 +472,9 @@ test('issue754 freeform', async ({ page }) => {
   await expect(page.locator('[data-testid="auth-status"]')).toHaveText(
     'Authentication failed: stubbed auth failure'
   );
-  // ... the audit section still renders (other panels render too) ...
-  await expect(page.locator('[data-panel="sources"]')).toBeVisible();
+  // ... the audit section still renders (the other panels stay
+  // hidden, one tool at a time) ...
+  await expect(page.locator('[data-panel="sources"]')).toBeHidden();
   await expect(section).toBeVisible();
   // ... and shows only the static fail-closed note with no admin
   // element, and no request reached /api/audit
