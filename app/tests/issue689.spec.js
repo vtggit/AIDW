@@ -274,14 +274,19 @@ test('issue689 freeform', async ({ page }) => {
   await expect(runsArea.locator('[data-testid="retention-run-purged"]')).toHaveText(['Purged: 0', 'Purged: 1200']);
   await expect(runsArea).not.toContainText('Weekly anonymize');
 
-  // AC-3: the panel=retention deep link scrolled the section into view.
-  await expect.poll(async () => page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBeGreaterThan(0);
+  // AC-3: the panel=retention deep link lands on the retention tool: it
+  // is the one tool shown, at the top of the main region (one tool at a
+  // time; the shell keeps the region at the top while the deep-linked
+  // tool is the shown tool, so nothing sits below the fold to scroll to).
   await expect.poll(async () =>
     page.evaluate(() => {
       const rect = document.querySelector('[data-panel="retention"]').getBoundingClientRect();
       return rect.top < window.innerHeight && rect.bottom > 0;
     })
   ).toBeTruthy();
+  await expect
+    .poll(async () => page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop))
+    .toBe(0);
 
   // ------------------------------------------------------------------
   // Phase 2 — no deep link, empty policy list
@@ -303,7 +308,7 @@ test('issue689 freeform', async ({ page }) => {
   // Phase 4 — selected policy with no runs
   // ------------------------------------------------------------------
   await mockApi(page, [POLICIES[0]], 200, [], 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=retention');
   const loneRow = page.locator('[data-testid="retention-policy-row"][data-id="pol-1"]');
   await expect(loneRow).toBeVisible();
   await loneRow.click();
@@ -313,7 +318,7 @@ test('issue689 freeform', async ({ page }) => {
   // Phase 5 — failed runs request
   // ------------------------------------------------------------------
   await mockApi(page, [POLICIES[0]], 200, API_ERROR, 500);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=retention');
   const loneRow2 = page.locator('[data-testid="retention-policy-row"][data-id="pol-1"]');
   await expect(loneRow2).toBeVisible();
   await loneRow2.click();
@@ -344,7 +349,7 @@ test('issue689 freeform', async ({ page }) => {
     created_at: null,
   };
   await mockApi(page, [nullPolicy], 200, [nullRun], 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=retention');
 
   const nullRow = page.locator('[data-testid="retention-policy-row"][data-id="pol-null"]');
   await expect(nullRow).toBeVisible();
@@ -458,7 +463,7 @@ test('issue689 freeform', async ({ page }) => {
     },
   ];
   await mockApi(page, [numPolicy], 200, numRuns, 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=retention');
   const numRow = page.locator('[data-testid="retention-policy-row"][data-id="7"]');
   await expect(numRow).toBeVisible();
   await numRow.click();
@@ -540,7 +545,7 @@ test('issue689 freeform', async ({ page }) => {
     },
   ];
   await mockApi(page, [tsPolicy], 200, tsRuns, 200);
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=retention');
   const tsRow = page.locator('[data-testid="retention-policy-row"][data-id="pol-ts"]');
   await expect(tsRow).toBeVisible();
   await tsRow.click();

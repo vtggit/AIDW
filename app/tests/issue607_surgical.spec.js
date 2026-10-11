@@ -70,7 +70,7 @@ test('issue607 surgical', async ({ page }) => {
 
   // --- Pass 1: viewer (non-admin) — execute button must be ABSENT ---
   await page.route('**/api/**', mockApi(['viewer']));
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
 
   const seqRowViewer = page.locator('[data-testid="sequence-row"]');
   await expect(seqRowViewer).toBeVisible();
@@ -88,7 +88,7 @@ test('issue607 surgical', async ({ page }) => {
 
   // --- Pass 2: admin — execute button must be PRESENT ---
   await page.route('**/api/**', mockApi(['admin']));
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
 
   const seqRowAdmin = page.locator('[data-testid="sequence-row"]');
   await expect(seqRowAdmin).toBeVisible();

@@ -112,7 +112,7 @@ test('issue572 freeform', async ({ page }) => {
     await page.addInitScript((t) => { window.sessionStorage.setItem('aicrm_token', t); }, TOKEN);
 
     // Open the studio and act on the inbox there.
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=suggestions');
     const card = page.locator(`[data-testid="suggestion"][data-id="${SUG_ID}"]`);
     await expect(card).toBeVisible();
     await expect(card.getByText(TITLE)).toBeVisible();

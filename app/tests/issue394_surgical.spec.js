@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('issue394 surgical', async ({ page }) => {
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=sequences');
 
     // Assert the new panel heading is visible on screen
     await expect(page.getByText('Run history')).toBeVisible();

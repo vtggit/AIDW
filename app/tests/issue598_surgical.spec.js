@@ -46,7 +46,7 @@ test('issue598 surgical', async ({ page }) => {
   });
 
   // --- Non-admin: create button absent from DOM, read-only content still renders ---
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
   await page.waitForSelector('[data-testid="sequence-row"]', { timeout: 5000 });
 
   const createBtnNonAdmin = await page.$('[data-testid="sequence-create"]');
@@ -58,7 +58,7 @@ test('issue598 surgical', async ({ page }) => {
 
   // --- Admin: create button present and functional ---
   authRole = 'admin';
-  await page.goto('/studio.html');
+  await page.goto('/studio.html?panel=sequences');
   await page.waitForSelector('[data-testid="sequence-row"]', { timeout: 5000 });
 
   const createBtnAdmin = await page.$('[data-testid="sequence-create"]');

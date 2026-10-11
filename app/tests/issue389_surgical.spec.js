@@ -1,10 +1,10 @@
 const { test, expect } = require('@playwright/test');
 
 test('issue389 surgical', async ({ page }) => {
-    await page.goto('/studio.html');
+    await page.goto('/studio.html?panel=sequences');
 
     // Assert the text 'Load sequences' is visible
-    await expect(page.getByRole('heading', {name: 'Load sequences'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Load sequences', exact: true})).toBeVisible();
 
     // Assert via waitForFunction that window.Sequences is defined
     await page.waitForFunction(() => typeof window.Sequences !== 'undefined');

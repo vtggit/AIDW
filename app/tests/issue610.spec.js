@@ -101,7 +101,7 @@ test('issue610 freeform', async ({ page }) => {
         configUnreachable = false;
         expectedToken = TOKEN1;
 
-        await page.goto(`/studio.html#access_token=${TOKEN1}`);
+        await page.goto(`/studio.html?panel=sequences#access_token=${TOKEN1}`);
 
         await expect(page.locator('[data-testid="sequences-empty"]'))
             .toHaveText(/No load sequences yet/);
@@ -150,7 +150,7 @@ test('issue610 freeform', async ({ page }) => {
         expectedToken = TOKEN2;
 
         await page.goto('about:blank'); // cross-document hop so the next goto is a full load
-        await page.goto(`/studio.html#access_token=${TOKEN2}`);
+        await page.goto(`/studio.html?panel=sequences#access_token=${TOKEN2}`);
 
         await expect(page.locator('[data-testid="sequences-empty"]'))
             .toHaveText(/No load sequences yet/);
