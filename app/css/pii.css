@@ -109,7 +109,9 @@
     font-feature-settings: var(--font-feature-tabular);
 }
 
-/* Compact flag row: column name, category pill, actions — one grid
+/* Compact flag row: the column cell (the name, and under it one muted
+ * line with the detection tier and the rationale), the category pill and
+ * the actions (the confidence chip before the two buttons) — one grid
  * column each, at least --row-min tall. */
 .wh-pii-row {
     flex: 0 0 auto;
@@ -140,6 +142,33 @@
     font-feature-settings: var(--font-feature-tabular);
     font-size: 0.875rem;
     color: var(--color-ink);
+}
+
+/* The row's first grid column: the field name, and — when the flag has a
+ * detection tier or a rationale — the muted detail line under it. Items
+ * stretch to the column's width so both lines can ellipsize. */
+.wh-pii-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+/* The muted detail line: tier and rationale on ONE line, ending in an
+ * ellipsis when too long; the full rationale rides the line's title
+ * (set by the renderer, escaped). */
+.wh-pii-detail {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: var(--color-ink-secondary);
+}
+
+.wh-pii-tier {
+    font-weight: 600;
 }
 
 .wh-pii-category {

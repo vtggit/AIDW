@@ -594,7 +594,7 @@ const Warehouse = {
         if (!el) return;
         const all = Array.isArray(this._piiFlags) ? this._piiFlags : [];
         const filter = this._piiFilter || 'all';
-        const categoryOf = (f) => String((f && f.category) || '');
+        const categoryOf = (f) => Warehouse._piiFilterKey(f.category);
         const counts = { all: all.length };
         for (const f of all) counts[categoryOf(f)] = (counts[categoryOf(f)] || 0) + 1;
         const categories = Object.keys(counts).filter((c) => c !== 'all').sort();
@@ -657,15 +657,34 @@ const Warehouse = {
         }).join('');
     },
 
-    /** One compact flag row: the column name, the category and the Confirm /
-     * Dismiss actions. Every API value goes through _esc/_attr — the row is
-     * never built from raw HTML. */
+    /** One compact flag row: the column name with the muted detection-tier /
+     * rationale detail line under it, the category, and — before the Confirm /
+     * Dismiss actions — the confidence chip. Every API value goes through
+     * _esc/_attr (including the detail line's title) — the row is never built
+     * from raw HTML. A flag with no tier and no rationale shows no detail
+     * line; a flag without a category reads 'Uncategorised'. */
     renderPiiRow(f, fieldName) {
         const field = fieldName || f.discovered_field_id || '(unbound field)';
+        const conf = Warehouse._confidence(f.confidence);
+        const tier = String((f && f.detection_tier) || '').trim();
+        const rationale = String((f && f.rationale) || '').trim();
+        const detail = tier || rationale
+            ? `<span class="wh-pii-detail" data-testid="pii-detail"${rationale
+                ? ` title="${Warehouse._attr(rationale)}"`
+                : ''}>${tier
+                ? `<span class="wh-pii-tier" data-testid="pii-tier">${Warehouse._esc(tier)}</span>`
+                : ''}${tier && rationale ? ' · ' : ''}${rationale
+                ? `<span class="wh-pii-rationale" data-testid="pii-rationale">${Warehouse._esc(rationale)}</span>`
+                : ''}</span>`
+            : '';
         return `<div class="wh-pii-row" data-testid="pii-flag" data-id="${Warehouse._attr(f.id)}">
-        <span class="wh-pii-field" data-testid="pii-field">${Warehouse._esc(field)}</span>
+        <div class="wh-pii-main">
+          <span class="wh-pii-field" data-testid="pii-field">${Warehouse._esc(field)}</span>
+          ${detail}
+        </div>
         <span class="wh-pii-category" data-testid="pii-category">${Warehouse._esc(Warehouse._piiCategory(f.category))}</span>
         <span class="wh-pii-actions">
+          <span class="wh-conf ${conf.cls}" data-testid="pii-confidence" title="score ${conf.value}">${conf.label}</span>
           <button type="button" class="btn btn-primary btn-sm" data-action="pii-confirm" data-id="${Warehouse._attr(f.id)}">Confirm</button>
           <button type="button" class="btn btn-secondary btn-sm" data-action="pii-dismiss" data-id="${Warehouse._attr(f.id)}">Dismiss</button>
         </span>
@@ -710,8 +729,35 @@ const Warehouse = {
         this._piiFitObserver.observe(section, { attributes: true, attributeFilter: ['hidden'] });
     },
 
+    /** The no-category chip's filter key: a plain, non-empty word. It must
+     * survive the HTML attribute round trip intact — the click handler
+     * matches the value read back from data-pii-filter against the
+     * in-memory keys, and the parser rewrites a NUL (or any other
+     * replacement-prone byte) into U+FFFD inside attribute values, so the
+     * sentinel must be exactly what the DOM carries. It must not be 'all',
+     * and a real category literally equal to it is an accepted cosmetic
+     * collision (it then reads 'Uncategorised' like the rest). The chip
+     * and the rows still read the human label (see _piiCategory). */
+    _piiNoCategoryKey: 'pii-no-category',
+
+    /** The chip's filter key for a category: the trimmed category when it
+     * has one, or the non-empty sentinel when it is missing or
+     * empty — no-category flags collect under one chip, a literal
+     * 'uncategorised' category stays its own category, and no filter value
+     * is ever the empty string. */
+    _piiFilterKey(c) {
+        const raw = String(c || '').trim();
+        return raw === '' ? Warehouse._piiNoCategoryKey : raw;
+    },
+
+    /** The chip's and the row's label for a category: 'Uncategorised' for a
+     * missing or empty one (or its sentinel key, which the chip list passes
+     * as the category), the category with underscores read as spaces
+     * otherwise — a literal 'uncategorised' category keeps its own label. */
     _piiCategory(c) {
-        return String(c || '').replace(/_/g, ' ') || 'other';
+        const raw = String(c || '').trim();
+        if (raw === '' || c === Warehouse._piiNoCategoryKey) return 'Uncategorised';
+        return raw.replace(/_/g, ' ');
     },
 
     _onPiiClick(e) {
