@@ -102,7 +102,7 @@ jobs:
 
       - name: Audit Python dependencies (pip-audit)
         run: |
-          pip-audit -r backend/requirements.txt
+          pip-audit -r backend/constraints.txt --no-deps --disable-pip
 
       - name: Install gitleaks
         run: |
@@ -131,7 +131,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install backend dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements.txt -c backend/constraints.txt
 
       - name: Verify OpenAPI schema is in sync
         run: |
@@ -174,7 +174,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install backend dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements.txt -c backend/constraints.txt
 
       - name: Verify migrations apply cleanly
         run: |
