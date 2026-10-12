@@ -1,0 +1,266 @@
+/* Suggested dashboard items tool (issue #777) — the work-queue pattern from
+ * docs/design/design-system.md, rebuilt as a fixed-height flex column:
+ *
+ *   • the top bar (title + #inbox-count badge + confidence filter chips)
+ *     always stays in view; the chips narrow the list client-side, no request
+ *   • #inbox is the ONLY scrolling region: a sticky column header (one element
+ *     holding the five labels) over compact rows (at least --row-min tall),
+ *     ordered highest confidence first
+ *   • on a desktop screen the document and the main .aidw-scroll region never
+ *     scroll because of the list: js/warehouse.js marks main.wh-main with
+ *     .suggestions-open while the shell shows this tool, and the media block
+ *     below locks the panel to the viewport height for exactly that state
+ *   • at 900 px and below the header row is dropped and each row stacks its
+ *     fields; the page may scroll vertically (never sideways)
+ *
+ * Colours, radii and spacing come from tokens.css only — no raw colour values.
+ * Row, header and empty-state markup are rendered by js/warehouse.js, which
+ * escapes every API value through Warehouse._esc/_attr before insertion.
+ */
+
+/* --- Top bar: title + count badge + confidence filter chips ------------- */
+
+.wh-suggestions-topbar {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.wh-suggestions-topbar h2 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.wh-suggestions-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+/* Toggle chips (aria-pressed carries the state, per the design system's
+ * accessibility rules); each shows its own tier count. */
+.wh-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--touch-min);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    color: var(--color-ink-secondary);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.wh-filter-chip:hover {
+    border-color: var(--color-accent);
+    color: var(--color-ink);
+}
+
+.wh-filter-chip[aria-pressed="true"] {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-contrast);
+}
+
+.wh-filter-count {
+    font-family: var(--font-mono);
+    font-feature-settings: var(--font-feature-tabular);
+    font-size: 0.8125rem;
+}
+
+/* --- #inbox: the only scroll region -------------------------------------- */
+
+.wh-inbox {
+    --sug-cols: 72px minmax(0, 1fr) 96px 96px 168px;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+}
+
+/* One element holds all five column labels; it pins to the top of the
+ * scrolling #inbox while the rows move under it. */
+.wh-inbox-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: var(--sug-cols);
+    gap: var(--space-3);
+    align-items: center;
+    padding: var(--space-2) var(--space-5);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-ink-secondary);
+}
+
+/* Compact row: one grid cell per column, at least --row-min tall. */
+.wh-sug-row {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: var(--sug-cols);
+    gap: var(--space-3);
+    align-items: center;
+    min-height: var(--row-min);
+    padding: var(--space-2) var(--space-5);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.wh-sug-row:hover {
+    background: var(--color-ground);
+}
+
+.wh-sug-type {
+    justify-self: start;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--color-border-subtle);
+    color: var(--color-ink-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.wh-sug-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    color: var(--color-ink);
+}
+
+.wh-sug-agg {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-feature-settings: var(--font-feature-tabular);
+    font-size: 0.8125rem;
+    color: var(--color-ink-secondary);
+}
+
+/* The confidence chip reuses the existing .wh-conf pill classes from
+ * warehouse.css (High / Medium / Low tiers). */
+.wh-inbox .wh-conf {
+    justify-self: start;
+}
+
+.wh-sug-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+/* --- Empty states: centred in the region --------------------------------- */
+
+.wh-sug-empty {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: var(--space-2);
+    padding: var(--space-6);
+}
+
+.wh-sug-empty-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--color-ink-secondary);
+}
+
+.wh-sug-empty-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.wh-sug-empty-copy {
+    margin: 0;
+    max-width: 34rem;
+    font-size: 0.9375rem;
+    color: var(--color-ink-secondary);
+}
+
+/* --- Desktop fit: the panel fills the viewport, only #inbox scrolls ------
+ *
+ * js/warehouse.js toggles .suggestions-open on main.wh-main while the shell
+ * shows the suggestions section. Only in that state does the main region
+ * lock to the viewport height (height: 100% of the .aidw-scroll region), so
+ * the document and the main region cannot scroll; the panel is a flex column
+ * with a fixed top bar and #inbox taking the rest with its own overflow.
+ * Every other tool keeps the region's normal scrolling behaviour. */
+@media (min-width: 901px) {
+    main.wh-main.suggestions-open {
+        height: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    main.wh-main.suggestions-open > section.wh-panel[data-panel="suggestions"] {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+    }
+
+    .wh-inbox {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+}
+
+/* --- Narrow screens: the header row is dropped, rows stack --------------- */
+
+@media (max-width: 900px) {
+    .wh-inbox-head {
+        display: none;
+    }
+
+    .wh-sug-row {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .wh-sug-actions {
+        justify-content: flex-start;
+    }
+}

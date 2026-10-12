@@ -15,8 +15,13 @@ const Warehouse = {
     async init() {
         await this._ensureAuth();
         this._renderAuth();
+        this._suggestions = [];
+        this._confidenceFilter = 'all';
         const inbox = document.getElementById('inbox');
         if (inbox) inbox.addEventListener('click', (e) => this._onCardClick(e));
+        const filters = document.querySelector('[data-testid="suggestions-filters"]');
+        if (filters) filters.addEventListener('click', (e) => this._onFilterClick(e));
+        this._bindSuggestionsFit();
         const pii = document.getElementById('pii-inbox');
         if (pii) pii.addEventListener('click', (e) => this._onPiiClick(e));
         await this.refresh();
@@ -62,14 +67,14 @@ const Warehouse = {
             el.innerHTML = this._notice('Could not load suggestions.', true);
             return;
         }
-        const suggested = (res.data || [])
-            .filter((s) => s.status === 'suggested')
-            .sort((a, b) => (b.score || 0) - (a.score || 0));
-        const count = document.getElementById('inbox-count');
-        if (count) count.textContent = String(suggested.length);
-        el.innerHTML = suggested.length
-            ? suggested.map(this.renderSuggestionCard).join('')
-            : this._notice('No pending suggestions. Discover a source to generate some.');
+        // Cache the pending suggestions (highest confidence first) so the
+        // confidence chips and accept/dismiss re-render from state — no new
+        // request — and _renderInbox() does the DOM update.
+        const data = Array.isArray(res.data) ? res.data : [];
+        this._suggestions = data
+            .filter((s) => s && s.status === 'suggested')
+            .sort((a, b) => Warehouse._scoreNumber(b.score) - Warehouse._scoreNumber(a.score));
+        this._renderInbox();
     },
 
     async loadDashboards() {
@@ -126,30 +131,132 @@ const Warehouse = {
 
     // ---- pure render helpers (data -> HTML) ---------------------------------
 
-    renderSuggestionCard(s) {
+    /**
+     * One compact inbox row: type, suggested item, aggregation, the
+     * confidence chip and the Accept / Dismiss actions, on the same grid
+     * columns as the sticky header. Every API value goes through
+     * _esc/_attr — the row is never built from raw HTML.
+     */
+    renderSuggestionRow(s) {
         const conf = Warehouse._confidence(s.score);
-        return `<div class="wh-card" data-testid="suggestion" data-id="${Warehouse._attr(s.id)}">
-      <div class="wh-card-main">
-        <span class="badge wh-chart">${Warehouse._chartLabel(s.item_type)}</span>
-        <span class="wh-title">${Warehouse._esc(s.title || s.name || '')}</span>
-        <span class="wh-agg">${Warehouse._esc(s.aggregation || '')}</span>
-      </div>
-      <div class="wh-card-actions">
-        <span class="wh-conf ${conf.cls}" data-testid="confidence" title="score ${conf.value}">${conf.label}</span>
-        <button class="btn btn-primary btn-sm" data-action="accept" data-id="${Warehouse._attr(s.id)}">Accept</button>
-        <button class="btn btn-secondary btn-sm" data-action="dismiss" data-id="${Warehouse._attr(s.id)}">Dismiss</button>
-      </div>
+        return `<div class="wh-sug-row" data-testid="suggestion" data-id="${Warehouse._attr(s.id)}">
+      <span class="wh-sug-type">${Warehouse._esc(Warehouse._chartLabel(s.item_type))}</span>
+      <span class="wh-sug-title">${Warehouse._esc(s.title || s.name || '')}</span>
+      <span class="wh-sug-agg">${Warehouse._esc(s.aggregation || '')}</span>
+      <span class="wh-conf ${conf.cls}" data-testid="confidence" title="score ${conf.value}">${conf.label}</span>
+      <span class="wh-sug-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-action="accept" data-id="${Warehouse._attr(s.id)}">Accept</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="dismiss" data-id="${Warehouse._attr(s.id)}">Dismiss</button>
+      </span>
     </div>`;
+    },
+
+    /** The sticky column header: ONE element holding the five labels, in column order. */
+    _inboxHead() {
+        return '<div class="wh-inbox-head" data-testid="inbox-header">'
+            + '<span class="wh-inbox-col">Type</span>'
+            + '<span class="wh-inbox-col">Suggested item</span>'
+            + '<span class="wh-inbox-col">Aggregation</span>'
+            + '<span class="wh-inbox-col">Confidence</span>'
+            + '<span class="wh-inbox-col">Actions</span>'
+            + '</div>';
+    },
+
+    /** The nothing-to-review empty state: centred heading, sentence and a
+     * link into the Data sources tool. */
+    _inboxEmpty() {
+        return '<div class="wh-sug-empty" data-testid="inbox-empty">'
+            + '<span class="wh-sug-empty-eyebrow">No pending suggestions</span>'
+            + '<h3 class="wh-sug-empty-title">No suggestions to review</h3>'
+            + '<p class="wh-sug-empty-copy">Discover a data source to get suggested dashboard items.</p>'
+            + '<a class="btn btn-primary" data-testid="open-sources" href="studio.html?panel=sources">Open Data sources</a>'
+            + '</div>';
+    },
+
+    /**
+     * Render #inbox from the cached suggestions: the sticky column header,
+     * then the rows for the active confidence filter (highest confidence
+     * first), or the matching empty state. Also updates the #inbox-count
+     * badge, every chip's own count and its aria-pressed state.
+     */
+    _renderInbox() {
+        const el = document.getElementById('inbox');
+        if (!el) return;
+        const all = Array.isArray(this._suggestions) ? this._suggestions : [];
+        const filter = this._confidenceFilter || 'all';
+        const tierOf = (s) => Warehouse._confidence(s.score).tier;
+        const counts = { all: all.length, high: 0, medium: 0, low: 0 };
+        for (const s of all) counts[tierOf(s)] += 1;
+        const visible = filter === 'all' ? all : all.filter((s) => tierOf(s) === filter);
+        const badge = document.getElementById('inbox-count');
+        if (badge) badge.textContent = String(counts.all);
+        for (const key of ['all', 'high', 'medium', 'low']) {
+            const countEl = document.getElementById('filter-' + key + '-count');
+            if (countEl) countEl.textContent = String(counts[key]);
+            const chip = document.querySelector('[data-testid="filter-' + key + '"]');
+            if (chip) chip.setAttribute('aria-pressed', String(chip.getAttribute('data-filter') === filter));
+        }
+        const body = visible.length
+            ? visible.map((s) => Warehouse.renderSuggestionRow(s)).join('')
+            : (counts.all
+                ? '<div class="wh-sug-empty" data-testid="inbox-empty-filter"><p class="wh-sug-empty-copy">No suggestions at this confidence.</p></div>'
+                : Warehouse._inboxEmpty());
+        el.innerHTML = Warehouse._inboxHead() + body;
+    },
+
+    /** A confidence chip narrows the list client-side: no request is sent. */
+    _onFilterClick(e) {
+        const chip = e.target.closest('.wh-filter-chip');
+        if (!chip) return;
+        const filter = chip.getAttribute('data-filter');
+        if (!filter || filter === this._confidenceFilter) return;
+        this._confidenceFilter = filter;
+        this._renderInbox();
+    },
+
+    /**
+     * While the shell shows the suggestions section, mark main.wh-main so
+     * css/suggestions.css can lock the panel to the viewport height
+     * (desktop): the document and the main .aidw-scroll region must not
+     * scroll — only #inbox does. The shell toggles the section's hidden
+     * attribute when switching tools; the observer follows it.
+     */
+    _bindSuggestionsFit() {
+        const section = document.querySelector('section.wh-panel[data-panel="suggestions"]');
+        if (!section) return;
+        const main = section.closest ? section.closest('main.wh-main') : null;
+        if (!main) return;
+        const sync = () => main.classList.toggle('suggestions-open', !section.hidden);
+        sync();
+        if (typeof MutationObserver === 'undefined') return;
+        this._suggestionsFitObserver = new MutationObserver(sync);
+        this._suggestionsFitObserver.observe(section, { attributes: true, attributeFilter: ['hidden'] });
+    },
+
+    /**
+     * Coerce an API score to a finite number: finite numbers pass through,
+     * numeric strings are parsed (a score that arrives as "0.9" sorts AND
+     * tiers as 0.9 — the two can never disagree), and anything else —
+     * missing, empty, non-numeric, control characters, NUL, Infinity/NaN —
+     * reads 0.
+     */
+    _scoreNumber(score) {
+        if (typeof score === 'number' && Number.isFinite(score)) return score;
+        if (typeof score === 'string' && score.trim() !== '') {
+            const n = Number(score);
+            if (Number.isFinite(n)) return n;
+        }
+        return 0;
     },
 
     /** Map a suggestion score to a confidence chip. Profile-tier's re-scoring surfaces here: a
      * data-confirmed low-arity dimension reads High; a demoted near-unique field reads Low. */
     _confidence(score) {
-        const v = typeof score === 'number' ? score : 0;
+        const v = Warehouse._scoreNumber(score);
         const value = v.toFixed(2);
-        if (v >= 0.7) return { label: 'High', cls: 'wh-conf-high', value };
-        if (v >= 0.4) return { label: 'Medium', cls: 'wh-conf-med', value };
-        return { label: 'Low', cls: 'wh-conf-low', value };
+        if (v >= 0.7) return { label: 'High', cls: 'wh-conf-high', tier: 'high', value };
+        if (v >= 0.4) return { label: 'Medium', cls: 'wh-conf-med', tier: 'medium', value };
+        return { label: 'Low', cls: 'wh-conf-low', tier: 'low', value };
     },
 
     renderDashboards(dashboards, items, layouts = [], editingId = null) {
@@ -407,8 +514,7 @@ const Warehouse = {
     async accept(id) {
         const res = await ApiClient.post(`/suggestions/${encodeURIComponent(id)}/accept`);
         if (res.ok) {
-            this._toast('Accepted — added to a dashboard.');
-            await this.refresh();
+            this._removeSuggestion(id, 'Accepted — added to a dashboard.');
         } else {
             this._toast('Accept failed.', true);
         }
@@ -417,11 +523,26 @@ const Warehouse = {
     async dismiss(id) {
         const res = await ApiClient.post(`/suggestions/${encodeURIComponent(id)}/dismiss`);
         if (res.ok) {
-            this._toast('Dismissed.');
-            await this.refresh();
+            this._removeSuggestion(id, 'Dismissed.');
         } else {
             this._toast('Dismiss failed.', true);
         }
+    },
+
+    /**
+     * Drop a suggestion after a successful accept/dismiss: the row leaves
+     * the list, the badge and chip counts update, and #inbox keeps its
+     * scroll position — no page reload, no re-fetch.
+     */
+    _removeSuggestion(id, toastMsg) {
+        const el = document.getElementById('inbox');
+        const scrollTop = el ? el.scrollTop : 0;
+        if (Array.isArray(this._suggestions)) {
+            this._suggestions = this._suggestions.filter((s) => s && String(s.id) !== String(id));
+        }
+        this._renderInbox();
+        if (el) el.scrollTop = scrollTop;
+        this._toast(toastMsg);
     },
 
     // ---- PII flags review ---------------------------------------------------
@@ -522,8 +643,14 @@ const Warehouse = {
     // ---- small utilities ----------------------------------------------------
 
     _chartLabel(t) {
-        return { kpi: 'KPI', bar: 'Bar', line: 'Line', pie: 'Pie', table: 'Table' }[t]
-            || String(t || '').toUpperCase();
+        const LABELS = { kpi: 'KPI', bar: 'Bar', line: 'Line', pie: 'Pie', table: 'Table' };
+        const key = String(t || '');
+        // Own-property lookup only: a prototype name ("constructor",
+        // "toString", "__proto__"...) must fall through to the upper-cased
+        // name, never resolve to a native function on Object.prototype.
+        return Object.prototype.hasOwnProperty.call(LABELS, key)
+            ? LABELS[key]
+            : key.toUpperCase();
     },
 
     /** HTML-escape text for safe insertion into element content. */

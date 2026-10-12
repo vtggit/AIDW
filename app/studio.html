@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/warehouse.css">
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/shell.css">
+    <link rel="stylesheet" href="css/suggestions.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -71,11 +72,16 @@
     </section>
 
     <section class="wh-panel" data-panel="suggestions">
-        <div class="wh-panel-head">
+        <div class="wh-suggestions-topbar" data-testid="suggestions-topbar">
             <h2>Suggested dashboard items <span class="badge wh-count" id="inbox-count">0</span></h2>
-            <p class="wh-sub">Review and promote AI-suggested metrics.</p>
+            <div class="wh-suggestions-filters" role="group" aria-label="Filter suggestions by confidence" data-testid="suggestions-filters">
+                <button type="button" class="wh-filter-chip" data-filter="all" data-testid="filter-all" aria-pressed="true">All <span class="wh-filter-count" id="filter-all-count" data-testid="filter-all-count">0</span></button>
+                <button type="button" class="wh-filter-chip" data-filter="high" data-testid="filter-high" aria-pressed="false">High <span class="wh-filter-count" id="filter-high-count" data-testid="filter-high-count">0</span></button>
+                <button type="button" class="wh-filter-chip" data-filter="medium" data-testid="filter-medium" aria-pressed="false">Medium <span class="wh-filter-count" id="filter-medium-count" data-testid="filter-medium-count">0</span></button>
+                <button type="button" class="wh-filter-chip" data-filter="low" data-testid="filter-low" aria-pressed="false">Low <span class="wh-filter-count" id="filter-low-count" data-testid="filter-low-count">0</span></button>
+            </div>
         </div>
-        <div id="inbox" class="wh-cards" data-testid="inbox"></div>
+        <div id="inbox" class="wh-inbox" data-testid="inbox" role="region" aria-label="Suggested dashboard items"></div>
     </section>
 
     <section class="wh-panel" data-panel="pii">
