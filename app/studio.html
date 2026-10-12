@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/shell.css">
     <link rel="stylesheet" href="css/suggestions.css">
+    <link rel="stylesheet" href="css/pii.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -85,11 +86,11 @@
     </section>
 
     <section class="wh-panel" data-panel="pii">
-        <div class="wh-panel-head">
+        <div class="wh-pii-topbar" data-testid="pii-topbar">
             <h2>PII flags <span class="badge wh-count" id="pii-count">0</span></h2>
-            <p class="wh-sub">Triage detected personally identifiable information.</p>
+            <div class="wh-pii-filters" role="group" aria-label="Filter PII flags by category" data-testid="pii-filters"></div>
         </div>
-        <div id="pii-inbox" class="wh-pii-groups" data-testid="pii-inbox"></div>
+        <div id="pii-inbox" class="wh-pii-inbox" data-testid="pii-inbox" role="region" aria-label="Pending PII flags"></div>
     </section>
 
     <section class="wh-panel" data-panel="wizard">

@@ -1,0 +1,245 @@
+/* PII flags tool (issue #781) — the work-queue pattern from
+ * docs/design/design-system.md, rebuilt as a fixed-height flex column
+ * (the same structure css/suggestions.css uses for #inbox):
+ *
+ *   • the top bar (title + #pii-count badge + category filter chips)
+ *     always stays in view; the chips narrow the list client-side, no
+ *     request
+ *   • #pii-inbox is the ONLY scrolling region: each dataset is a group
+ *     whose sticky header (name + the dataset's pending count) pins to
+ *     the top of the region while its compact rows (at least
+ *     --row-min tall) scroll under it
+ *   • on a desktop screen the document and the main .aidw-scroll region
+ *     never scroll because of the list: js/warehouse.js marks
+ *     main.wh-main with .pii-open while the shell shows this tool, and
+ *     the media block below locks the panel to the viewport height for
+ *     exactly that state
+ *   • at 900 px and below each row stacks its fields; the page may
+ *     scroll vertically (never sideways)
+ *
+ * Colours, radii and spacing come from tokens.css only — no raw colour
+ * values. The filter chips reuse the .wh-filter-chip / .wh-filter-count
+ * classes from css/suggestions.css; the Confirm / Dismiss buttons reuse
+ * the .btn classes. Row, group and empty-state markup is rendered by
+ * js/warehouse.js, which escapes every API value through
+ * Warehouse._esc/_attr before insertion.
+ */
+
+/* --- Top bar: title + count badge + category filter chips ------------- */
+
+.wh-pii-topbar {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.wh-pii-topbar h2 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.wh-pii-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+/* --- #pii-inbox: the only scroll region -------------------------------- */
+
+.wh-pii-inbox {
+    --pii-cols: minmax(0, 1fr) 148px auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+}
+
+/* One dataset group: its sticky header, then its rows. */
+.wh-pii-group {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* The group header pins to the top of the scrolling #pii-inbox while
+ * the group's rows move under it; the next group's header takes the
+ * top when it reaches it. */
+.wh-pii-group-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: var(--touch-min);
+    padding: var(--space-2) var(--space-5);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.wh-pii-group-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.wh-pii-group-count {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-feature-settings: var(--font-feature-tabular);
+}
+
+/* Compact flag row: column name, category pill, actions — one grid
+ * column each, at least --row-min tall. */
+.wh-pii-row {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: var(--pii-cols);
+    gap: var(--space-3);
+    align-items: center;
+    min-height: var(--row-min);
+    padding: var(--space-2) var(--space-5);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.wh-pii-row:hover {
+    background: var(--color-ground);
+}
+
+.wh-pii-row:last-child {
+    border-bottom: 0;
+}
+
+.wh-pii-field {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-feature-settings: var(--font-feature-tabular);
+    font-size: 0.875rem;
+    color: var(--color-ink);
+}
+
+.wh-pii-category {
+    justify-self: start;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--color-border-subtle);
+    color: var(--color-ink-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.wh-pii-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+/* --- Empty states: centred in the region -------------------------------- */
+
+.wh-pii-empty {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: var(--space-2);
+    padding: var(--space-6);
+}
+
+.wh-pii-empty-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+.wh-pii-empty-copy {
+    margin: 0;
+    max-width: 34rem;
+    font-size: 0.9375rem;
+    color: var(--color-ink-secondary);
+}
+
+/* --- Desktop fit: the panel fills the viewport, only #pii-inbox scrolls --
+ *
+ * js/warehouse.js toggles .pii-open on main.wh-main while the shell
+ * shows the PII section. Only in that state does the main region lock
+ * to the viewport height (height: 100% of the .aidw-scroll region), so
+ * the document and the main region cannot scroll; the panel is a flex
+ * column with a fixed top bar and #pii-inbox taking the rest with its
+ * own overflow. Every other tool keeps the region's normal scrolling
+ * behaviour. */
+@media (min-width: 901px) {
+    main.wh-main.pii-open {
+        height: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    main.wh-main.pii-open > section.wh-panel[data-panel="pii"] {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+    }
+
+    .wh-pii-inbox {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+}
+
+/* --- Narrow screens: rows stack their fields ---------------------------- */
+
+@media (max-width: 900px) {
+    .wh-pii-row {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .wh-pii-category {
+        justify-self: start;
+    }
+
+    .wh-pii-actions {
+        justify-content: flex-start;
+    }
+}
