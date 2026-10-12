@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/shell.css">
     <link rel="stylesheet" href="css/suggestions.css">
     <link rel="stylesheet" href="css/pii.css">
+    <link rel="stylesheet" href="css/sequences.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -149,20 +150,24 @@
         </fieldset>
     </section>
 
-    <section class="wh-panel">
+    <section class="wh-panel seq-tool">
         <div class="wh-panel-head">
             <h2>Load sequences</h2>
-            <p class="wh-sub">Inspect sequences and their BPMN-projected flow.</p>
+            <p class="wh-sub">Inspect sequences, their BPMN-projected flow and their run history.</p>
         </div>
-        <div data-panel="sequences" data-testid="sequences"></div>
-    </section>
-
-    <section class="wh-panel">
-        <div class="wh-panel-head">
-            <h2>Run history</h2>
-            <p class="wh-sub">Execute sequences and inspect per-step run state.</p>
+        <div class="seq-split">
+            <div class="seq-list-pane" data-testid="seq-list-pane">
+                <div class="seq-list-head" data-testid="seq-list-head"></div>
+                <div class="seq-list-rows" data-panel="sequences" data-testid="sequences"></div>
+            </div>
+            <div class="seq-detail-pane" data-testid="seq-detail-pane">
+                <div class="seq-flow-wrap">
+                    <div data-testid="sequence-detail"></div>
+                    <button type="button" class="seq-download" data-testid="bpmn-download" hidden>Download BPMN</button>
+                </div>
+                <div class="seq-runs" data-panel="sequence-runs" data-testid="sequence-runs">Select a load sequence to see its runs.</div>
+            </div>
         </div>
-        <div data-panel="sequence-runs" data-testid="sequence-runs">Select a load sequence to see its runs.</div>
     </section>
 
     <section class="wh-panel" data-panel="retention">

@@ -68,24 +68,32 @@ const SequenceRuns = {
     if (!container) return;
 
     let selectedSequenceId = null;
+    // A monotonically increasing token per row selection: an in-flight
+    // response from an earlier click must not overwrite the runs of a
+    // row chosen afterwards.
+    let selectionToken = 0;
 
     // Bind delegated click listener for sequence rows (rendered by sequences.js)
     document.addEventListener('click', async (e) => {
       const row = e.target.closest('[data-testid="sequence-row"]');
       if (!row) return;
 
+      const id = row.dataset.id;
+      const token = ++selectionToken;
       this._clearPolling();
-      selectedSequenceId = row.dataset.id;
+      selectedSequenceId = id;
 
       // Fetch all runs and client-filter by sequence_id
       const res = await ApiClient.get('/sequence-runs');
+      // A later row selection superseded this response: drop it.
+      if (token !== selectionToken) return;
       if (!res.ok) {
         container.innerHTML = '<div data-testid="runs-error">Could not load runs.</div>';
         return;
       }
 
       const allRuns = Array.isArray(res.data) ? res.data : [];
-      const filteredRuns = allRuns.filter(r => r.sequence_id === selectedSequenceId);
+      const filteredRuns = allRuns.filter(r => r.sequence_id === id);
 
       // Render history + execute button (admin-only)
       let html = this.renderRuns(filteredRuns);
