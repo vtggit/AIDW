@@ -1,0 +1,330 @@
+/* Load sequences (issue #785) — the tool fits the window as a list pane
+ * and a detail pane:
+ *
+ *   • list pane (left): the name input and the Create button stay in a
+ *     fixed head; the rows scroll on their own below them
+ *   • detail pane (right, wider): the chosen sequence's flow diagram,
+ *     its BPMN download and, under them, its run history — the pane
+ *     scrolls on its own
+ *   • at 900 px and below the panes stack; the page may scroll
+ *     vertically but never sideways
+ *
+ * Colours, radii and spacing come from app/css/tokens.css.
+ */
+
+/* --- Desktop fit: the tool fills the viewport, the panes scroll ------
+ *
+ * js/sequences.js toggles .sequences-open on main.wh-main while the
+ * shell shows the tool's section. Only in that state does the main
+ * region lock to the viewport height (height: 100% of the
+ * .aidw-scroll region), so the document and the main region cannot
+ * scroll — only the panes do. Every other tool keeps the region's
+ * normal scrolling behaviour. */
+@media (min-width: 901px) {
+    main.wh-main.sequences-open {
+        height: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    main.wh-main.sequences-open > section.wh-panel.seq-tool {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+    }
+
+    main.wh-main.sequences-open > section.wh-panel.seq-tool > .wh-panel-head {
+        flex: 0 0 auto;
+        padding: var(--space-4) var(--space-5) var(--space-2);
+    }
+}
+
+/* --- The split: list pane (left) + detail pane (right, wider) -------- */
+
+.seq-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-4);
+}
+
+.seq-list-pane {
+    flex: 0 1 40%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+}
+
+/* The fixed head: the name input and the Create button never scroll
+ * away; the rows below them do. */
+.seq-list-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.seq-list-head input {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+.seq-list-rows {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* The detail pane scrolls on its own: flow, download, then runs. */
+.seq-detail-pane {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.seq-runs {
+    min-width: 0;
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+/* --- List rows -------------------------------------------------------- */
+
+.wh-seq-row {
+    display: flex;
+    align-items: center;
+    min-height: var(--row-min);
+    padding: 0 var(--space-4);
+    border-bottom: 1px solid var(--color-border-subtle);
+    font-size: 0.9375rem;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.wh-seq-row:hover {
+    background: var(--color-ground);
+}
+
+/* The chosen row: tinted, like the shell's current nav item. */
+.wh-seq-row[aria-current="true"] {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-weight: 600;
+}
+
+.wh-seq-row[aria-current="true"]:hover {
+    background: var(--color-accent);
+}
+
+[data-testid="sequences-empty"],
+[data-testid="runs-empty"] {
+    padding: var(--space-5) var(--space-4);
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+[data-testid="sequences-error"],
+[data-testid="runs-error"],
+[data-testid="flow-error"] {
+    padding: var(--space-3) var(--space-4);
+    font-size: 0.875rem;
+    color: var(--color-risk);
+    white-space: pre-wrap;
+}
+
+/* --- The controls (Create, Execute, Download BPMN) -------------------- */
+
+[data-testid="sequence-create"],
+[data-testid="sequence-execute"] {
+    flex: 0 0 auto;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-control);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+[data-testid="bpmn-download"] {
+    flex: 0 0 auto;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+[data-testid="bpmn-download"]:hover {
+    background: var(--color-ground);
+}
+
+.seq-flow-wrap {
+    min-width: 0;
+}
+
+/* --- Flow diagram (vertical: start, steps, end) ------------------------ */
+
+.wh-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
+}
+
+.wh-flow-node {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wh-flow-node[data-testid="flow-start"] {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-weight: 600;
+}
+
+.wh-flow-node[data-testid="flow-end"] {
+    background: var(--color-ground);
+    color: var(--color-ink-secondary);
+}
+
+.wh-flow-arrow {
+    width: 2px;
+    height: var(--space-4);
+    background: var(--color-border);
+}
+
+/* --- Run history: run rows and their step rows ------------------------- */
+
+.wh-run-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+    color: var(--color-ink);
+    overflow-wrap: anywhere;
+}
+
+.wh-run-row [data-testid="run-status"] {
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-ground);
+    color: var(--color-ink-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.wh-run-row [data-testid="run-status"][data-status="completed"] {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+}
+
+.wh-run-row [data-testid="run-status"][data-status="failed"] {
+    border-color: var(--color-risk);
+    background: var(--color-risk-bg);
+    color: var(--color-risk);
+}
+
+[data-testid="run-step-row"] {
+    margin: var(--space-1) 0 var(--space-1) var(--space-4);
+    padding: var(--space-1) 0 var(--space-1) var(--space-3);
+    border-left: 2px solid var(--color-border);
+    color: var(--color-ink-secondary);
+    font-size: 0.8125rem;
+}
+
+[data-testid="run-step-row"][data-status="completed"] {
+    border-left-color: var(--color-accent);
+    color: var(--color-ink);
+}
+
+[data-testid="run-step-row"][data-status="failed"] {
+    border-left-color: var(--color-risk);
+    color: var(--color-risk);
+}
+
+[data-testid="run-steps-empty"] {
+    padding: var(--space-2) 0;
+    font-size: 0.8125rem;
+    color: var(--color-ink-secondary);
+}
+
+/* --- Narrow screens: the panes stack ----------------------------------- */
+
+@media (max-width: 900px) {
+    .seq-split {
+        flex-direction: column;
+    }
+
+    .seq-list-pane {
+        flex: none;
+        width: 100%;
+    }
+
+    .seq-detail-pane {
+        width: 100%;
+    }
+}

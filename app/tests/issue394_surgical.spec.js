@@ -4,7 +4,7 @@ test('issue394 surgical', async ({ page }) => {
     await page.goto('/studio.html?panel=sequences');
 
     // Assert the new panel heading is visible on screen
-    await expect(page.getByText('Run history')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Load sequences', exact: true })).toBeVisible();
 
     // Assert the module global was wired in by DOMContentLoaded init
     await page.waitForFunction(() => typeof window.SequenceRuns !== 'undefined');
