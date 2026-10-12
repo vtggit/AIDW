@@ -27,9 +27,11 @@ AUTH_ISSUER: str = os.getenv(
 )
 AUTH_CLIENT_ID: str = os.getenv("AUTH_CLIENT_ID", "aicrm-backend")
 AUTH_AUDIENCE: str = os.getenv("AUTH_AUDIENCE", AUTH_CLIENT_ID)
-AUTH_JWKS_URL: str = os.getenv(
-    "AUTH_JWKS_URL",
-    f"{AUTH_ISSUER}/protocol/openid-connect/certs",
+_AUTH_JWKS_URL_RAW: str = os.getenv("AUTH_JWKS_URL", "")
+AUTH_JWKS_URL: str = (
+    _AUTH_JWKS_URL_RAW
+    if _AUTH_JWKS_URL_RAW.strip()
+    else f"{AUTH_ISSUER}/protocol/openid-connect/certs"
 )
 
 # Supported signing algorithms (comma-separated env var, default RS256).
