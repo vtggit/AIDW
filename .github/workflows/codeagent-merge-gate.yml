@@ -59,7 +59,9 @@ jobs:
         run: python -m pip install -U pip pytest
 
       - name: ca_gate self-tests (no DB)
-        run: python -m pytest tests/ca_gate/ -q || true   # report-only: never block
+        # Blocking: these are fast unit tests of the gate scripts with no network and no
+        # database. If they fail, the gate itself is broken and its verdict means nothing.
+        run: python -m pytest tests/ca_gate/ -q
 
       - name: Fetch PR body + changed files
         env:
