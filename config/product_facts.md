@@ -40,9 +40,15 @@ Ground truth for the panel/auto-operator. `[OPERATOR: fill in]` marks unknowns.
 - Ingestion/connector runtimes (OData sync, CDC pollers) run as **separate worker services**,
   not the API process — **BUILT**: a `worker` compose service (profile `worker`) running
   `app.worker`'s FOR UPDATE SKIP LOCKED claim loop over the same `execute_run` path. The
-  persistent stack currently runs the interim in-API executor (`INGEST_EXECUTOR=inline`) —
-  that is configuration, not missing code. Scheduled/recurring triggering is NOT built
-  (`pipelines.schedule` has no consumer; every run is trigger=manual).
+  persistent stack runs it (`INGEST_EXECUTOR=worker`); the interim in-API executor
+  (`INGEST_EXECUTOR=inline`) remains the compose default.
+- Scheduled/recurring triggering is **BUILT for load sequences**: a sequence carries a
+  `schedule_cadence`, the worker fires the sequences that are due
+  (`app/worker/scheduling.py`, one pending `sequence_runs` row with `triggered_by = 'schedule'`)
+  and executes them, running the sequence's pipelines in step order. A single pipeline has no
+  schedule of its own: `pipelines.schedule` is stored and has no consumer. The schedule is
+  recorded on the sequence run; each pipeline run row still records trigger=manual, including
+  the runs a scheduled sequence starts.
 
 ## Connectivity & CDC (grown by CodeAgent)
 
