@@ -1,4 +1,4 @@
-"""CodeAgent contract merge-gate checker (contract-v2 Phase 4a.3, report-only).
+"""CodeAgent contract merge-gate checker (contract-v2 Phase 4a.4, enforcing).
 
 Resolves a PR's ``codeagent-pr-contract`` against the linked issue's
 ``codeagent-contract`` and a pytest junitxml run, and produces a per-AC verdict.
@@ -25,13 +25,14 @@ Verdict rules (from the P4a design synthesis):
                  mapped pytest nodeids were all collected+passed (every
                  parametrization; not skipped/xfail) and non-trivial.
 
-KNOWN GAP (accepted for report-only; must be addressed before 4a.4 becomes a
-required check): the AST assertion-floor only proves the mapped test exists and
+KNOWN LIMIT: the AST assertion-floor only proves the mapped test exists and
 asserts SOMETHING — it does not prove the test actually exercises the AC. A
-proof-map could point at an unrelated green test. Mitigation for 4a.4: require
-each mapped test to be added/modified in the PR diff.
+proof-map could point at an unrelated green test. Mitigation: when
+``--changed-files-file`` is given (the merge-gate workflow passes it), every
+mapped test must live in a file the PR adds or modifies.
 
-In report-only mode the verdict is computed and rendered but the process exits 0.
+The process exits non-zero on a failing verdict. With ``--report-only`` the
+verdict is still computed and rendered but the process exits 0.
 """
 from __future__ import annotations
 
