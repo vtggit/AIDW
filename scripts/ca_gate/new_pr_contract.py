@@ -8,7 +8,8 @@ Reads an issue body that carries a ``codeagent-contract`` footer, and prints a
 ``## CodeAgent PR Contract`` section with one ``proof_map`` entry per ACTIVE
 acceptance criterion — each with its ``ac_text_hash`` filled in and
 ``tests: ["TODO"]`` for you to replace with the pytest nodeids that prove it.
-Nothing here enforces anything; that's the CI merge-gate (a later phase).
+Nothing here enforces anything; ``check_pr_contract.py``, run by the merge-gate
+workflow, does that.
 """
 from __future__ import annotations
 
