@@ -3,8 +3,10 @@ FROM python:3.11-slim@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a24
 WORKDIR /app
 
 # Install dependencies first (layer caching)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# constraints.txt pins the exact version of every package, so a rebuild installs what
+# was tested and nothing newer (scripts/refresh_constraints.sh takes upgrades on purpose).
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # Copy application code
 COPY . .
