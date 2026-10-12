@@ -22,8 +22,13 @@ const Warehouse = {
         const filters = document.querySelector('[data-testid="suggestions-filters"]');
         if (filters) filters.addEventListener('click', (e) => this._onFilterClick(e));
         this._bindSuggestionsFit();
+        this._piiFlags = [];
+        this._piiFilter = 'all';
         const pii = document.getElementById('pii-inbox');
         if (pii) pii.addEventListener('click', (e) => this._onPiiClick(e));
+        const piiFilters = document.querySelector('[data-testid="pii-filters"]');
+        if (piiFilters) piiFilters.addEventListener('click', (e) => this._onPiiFilterClick(e));
+        this._bindPiiFit();
         await this.refresh();
     },
 
@@ -547,6 +552,12 @@ const Warehouse = {
 
     // ---- PII flags review ---------------------------------------------------
 
+    /**
+     * Fetch pending PII flags (plus the dataset and field name maps) and render
+     * the panel. Only 'flagged' rows are pending — confirmed/dismissed/stale
+     * are decided. The list keeps its scroll position across the re-render:
+     * acting on a visible row must not yank the list back to the top.
+     */
     async loadPiiFlags() {
         const el = document.getElementById('pii-inbox');
         if (!el) return;
@@ -559,20 +570,72 @@ const Warehouse = {
             el.innerHTML = this._notice('Could not load PII flags.', true);
             return;
         }
-        // only 'flagged' rows are pending review — confirmed/dismissed/stale are decided
-        const pending = (fRes.data || []).filter((f) => f.status === 'flagged');
-        const count = document.getElementById('pii-count');
-        if (count) count.textContent = String(pending.length);
+        this._piiFlags = (fRes.data || []).filter((f) => f && f.status === 'flagged');
         const dsById = {};
         for (const d of dRes.data || []) dsById[d.id] = d.name;
+        this._piiDs = dsById;
         const fieldById = {};
         for (const f of dfRes.data || []) fieldById[f.id] = f.name;
-        el.innerHTML = pending.length
-            ? this.renderPiiGroups(pending, dsById, fieldById)
-            : this._notice('No PII flags awaiting review. Discover or profile a source to scan.');
+        this._piiFields = fieldById;
+        this._renderPii();
     },
 
-    /** Group pending flags by dataset and render each group as a card of flag rows. */
+    /**
+     * Render the whole PII panel from the cached pending flags: the #pii-count
+     * badge (total pending), the category chips — All (default) first, then
+     * one chip per category present among the pending flags, each with its
+     * own count and aria-pressed state — and the dataset groups or the
+     * matching empty state. A category that the active filter still points at
+     * but has run out of flags keeps its (0-count) chip, so "No flags in this
+     * category." stays reachable. The list keeps its scroll position.
+     */
+    _renderPii() {
+        const el = document.getElementById('pii-inbox');
+        if (!el) return;
+        const all = Array.isArray(this._piiFlags) ? this._piiFlags : [];
+        const filter = this._piiFilter || 'all';
+        const categoryOf = (f) => String((f && f.category) || '');
+        const counts = { all: all.length };
+        for (const f of all) counts[categoryOf(f)] = (counts[categoryOf(f)] || 0) + 1;
+        const categories = Object.keys(counts).filter((c) => c !== 'all').sort();
+        if (filter !== 'all' && !counts[filter]) categories.push(filter);
+        const visible = filter === 'all' ? all : all.filter((f) => categoryOf(f) === filter);
+        const badge = document.getElementById('pii-count');
+        if (badge) badge.textContent = String(all.length);
+        const chips = document.querySelector('[data-testid="pii-filters"]');
+        if (chips) chips.innerHTML = this._piiChips(counts, categories, filter);
+        const scrollTop = el.scrollTop;
+        el.innerHTML = visible.length
+            ? this.renderPiiGroups(visible, this._piiDs, this._piiFields)
+            : (all.length
+                ? '<div class="wh-pii-empty" data-testid="pii-empty-category"><p class="wh-pii-empty-copy">No flags in this category.</p></div>'
+                : this._piiEmpty());
+        el.scrollTop = scrollTop;
+    },
+
+    /** The category filter chips: All first, then one chip per category;
+     * each shows its own count and carries its state via aria-pressed. */
+    _piiChips(counts, categories, filter) {
+        const chip = (key, label, count) => {
+            const pressed = String(key === filter);
+            return '<button type="button" class="wh-filter-chip wh-pii-chip" data-pii-filter="'
+                + Warehouse._attr(key) + '" data-testid="pii-filter-' + Warehouse._attr(key)
+                + '" aria-pressed="' + pressed + '">'
+                + Warehouse._esc(label)
+                + ' <span class="wh-filter-count" data-testid="pii-filter-' + Warehouse._attr(key)
+                + '-count">' + String(count) + '</span></button>';
+        };
+        return [chip('all', 'All', counts.all || 0)]
+            .concat(categories.map((c) => chip(c, Warehouse._piiCategory(c), counts[c] || 0)))
+            .join('');
+    },
+
+    /**
+     * Group pending flags by dataset: each dataset is a group — sticky header
+     * with the dataset name and that dataset's pending count — whose compact
+     * rows scroll under the header inside #pii-inbox. A group with no rows is
+     * not rendered, so an emptied group disappears.
+     */
     renderPiiGroups(flags, dsById, fieldById) {
         const byDs = {};
         for (const f of flags) {
@@ -580,31 +643,71 @@ const Warehouse = {
             (byDs[key] = byDs[key] || []).push(f);
         }
         return Object.keys(byDs).map((dsId) => {
-            const name = dsById[dsId] || 'Unknown dataset';
-            const rows = byDs[dsId].map((f) => Warehouse.renderPiiCard(f, fieldById[f.discovered_field_id])).join('');
-            return `<div class="dashboard-card" data-testid="pii-group" data-id="${Warehouse._attr(dsId)}">
-        <h3>${Warehouse._esc(name)}</h3>
-        <div class="wh-cards">${rows}</div>
+            const name = (dsById && dsById[dsId]) || 'Unknown dataset';
+            const rows = byDs[dsId]
+                .map((f) => Warehouse.renderPiiRow(f, fieldById && fieldById[f.discovered_field_id]))
+                .join('');
+            return `<div class="wh-pii-group" data-testid="pii-group" data-id="${Warehouse._attr(dsId)}">
+        <div class="wh-pii-group-head" data-testid="pii-group-head">
+          <span class="wh-pii-group-name">${Warehouse._esc(name)}</span>
+          <span class="badge wh-count wh-pii-group-count" data-testid="pii-group-count">${String(byDs[dsId].length)}</span>
+        </div>
+        <div class="wh-pii-group-rows">${rows}</div>
       </div>`;
         }).join('');
     },
 
-    renderPiiCard(f, fieldName) {
-        const conf = Warehouse._confidence(f.confidence);
+    /** One compact flag row: the column name, the category and the Confirm /
+     * Dismiss actions. Every API value goes through _esc/_attr — the row is
+     * never built from raw HTML. */
+    renderPiiRow(f, fieldName) {
         const field = fieldName || f.discovered_field_id || '(unbound field)';
-        return `<div class="wh-card" data-testid="pii-flag" data-id="${Warehouse._attr(f.id)}">
-      <div class="wh-card-main">
-        <span class="badge wh-chart">${Warehouse._esc(Warehouse._piiCategory(f.category))}</span>
-        <span class="wh-title">${Warehouse._esc(field)}</span>
-        <span class="wh-agg" data-testid="pii-tier">${Warehouse._esc(f.detection_tier || '')}</span>
-        <span class="wh-sub">${Warehouse._esc(f.rationale || '')}</span>
-      </div>
-      <div class="wh-card-actions">
-        <span class="wh-conf ${conf.cls}" data-testid="pii-confidence" title="confidence ${conf.value}">${conf.label}</span>
-        <button class="btn btn-primary btn-sm" data-action="pii-confirm" data-id="${Warehouse._attr(f.id)}">Confirm</button>
-        <button class="btn btn-secondary btn-sm" data-action="pii-dismiss" data-id="${Warehouse._attr(f.id)}">Dismiss</button>
-      </div>
-    </div>`;
+        return `<div class="wh-pii-row" data-testid="pii-flag" data-id="${Warehouse._attr(f.id)}">
+        <span class="wh-pii-field" data-testid="pii-field">${Warehouse._esc(field)}</span>
+        <span class="wh-pii-category" data-testid="pii-category">${Warehouse._esc(Warehouse._piiCategory(f.category))}</span>
+        <span class="wh-pii-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-action="pii-confirm" data-id="${Warehouse._attr(f.id)}">Confirm</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="pii-dismiss" data-id="${Warehouse._attr(f.id)}">Dismiss</button>
+        </span>
+      </div>`;
+    },
+
+    /** The nothing-pending empty state: a centred heading and the sentence
+     * that says what will appear here. */
+    _piiEmpty() {
+        return '<div class="wh-pii-empty" data-testid="pii-empty">'
+            + '<h3 class="wh-pii-empty-title">No PII flags to review</h3>'
+            + '<p class="wh-pii-empty-copy">Flags appear here when discovery finds personal data in a source.</p>'
+            + '</div>';
+    },
+
+    /** A category chip narrows the list client-side: no request is sent. */
+    _onPiiFilterClick(e) {
+        const chip = e.target.closest('.wh-pii-chip');
+        if (!chip) return;
+        const filter = chip.getAttribute('data-pii-filter');
+        if (filter === null || filter === this._piiFilter) return;
+        this._piiFilter = filter;
+        this._renderPii();
+    },
+
+    /**
+     * While the shell shows the PII section, mark main.wh-main so
+     * css/pii.css can lock the panel to the viewport height (desktop):
+     * the document and the main .aidw-scroll region must not scroll —
+     * only #pii-inbox does. The shell toggles the section's hidden
+     * attribute when switching tools; the observer follows it.
+     */
+    _bindPiiFit() {
+        const section = document.querySelector('section.wh-panel[data-panel="pii"]');
+        if (!section) return;
+        const main = section.closest ? section.closest('main.wh-main') : null;
+        if (!main) return;
+        const sync = () => main.classList.toggle('pii-open', !section.hidden);
+        sync();
+        if (typeof MutationObserver === 'undefined') return;
+        this._piiFitObserver = new MutationObserver(sync);
+        this._piiFitObserver.observe(section, { attributes: true, attributeFilter: ['hidden'] });
     },
 
     _piiCategory(c) {
