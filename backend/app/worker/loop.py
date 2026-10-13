@@ -9,6 +9,10 @@ invariant fleet-wide: a ``running`` row whose executor died (crash, OOM, kill -9
 ``failed`` instead of sitting corrupt forever; ``updated_at`` is the liveness signal (the claim
 touches it, and one run is a single bounded fetch + apply, so a generous cutoff cannot reap a
 live run).
+The same invariant holds for the sequence spine: ``reap_stale_sequence_runs`` finalises a
+``running`` ``sequence_runs`` row (and its steps that are still ``running`` or ``pending``)
+in one transaction when its executor died, in bounded passes, so a sequence blocked on a
+dead run can be re-fired by the very same worker pass.
 """
 
 import contextlib
@@ -30,6 +34,8 @@ POLL_SECONDS = float(os.getenv("WORKER_POLL_SECONDS", "5"))
 STALE_RUNNING_SECONDS = int(os.getenv("WORKER_STALE_RUNNING_SECONDS", "1800"))
 DELETION_MAX_ATTEMPTS = 5  # beyond this the request sits for operator triage (#76)
 STRANDED_SCHEDULED_SECONDS = int(os.getenv("WORKER_STRANDED_SCHEDULED_SECONDS", "1800"))
+STALE_SEQUENCE_RUN_SECONDS = int(os.getenv("WORKER_STALE_SEQUENCE_RUN_SECONDS", "7200"))
+STALE_SEQUENCE_RUN_BATCH = 50  # bounded pass: at most this many runs per reaper call
 
 
 def claim_next() -> str | None:
@@ -155,6 +161,50 @@ def reap_stranded_scheduled(max_age_seconds: int | None = None) -> int:
     return reaped
 
 
+def reap_stale_sequence_runs(max_age_seconds: int | None = None) -> int:
+    """Finalize ``sequence_runs`` rows whose executor died: status ``running`` with
+    ``updated_at`` older than the cutoff → ``failed`` with ``finished_at`` and
+    ``updated_at`` stamped now, and each of its ``sequence_run_steps`` rows still
+    ``running`` or ``pending`` → ``failed`` with ``finished_at`` and ``updated_at``
+    stamped now. Steps that already succeeded keep their status. The run and its
+    steps change in one transaction. Bounded pass: at most
+    ``STALE_SEQUENCE_RUN_BATCH`` runs per call, so a large backlog cannot wedge the
+    worker loop. Returns the number of runs finalised."""
+    cutoff_age = (
+        STALE_SEQUENCE_RUN_SECONDS if max_age_seconds is None else max_age_seconds
+    )
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=cutoff_age)
+    now_iso = now.isoformat()
+    finalised = 0
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id FROM sequence_runs "
+            "WHERE status = 'running' AND updated_at < %s "
+            "ORDER BY updated_at, id LIMIT %s FOR UPDATE",
+            (cutoff, STALE_SEQUENCE_RUN_BATCH),
+        )
+        for row in cur.fetchall():
+            run_id = row["id"]
+            cur.execute(
+                "UPDATE sequence_runs SET status = 'failed', finished_at = %s, "
+                "updated_at = %s WHERE id = %s AND status = 'running'",
+                (now_iso, now, run_id),
+            )
+            if not cur.rowcount:
+                continue  # a concurrent worker finalised it first
+            cur.execute(
+                "UPDATE sequence_run_steps SET status = 'failed', finished_at = %s, "
+                "updated_at = %s WHERE run_id = %s "
+                "AND status IN ('running', 'pending')",
+                (now_iso, now, run_id),
+            )
+            finalised += 1
+    if finalised:
+        logger.warning("finalised %d stale sequence run(s)", finalised)
+    return finalised
+
+
 def main_loop(
     poll_seconds: float | None = None, max_iterations: int | None = None
 ) -> None:
@@ -189,6 +239,10 @@ def main_loop(
                     reap_stranded_scheduled()
                 except Exception:
                     logger.exception("reap_stranded_scheduled failed")
+                try:
+                    reap_stale_sequence_runs()
+                except Exception:
+                    logger.exception("reap_stale_sequence_runs failed")
                 try:
                     fire_due_sequences_once()
                 except Exception:
