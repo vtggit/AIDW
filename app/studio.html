@@ -11,21 +11,12 @@
     <link rel="stylesheet" href="css/suggestions.css">
     <link rel="stylesheet" href="css/pii.css">
     <link rel="stylesheet" href="css/sequences.css">
+    <link rel="stylesheet" href="css/retention.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Data retention panel (issue #689) */
-        .wh-retention-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
-        .wh-retention-table th,
-        .wh-retention-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
-        .wh-retention-table thead th { color: var(--text-secondary); font-weight: 600; }
-        .wh-retention-row { cursor: pointer; }
-        .wh-retention-row:hover,
-        .wh-retention-row-selected { background: var(--accent-light); }
-        .retention-runs { margin-top: 1rem; font-size: 0.875rem; }
-        .wh-retention-run-row { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
-        .wh-retention-run-error { margin: 0 0 0.5rem 1rem; color: #c0392b; font-size: 0.8125rem; white-space: pre-wrap; }
+        /* Data retention panel: styles live in css/retention.css (issue #800). */
         /* Ingestion panel (issue #692) */
         .wh-ingestion-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
         .wh-ingestion-table th,
@@ -175,8 +166,11 @@
             <h2>Data retention</h2>
             <p class="wh-sub">Review retention policies and inspect their sweep runs.</p>
         </div>
-        <div id="retention-policy-table-wrap" class="retention-table-wrap" data-testid="retention-policy-table-wrap"></div>
-        <div id="retention-runs" class="retention-runs" data-testid="retention-runs">Select a policy to see its runs.</div>
+        <div class="retention-split">
+            <div id="retention-policy-table-wrap" class="retention-table-wrap" data-testid="retention-policy-table-wrap"></div>
+            <h3 class="retention-runs-head" data-testid="retention-runs-head">Sweep runs</h3>
+            <div id="retention-runs" class="retention-runs" data-testid="retention-runs">Select a policy to see its runs.</div>
+        </div>
     </section>
 
     <section class="wh-panel" data-panel="ingestion">

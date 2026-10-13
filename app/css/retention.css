@@ -1,0 +1,360 @@
+/* Data retention tool (issue #800) — the "table in a card" pattern from
+ * docs/design/design-system.md, rebuilt as two stacked regions that each
+ * scroll on their own:
+ *
+ *   • the policy region (#retention-policy-table-wrap, on top, about
+ *     three fifths of the tool's height): the "Add policy" button (admin
+ *     only, rendered by js/retention.js) stays in a fixed toolbar and the
+ *     policy table's header row pins to the top of the region while its
+ *     rows scroll under it; a policy form opened from "Add policy" or a
+ *     row's "Edit" takes the region's place and scrolls inside it
+ *   • the runs region (#retention-runs, under it): the chosen policy's
+ *     sweep runs scroll on their own, under the fixed "Sweep runs"
+ *     heading that sits above the region in studio.html (the panel
+ *     script replaces the region's content, so the heading lives outside
+ *     it)
+ *
+ * On a desktop screen (901 px and up) the tool fits the window: the
+ * document and the main region do not scroll — only the two regions do.
+ * js/retention.js is untouched, so the shown state is detected from the
+ * section's hidden attribute (the shell's visibility mechanism,
+ * css/shell.css) with :has() — the same fit state the sibling tools
+ * reach with their *-open classes (css/pii.css, css/sequences.css,
+ * css/suggestions.css). Every other tool keeps the region's normal
+ * scrolling behaviour.
+ *
+ * At 900 px and below the regions stack at their natural height and the
+ * page scrolls vertically (never sideways); the table scrolls sideways
+ * inside the policy region when it is wider than the region.
+ *
+ * Colours, radii and spacing come from app/css/tokens.css — no raw
+ * colour values.
+ */
+
+/* --- The two regions: one above the other -------------------------------- */
+
+.retention-split {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+}
+
+/* The policy region: the card that holds the toolbar, the table (or the
+ * form / empty / error states) and their scrolling. */
+#retention-policy-table-wrap {
+    --retention-toolbar-h: calc(var(--touch-min) + var(--space-4));
+    position: relative;
+    overflow: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+}
+
+/* --- The admin toolbar: fixed above the scrolling table -------------------
+ *
+ * The toolbar is the first child of the policy region (rendered by
+ * js/retention.js); it pins to the top of the region while the table
+ * scrolls. Its height is deterministic (the touch target plus the
+ * region's vertical breathing room), which is what the sticky offset of
+ * the header row below it uses. */
+.wh-retention-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    height: var(--retention-toolbar-h);
+    padding: 0 var(--space-4);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.wh-retention-toolbar button {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-control);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* --- The policy table: sticky header row ---------------------------------- */
+
+.wh-retention-table {
+    width: 100%;
+    /* Wide enough that on a narrow screen the table is wider than the
+     * policy region and scrolls sideways inside it (never the page). */
+    min-width: 680px;
+    /* separate + spacing 0 keeps the sticky header row's own bottom
+     * border pinned with it (collapsed borders would scroll away). */
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.875rem;
+}
+
+.wh-retention-table th,
+.wh-retention-table td {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The header row pins to the top of the policy region while the rows
+ * scroll; with the admin toolbar present it pins just below it. */
+.wh-retention-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-surface);
+    color: var(--color-ink-secondary);
+    font-weight: 600;
+}
+
+#retention-policy-table-wrap:has(> .wh-retention-toolbar) .wh-retention-table thead th {
+    top: var(--retention-toolbar-h);
+}
+
+.wh-retention-row {
+    cursor: pointer;
+}
+
+.wh-retention-row:hover {
+    background: var(--color-ground);
+}
+
+/* The chosen policy: tinted with the accent token, like the shell's
+ * current nav item and the Load sequences tool's chosen row. */
+.wh-retention-row-selected,
+.wh-retention-row[aria-selected="true"] {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+}
+
+.wh-retention-row-selected td,
+.wh-retention-row[aria-selected="true"] td {
+    border-bottom-color: var(--color-accent);
+}
+
+.wh-retention-row-selected:hover,
+.wh-retention-row[aria-selected="true"]:hover {
+    background: var(--color-accent);
+}
+
+/* The row's controls (Edit / Delete / toggle / sweep confirmation):
+ * quiet chips that read on both the plain and the tinted row. */
+.wh-retention-table button {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+/* The row's inline confirmations (delete, sweep) wrap in place, so a
+ * long policy name never pushes the row's actions outside the tool. */
+.wh-retention-sweep-confirm,
+[data-testid="retention-policy-delete-text"] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 0.8125rem;
+    color: var(--color-ink);
+}
+
+.wh-retention-sweep-confirm input {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.8125rem;
+}
+
+/* --- Empty and error states: centred in their region ----------------------- */
+
+[data-testid="retention-policies-empty"],
+[data-testid="retention-policies-error"],
+[data-testid="retention-runs-empty"],
+[data-testid="retention-runs-error"] {
+    padding: var(--space-5) var(--space-4);
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+[data-testid="retention-policies-error"],
+[data-testid="retention-runs-error"] {
+    color: var(--color-risk);
+}
+
+/* --- The policy form: a "form in a pane" in the policy region --------------
+ *
+ * "Add policy" and "Edit" replace the region's table with the form; the
+ * region scrolls when the form is taller than it, so nothing is cut off
+ * or pushed outside the tool. */
+.wh-retention-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 34rem;
+    padding: var(--space-4);
+}
+
+.wh-retention-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+.wh-retention-field[hidden] {
+    /* js/retention.js toggles the dataset field's `hidden` attribute
+     * with the scope select; the flex display above must not override
+     * it, or a scope=class form would show an empty dataset select. */
+    display: none;
+}
+
+.wh-retention-field input,
+.wh-retention-field select {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+.wh-retention-form button[type="submit"] {
+    align-self: flex-start;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-5);
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-control);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wh-retention-form-error {
+    padding: 0 var(--space-4) var(--space-4);
+    color: var(--color-risk);
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+}
+
+/* --- The runs region: the "Sweep runs" heading + the scrolling runs -------- */
+
+/* The fixed heading: a sibling of the runs region in studio.html (the
+ * panel script replaces the region's content), so it stays in view
+ * while the runs scroll. */
+.retention-runs-head {
+    flex: 0 0 auto;
+    padding: 0 var(--space-1) var(--space-1);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+#retention-runs {
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+    padding: var(--space-2) var(--space-4);
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+.wh-retention-run-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-4);
+    min-width: 0;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+    color: var(--color-ink);
+}
+
+.wh-retention-run-row > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.wh-retention-run-error {
+    margin: 0 0 var(--space-2) var(--space-5);
+    color: var(--color-risk);
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+}
+
+/* --- Desktop fit: the tool fills the window, only the regions scroll -------
+ *
+ * Only while the shell shows the retention section (its container
+ * carries no hidden attribute) does the main region lock to the
+ * viewport height (height: 100% of the .aidw-scroll region), so the
+ * document and the main region cannot scroll — only the two regions
+ * do. The policy region takes three fifths of the tool's height, the
+ * runs region two fifths. */
+@media (min-width: 901px) {
+    main.wh-main:has(> section.wh-panel[data-panel="retention"]:not([hidden])) {
+        height: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="retention"]:not([hidden]))
+        > section.wh-panel[data-panel="retention"] {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="retention"]:not([hidden]))
+        > section.wh-panel[data-panel="retention"] > .wh-panel-head {
+        flex: 0 0 auto;
+        padding: var(--space-4) var(--space-5) var(--space-3);
+        border-bottom: 1px solid var(--color-border-subtle);
+    }
+
+    .retention-split {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    #retention-policy-table-wrap {
+        flex: 3 1 0%;
+        min-height: 0;
+    }
+
+    #retention-runs {
+        flex: 2 1 0%;
+        min-height: 0;
+    }
+}
