@@ -1,0 +1,263 @@
+/* Ingestion tool (issue #808) — the "table in a card" pattern from
+ * docs/design/design-system.md, rebuilt as two stacked regions that each
+ * scroll on their own:
+ *
+ *   • the pipeline region (#ingestion-pipeline-table-wrap, on top, about
+ *     three fifths of the tool's height): the pipeline table's header row
+ *     pins to the top of the region while its rows scroll under it
+ *   • the runs region (#ingestion-runs, under it): the chosen pipeline's
+ *     runs scroll on their own, under the fixed "Pipeline runs" heading
+ *     that sits above the region in studio.html (the panel script
+ *     replaces the region's content, so the heading lives outside it)
+ *
+ * On a desktop screen (901 px and up) the tool fits the window: the
+ * document and the main region do not scroll — only the two regions do.
+ * js/ingestion.js is untouched, so the shown state is detected from the
+ * section's hidden attribute (the shell's visibility mechanism,
+ * css/shell.css) with :has() — the same fit state the sibling tools
+ * reach with their *-open classes (css/pii.css, css/sequences.css,
+ * css/suggestions.css).
+ *
+ * While the tool is shown the main region widens from the 960 px column
+ * to 1,280 px, centred (issue #808); every other Studio tool keeps the
+ * 960 px column it has.
+ *
+ * At 900 px and below the regions stack at their natural height and the
+ * page scrolls vertically (never sideways); the table scrolls sideways
+ * inside the pipeline region when it is wider than the region.
+ *
+ * Colours, radii and spacing come from app/css/tokens.css — no raw
+ * colour values.
+ */
+
+/* --- The two regions: one above the other -------------------------------- */
+
+.ingestion-split {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+}
+
+/* The pipeline region: the card that holds the table (or the empty /
+ * error states) and their scrolling. */
+#ingestion-pipeline-table-wrap {
+    /* The chosen row's tint: a light mix of the accent token into the
+     * surface token (never a raw colour value). */
+    --ingestion-selected-bg: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface) 88%);
+    position: relative;
+    overflow: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+}
+
+/* --- The pipeline table: sticky header row -------------------------------- */
+
+.wh-ingestion-table {
+    width: 100%;
+    /* Wide enough that on a narrow screen the table is wider than the
+     * pipeline region and scrolls sideways inside it (never the page). */
+    min-width: 680px;
+    /* separate + spacing 0 keeps the sticky header row's own bottom
+     * border pinned with it (collapsed borders would scroll away). */
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.875rem;
+}
+
+.wh-ingestion-table th,
+.wh-ingestion-table td {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The header row pins to the top of the pipeline region while the rows
+ * scroll. */
+.wh-ingestion-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-surface);
+    color: var(--color-ink-secondary);
+    font-weight: 600;
+}
+
+.wh-ingestion-row {
+    cursor: pointer;
+}
+
+.wh-ingestion-row:hover {
+    background: var(--color-ground);
+}
+
+/* The chosen pipeline: a light accent tint (the accent token mixed into
+ * the surface token) with the row's text keeping the ink colour, so the
+ * pipeline text, the Enabled/Disabled label and the inline run-now
+ * outcome all stay readable; the row's buttons keep their own surface
+ * background and ink text. The design system's 3 px accent bar at the
+ * row's start edge marks the choice, so it never rests on the tint
+ * alone. */
+.wh-ingestion-row-selected,
+.wh-ingestion-row[aria-selected="true"] {
+    background: var(--ingestion-selected-bg);
+    color: var(--color-ink);
+}
+
+.wh-ingestion-row-selected > td:first-child,
+.wh-ingestion-row[aria-selected="true"] > td:first-child {
+    box-shadow: inset 3px 0 0 0 var(--color-accent);
+}
+
+.wh-ingestion-row-selected td,
+.wh-ingestion-row[aria-selected="true"] td {
+    border-bottom-color: var(--color-accent);
+}
+
+/* Hovering a chosen row keeps its tint (the ground hover above only
+ * applies to unchosen rows), so the background never flickers. */
+.wh-ingestion-row-selected:hover,
+.wh-ingestion-row[aria-selected="true"]:hover {
+    background: var(--ingestion-selected-bg);
+}
+
+/* The row's controls (Run now, Enable/Disable toggle): quiet chips that
+ * read on both the plain and the tinted row. */
+.wh-ingestion-table button {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+/* The run-now / enabled outcome shown in the row's live DOM keeps the
+ * row's ink text. */
+[data-testid="ingestion-run-now-status"],
+[data-testid="ingestion-enabled-status"] {
+    color: var(--color-ink);
+    font-size: 0.8125rem;
+}
+
+/* --- Empty and error states: centred in their region ---------------------- */
+
+[data-testid="ingestion-pipelines-empty"],
+[data-testid="ingestion-pipelines-error"],
+[data-testid="ingestion-runs-empty"],
+[data-testid="ingestion-runs-error"] {
+    padding: var(--space-5) var(--space-4);
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+[data-testid="ingestion-pipelines-error"],
+[data-testid="ingestion-runs-error"] {
+    color: var(--color-risk);
+}
+
+/* --- The runs region: the "Pipeline runs" heading + the scrolling runs ---- */
+
+/* The fixed heading: a sibling of the runs region in studio.html (the
+ * panel script replaces the region's content), so it stays in view
+ * while the runs scroll. */
+.ingestion-runs-head {
+    flex: 0 0 auto;
+    padding: 0 var(--space-1) var(--space-1);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+#ingestion-runs {
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+    padding: var(--space-2) var(--space-4);
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+.wh-ingestion-run-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-4);
+    min-width: 0;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+    color: var(--color-ink);
+}
+
+.wh-ingestion-run-row > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.wh-ingestion-run-error {
+    margin: 0 0 var(--space-2) var(--space-5);
+    color: var(--color-risk);
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+}
+
+/* --- Desktop fit: the tool fills the window, only the regions scroll -------
+ *
+ * Only while the shell shows the ingestion section (its container
+ * carries no hidden attribute) does the main region lock to the
+ * viewport height (height: 100% of the .aidw-scroll region), so the
+ * document and the main region cannot scroll — only the two regions
+ * do. The pipeline region takes three fifths of the tool's height, the
+ * runs region two fifths. And the main region widens from the 960 px
+ * column to 1,280 px, centred. */
+@media (min-width: 901px) {
+    main.wh-main:has(> section.wh-panel[data-panel="ingestion"]:not([hidden])) {
+        max-width: 1280px;
+        height: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="ingestion"]:not([hidden]))
+        > section.wh-panel[data-panel="ingestion"] {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="ingestion"]:not([hidden]))
+        > section.wh-panel[data-panel="ingestion"] > .wh-panel-head {
+        flex: 0 0 auto;
+        padding: var(--space-4) var(--space-5) var(--space-3);
+        border-bottom: 1px solid var(--color-border-subtle);
+    }
+
+    .ingestion-split {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    #ingestion-pipeline-table-wrap {
+        flex: 3 1 0%;
+        min-height: 0;
+    }
+
+    #ingestion-runs {
+        flex: 2 1 0%;
+        min-height: 0;
+    }
+}

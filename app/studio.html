@@ -12,22 +12,13 @@
     <link rel="stylesheet" href="css/pii.css">
     <link rel="stylesheet" href="css/sequences.css">
     <link rel="stylesheet" href="css/retention.css">
+    <link rel="stylesheet" href="css/ingestion.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* Data retention panel: styles live in css/retention.css (issue #800). */
-        /* Ingestion panel (issue #692) */
-        .wh-ingestion-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
-        .wh-ingestion-table th,
-        .wh-ingestion-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
-        .wh-ingestion-table thead th { color: var(--text-secondary); font-weight: 600; }
-        .wh-ingestion-row { cursor: pointer; }
-        .wh-ingestion-row:hover,
-        .wh-ingestion-row-selected { background: var(--accent-light); }
-        .ingestion-runs { margin-top: 1rem; font-size: 0.875rem; }
-        .wh-ingestion-run-row { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
-        .wh-ingestion-run-error { margin: 0 0 0.5rem 1rem; color: #c0392b; font-size: 0.8125rem; white-space: pre-wrap; }
+        /* Ingestion panel: styles live in css/ingestion.css (issue #808). */
         /* Feed keys panel (issue #740) */
         .feedkeys-meta { margin: 0 0 0.25rem; font-size: 0.875rem; }
         .feedkeys-note { margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--text-secondary); }
@@ -178,8 +169,11 @@
             <h2>Ingestion</h2>
             <p class="wh-sub">Review pipelines and inspect their runs.</p>
         </div>
-        <div id="ingestion-pipeline-table-wrap" class="ingestion-table-wrap" data-testid="ingestion-pipeline-table-wrap"></div>
-        <div id="ingestion-runs" class="ingestion-runs" data-testid="ingestion-runs">Select a pipeline to see its runs.</div>
+        <div class="ingestion-split">
+            <div id="ingestion-pipeline-table-wrap" class="ingestion-table-wrap" data-testid="ingestion-pipeline-table-wrap"></div>
+            <h3 class="ingestion-runs-head" data-testid="ingestion-runs-head">Pipeline runs</h3>
+            <div id="ingestion-runs" class="ingestion-runs" data-testid="ingestion-runs">Select a pipeline to see its runs.</div>
+        </div>
     </section>
 
     <section class="wh-panel" data-panel="feedkeys" data-requires-role="admin">

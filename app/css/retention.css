@@ -329,9 +329,12 @@
  * viewport height (height: 100% of the .aidw-scroll region), so the
  * document and the main region cannot scroll — only the two regions
  * do. The policy region takes three fifths of the tool's height, the
- * runs region two fifths. */
+ * runs region two fifths. And the main region widens from the 960 px
+ * column to 1,280 px, centred (issue #808); every other Studio tool
+ * keeps the 960 px column it has. */
 @media (min-width: 901px) {
     main.wh-main:has(> section.wh-panel[data-panel="retention"]:not([hidden])) {
+        max-width: 1280px;
         height: 100%;
         padding: 0;
         gap: 0;
