@@ -30,7 +30,7 @@ const SequenceRuns = {
 
       html += `<div class="wh-run-row" data-testid="run-row" data-id="${this._esc(run.id)}">`;
       html += `${this._esc(run.name)}`;
-      html += `<span data-testid="run-status" data-status="${effectiveStatus}">${this._esc(effectiveStatus)}</span>`;
+      html += `<span data-testid="run-status" data-status="${this._esc(effectiveStatus)}">${this._esc(effectiveStatus)}</span>`;
       if (startedAt || finishedAt) {
         html += `<div>${startedAt}${finishedAt}</div>`;
       }
@@ -49,7 +49,7 @@ const SequenceRuns = {
       const effectiveStatus = this._effectiveStatus(step.status);
       const label = step.label || step.name || '';
 
-      html += `<div data-testid="run-step-row" data-status="${effectiveStatus}">`;
+      html += `<div data-testid="run-step-row" data-status="${this._esc(effectiveStatus)}">`;
       html += `${this._esc(label)}`;
       html += `</div>`;
     }
@@ -66,6 +66,12 @@ const SequenceRuns = {
   async init() {
     const container = document.querySelector('[data-panel="sequence-runs"]');
     if (!container) return;
+
+    // The runs block starts with this heading while a sequence is
+    // chosen — whether it lists runs, the empty note, or a load error.
+    // Before a sequence is chosen the block keeps its pre-selection
+    // note and no heading.
+    const runsHeading = '<div data-testid="runs-heading">Run history</div>';
 
     let selectedSequenceId = null;
     // A monotonically increasing token per row selection: an in-flight
@@ -88,15 +94,15 @@ const SequenceRuns = {
       // A later row selection superseded this response: drop it.
       if (token !== selectionToken) return;
       if (!res.ok) {
-        container.innerHTML = '<div data-testid="runs-error">Could not load runs.</div>';
+        container.innerHTML = runsHeading + '<div data-testid="runs-error">Could not load runs.</div>';
         return;
       }
 
       const allRuns = Array.isArray(res.data) ? res.data : [];
       const filteredRuns = allRuns.filter(r => r.sequence_id === id);
 
-      // Render history + execute button (admin-only)
-      let html = this.renderRuns(filteredRuns);
+      // Render heading + history + execute button (admin-only)
+      let html = runsHeading + this.renderRuns(filteredRuns);
       if (Auth.isAdmin()) {
         html += `<button data-testid="sequence-execute" data-requires-role="admin">Execute</button>`;
       }
@@ -139,8 +145,8 @@ const SequenceRuns = {
         const finalRun = execRes.data;
         const steps = finalRun.steps || [];
 
-        // Render steps + re-render history
-        let html2 = this.renderRunSteps(steps);
+        // Render heading + steps + re-render history
+        let html2 = runsHeading + this.renderRunSteps(steps);
         html2 += this.renderRuns(filteredRuns.concat([finalRun]));
         container.innerHTML = html2;
 
@@ -152,6 +158,13 @@ const SequenceRuns = {
 
         this._pollInterval = setInterval(async () => {
           const pollRes = await ApiClient.get(`/sequence-runs/${runId}`);
+          // A later row selection may have superseded this poll while it
+          // was in flight: its answer describes the executed run of the
+          // earlier selection and must not overwrite the runs of the row
+          // chosen afterwards.
+          if (token !== selectionToken) {
+            return;
+          }
           if (!pollRes.ok) {
             this._clearPolling();
             container.innerHTML += '<div data-testid="runs-error">Could not load runs.</div>';
@@ -165,7 +178,7 @@ const SequenceRuns = {
             this._clearPolling();
             // Re-render history with updated run
             const updatedFiltered = filteredRuns.map(r => r.id === runId ? polledRun : r);
-            container.innerHTML = this.renderRunSteps(polledRun.steps || []) + this.renderRuns(updatedFiltered);
+            container.innerHTML = runsHeading + this.renderRunSteps(polledRun.steps || []) + this.renderRuns(updatedFiltered);
           }
         }, 2000);
       });
