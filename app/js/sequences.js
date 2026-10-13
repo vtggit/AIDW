@@ -161,6 +161,10 @@ const Sequences = {
     // response from an earlier click must not overwrite the detail of a
     // row chosen afterwards.
     let selectionToken = 0;
+    // The id of the row currently chosen (null before the first choice):
+    // after the list is redrawn (Create) the mark is re-applied to the
+    // row carrying this id.
+    let currentId = null;
 
     // Bind delegated click handler for sequence rows
     listPane.addEventListener('click', async (e) => {
@@ -169,23 +173,24 @@ const Sequences = {
 
       const id = row.dataset.id;
       const token = ++selectionToken;
+
+      // Mark the chosen row the moment it is chosen — before any
+      // response arrives — and clear the mark from every other row.
+      currentId = id;
+      this._markCurrent(rowsEl, row);
+
       const res = await ApiClient.get(`/load-sequences/${id}/bpmn`);
       // A later row selection superseded this response: drop it.
       if (token !== selectionToken) return;
-      if (!res.ok) return;
 
-      const { process_key, bpmn_xml } = res.data;
-
-      this._markCurrent(rowsEl, row);
-
-      // Render the flow into the detail pane (replacing any previous one)
+      // Render the flow into the detail pane (replacing any previous
+      // one), or the load error when the flow could not be fetched.
       let detailEl = detailPane ? detailPane.querySelector('[data-testid="sequence-detail"]') : null;
       if (!detailEl) {
         detailEl = document.createElement('div');
         detailEl.setAttribute('data-testid', 'sequence-detail');
         (detailPane || section || listPane).appendChild(detailEl);
       }
-      detailEl.innerHTML = this.renderFlow(bpmn_xml);
 
       // Show the BPMN download control — copy wizard.js downloadXml idiom
       let downloadBtn = detailPane ? detailPane.querySelector('[data-testid="bpmn-download"]') : null;
@@ -195,6 +200,19 @@ const Sequences = {
         downloadBtn.textContent = 'Download BPMN';
         (detailPane || section || listPane).appendChild(downloadBtn);
       }
+
+      if (!res.ok) {
+        // A flow that fails to load: the chosen row stays marked, the
+        // previous flow is removed from the detail and a load error
+        // takes its place, and the download is hidden. The chosen
+        // sequence's runs load independently (js/sequence_runs.js).
+        detailEl.innerHTML = '<div data-testid="flow-load-error">Could not load the flow for this sequence.</div>';
+        downloadBtn.hidden = true;
+        return;
+      }
+
+      const { process_key, bpmn_xml } = res.data;
+      detailEl.innerHTML = this.renderFlow(bpmn_xml);
       downloadBtn.hidden = false;
 
       const blob = new Blob([bpmn_xml], { type: 'application/xml' });
@@ -233,6 +251,17 @@ const Sequences = {
       }
 
       this._commitList(rowsEl, headEl, refreshResult.data);
+
+      // Re-apply the selection mark after the redraw: the row of the
+      // sequence chosen before keeps aria-current, matched by id — and
+      // with no sequence chosen before, no row is marked.
+      if (currentId !== null) {
+        let chosenRow = null;
+        rowsEl.querySelectorAll('[data-testid="sequence-row"]').forEach((r) => {
+          if (r.dataset.id === currentId) chosenRow = r;
+        });
+        this._markCurrent(rowsEl, chosenRow);
+      }
     });
   },
 };
