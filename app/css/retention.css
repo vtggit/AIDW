@@ -44,6 +44,9 @@
  * form / empty / error states) and their scrolling. */
 #retention-policy-table-wrap {
     --retention-toolbar-h: calc(var(--touch-min) + var(--space-4));
+    /* The chosen row's tint: a light mix of the accent token into the
+     * surface token (never a raw colour value). */
+    --retention-selected-bg: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface) 88%);
     position: relative;
     overflow: auto;
     background: var(--color-surface);
@@ -127,12 +130,21 @@
     background: var(--color-ground);
 }
 
-/* The chosen policy: tinted with the accent token, like the shell's
- * current nav item and the Load sequences tool's chosen row. */
+/* The chosen policy: a light accent tint (the accent token mixed into
+ * the surface token) with the row's text keeping the ink colour, so
+ * the policy text, the enabled label and the inline confirmations all
+ * stay readable; the row's buttons keep their own surface background
+ * and ink text. The design system's 3 px accent bar at the row's start
+ * edge marks the choice, so it never rests on the tint alone. */
 .wh-retention-row-selected,
 .wh-retention-row[aria-selected="true"] {
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
+    background: var(--retention-selected-bg);
+    color: var(--color-ink);
+}
+
+.wh-retention-row-selected > td:first-child,
+.wh-retention-row[aria-selected="true"] > td:first-child {
+    box-shadow: inset 3px 0 0 0 var(--color-accent);
 }
 
 .wh-retention-row-selected td,
@@ -140,9 +152,11 @@
     border-bottom-color: var(--color-accent);
 }
 
+/* Hovering a chosen row keeps its tint (the ground hover above only
+ * applies to unchosen rows), so the background never flickers. */
 .wh-retention-row-selected:hover,
 .wh-retention-row[aria-selected="true"]:hover {
-    background: var(--color-accent);
+    background: var(--retention-selected-bg);
 }
 
 /* The row's controls (Edit / Delete / toggle / sweep confirmation):
