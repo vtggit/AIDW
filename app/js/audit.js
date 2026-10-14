@@ -11,11 +11,15 @@
  *     &limit=100 (the type URL-encoded) and shows the events that
  *     answer returns, newest first; choosing "All entity types" again
  *     asks for GET /api/audit?limit=100.  A count line in the filter
- *     row reads "N events" for what is shown, and "Latest 100 events"
- *     when the server returned exactly 100, so a capped list says it is
- *     capped.  While a request is out the select stays usable, and only
- *     the newest choice's answer is shown: an answer for an older choice
- *     is dropped (request-sequence guard).
+ *     row reads "1 event" for a single event, "N events" for any other
+ *     number below 100, and "Latest 100 events" when the server
+ *     returned exactly 100, so a capped list says it is capped.  While
+ *     a request is out the select stays usable, and only the newest
+ *     choice's answer is shown: an answer for an older choice is
+ *     dropped (request-sequence guard — the request counter is never
+ *     reset when the panel loads again, and the first load uses it
+ *     too, so an answer to a request made before a reload is always
+ *     dropped).
  *   • after that block, in document order, the events table inside its
  *     own scroll region (css/audit.css): the header row stays in view at
  *     the top of the region while the rows scroll, and every row is one
@@ -44,8 +48,9 @@
  *     /api/audit is made.
  *   • With no events the section shows "No audit events yet."; a failed
  *     load shows "Could not load audit history." — for a failed FILTER
- *     request the note takes the table's place in the table's region
- *     and the filter row stays, so another choice can be made.
+ *     request the note takes the table's place in the table's region,
+ *     the count line is emptied, and the filter row stays, so another
+ *     choice can be made; the next answer refills the count line.
  *   • Nothing in this section changes data: it renders, it does not
  *     write (no forms, no buttons, no mutation endpoints).
  */
@@ -180,14 +185,15 @@ const AuditView = {
     },
 
     /**
-     * The count line's text: "N events" for what is shown, and
-     * "Latest 100 events" when the server returned exactly one page,
-     * so a capped list says it is capped.
+     * The count line's text: "1 event" for a single event, "N events"
+     * for any other number below the page size, and "Latest 100
+     * events" when the server returned exactly one page, so a capped
+     * list says it is capped.
      */
     _countText(events) {
-        return events.length === this.PAGE_SIZE
-            ? this.CAPPED_COUNT
-            : events.length + ' events';
+        const count = events.length;
+        if (count === this.PAGE_SIZE) return this.CAPPED_COUNT;
+        return count + (count === 1 ? ' event' : ' events');
     },
 
     /**
@@ -320,9 +326,12 @@ const AuditView = {
     },
 
     /** The load-failure note in place of the table, inside the table's
-     *  region — the filter row above it stays, so another choice can be
-     *  made. */
+     *  region — the filter row above it stays (with the count line
+     *  emptied, so the count says nothing while no events are shown),
+     *  so another choice can be made; the next answer refills the
+     *  count line. */
     _showLoadErrorInTableRegion() {
+        this._countEl.textContent = '';
         this._tableWrap.textContent = '';
         const note = document.createElement('p');
         note.className = 'audit-note';
@@ -434,12 +443,19 @@ const AuditView = {
             return;
         }
 
+        // The first load goes through the request counter like every
+        // other request, and the counter is never reset when the panel
+        // loads again: a late answer to an older first load — or to a
+        // choice made before the reload — is dropped instead of
+        // overwriting a newer choice's.
+        const seq = ++this._requestSeq;
         let res;
         try {
             res = await ApiClient.get('/audit?limit=100');
         } catch (e) {
             res = null;
         }
+        if (seq !== this._requestSeq) return; // the panel was reloaded
 
         if (res && res.ok && Array.isArray(res.data)) {
             if (res.data.length === 0) {
@@ -448,7 +464,6 @@ const AuditView = {
             }
             const events = this._sortedNewestFirst(res.data);
             this._knownTypes = this._distinctEntityTypes(events);
-            this._requestSeq = 0;
             host.textContent = '';
             host.appendChild(this._renderAdmin(events, this._knownTypes));
             return;
