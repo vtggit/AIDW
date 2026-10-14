@@ -97,6 +97,16 @@ const Retention = {
         return '';
     },
 
+    /** Readable stamp for a timestamp: the server's original value
+     *  (or an em dash when missing) through TimeFormat; the raw value
+     *  when TimeFormat is not loaded.  Never throws. */
+    _stamp(value) {
+        if (typeof TimeFormat !== 'undefined' && TimeFormat !== null) {
+            return TimeFormat.stamp(value);
+        }
+        return this._text(value);
+    },
+
     /** Count label: null/undefined -> '' (neutral), value -> "Purged: 1200". */
     _countLabel(prefix, value) {
         if (value === null || value === undefined) return '';
@@ -567,7 +577,8 @@ const Retention = {
                 + '<span data-testid="retention-run-status">' + this._esc(this._text(run.status)) + '</span>'
                 + '<span data-testid="retention-run-purged">' + this._esc(this._countLabel('Purged', run.records_purged)) + '</span>'
                 + '<span data-testid="retention-run-anonymized">' + this._esc(this._countLabel('Anonymized', run.records_anonymized)) + '</span>'
-                + '<span data-testid="retention-run-created">' + this._esc(this._text(run.created_at)) + '</span>'
+                + '<span data-testid="retention-run-created" title="' + this._esc(this._text(run.created_at)) + '">'
+                    + this._esc(this._stamp(run.created_at)) + '</span>'
                 + '</div>';
             if (detail !== '') {
                 html += '<div class="wh-retention-run-error" data-testid="retention-run-error">'
