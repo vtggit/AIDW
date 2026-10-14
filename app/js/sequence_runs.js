@@ -17,22 +17,80 @@ const SequenceRuns = {
     return status;
   },
 
+  _hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+  },
+
+  /** "label value" with the label alone when the value is empty. */
+  _agePhrase(label, value) {
+    return value === '' ? label : label + ' ' + value;
+  },
+
+  /**
+   * The row's time cells: a readable start stamp (its title keeps the
+   * server's original value), "took <span>" for a finished run, the
+   * finished run's readable finished stamp, and — for a run that has
+   * not finished yet — "running for <age>" once it has started, or
+   * "waiting for <age>" from when it was created (the label alone when
+   * the run carries no created time).
+   */
+  _runTimes(run, effectiveStatus, now) {
+    if (typeof TimeFormat === 'undefined' || TimeFormat === null) {
+      // A page that loads this module without time_format.js keeps the
+      // plain raw-timestamp row.
+      const startedAt = run.started_at ? ` ${this._esc(run.started_at)}` : '';
+      const finishedAt = run.finished_at ? ` ${this._esc(run.finished_at)}` : '';
+      if (startedAt || finishedAt) {
+        return `<div>${startedAt}${finishedAt}</div>`;
+      }
+      return '';
+    }
+    const startedAt = run.started_at;
+    const finishedAt = run.finished_at;
+    let times = '';
+    if (this._hasValue(startedAt)) {
+      times += `<span data-testid="run-started" title="${this._esc(startedAt)}">${this._esc(TimeFormat.stamp(startedAt))}</span>`;
+    }
+    if (effectiveStatus === 'completed' && this._hasValue(finishedAt)) {
+      const duration = TimeFormat.span(startedAt, finishedAt);
+      if (duration !== '') {
+        times += `<span data-testid="run-duration">took ${this._esc(duration)}</span>`;
+      }
+    }
+    if (this._hasValue(finishedAt)) {
+      times += `<span title="${this._esc(finishedAt)}">${this._esc(TimeFormat.stamp(finishedAt))}</span>`;
+    }
+    if (effectiveStatus === 'running' || effectiveStatus === 'pending') {
+      const created = run.created_at;
+      let ageValue = '';
+      let label = 'waiting for';
+      if (this._hasValue(startedAt)) {
+        label = 'running for';
+        ageValue = TimeFormat.age(startedAt, now);
+      } else if (this._hasValue(created)) {
+        ageValue = TimeFormat.age(created, now);
+      }
+      times += `<span data-testid="run-age">${this._esc(this._agePhrase(label, ageValue))}</span>`;
+    }
+    return times;
+  },
+
   renderRuns(runs) {
     if (!runs || runs.length === 0) {
       return '<div data-testid="runs-empty">No runs yet</div>';
     }
+    const now = new Date();
     let html = '';
     for (let i = 0; i < runs.length; i++) {
-      const run = runs[i];
+      const run = runs[i] || {};
       const effectiveStatus = this._effectiveStatus(run.status);
-      const startedAt = run.started_at ? ` ${this._esc(run.started_at)}` : '';
-      const finishedAt = run.finished_at ? ` ${this._esc(run.finished_at)}` : '';
 
       html += `<div class="wh-run-row" data-testid="run-row" data-id="${this._esc(run.id)}">`;
       html += `${this._esc(run.name)}`;
       html += `<span data-testid="run-status" data-status="${this._esc(effectiveStatus)}">${this._esc(effectiveStatus)}</span>`;
-      if (startedAt || finishedAt) {
-        html += `<div>${startedAt}${finishedAt}</div>`;
+      const times = this._runTimes(run, effectiveStatus, now);
+      if (times !== '') {
+        html += times;
       }
       html += `</div>`;
     }

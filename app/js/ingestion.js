@@ -316,6 +316,26 @@ const Ingestion = {
         return html;
     },
 
+    /** Readable stamp for a timestamp: the server's original value
+     *  (or an em dash when missing) through TimeFormat; the raw value
+     *  when TimeFormat is not loaded.  Never throws. */
+    _stamp(value) {
+        if (typeof TimeFormat !== 'undefined' && TimeFormat !== null) {
+            return TimeFormat.stamp(value);
+        }
+        return this._text(value);
+    },
+
+    /** "took <span>" for a finished run with a computable span; ''
+     *  otherwise.  The span is the time between started and finished. */
+    _durationSpan(run) {
+        if (typeof TimeFormat === 'undefined' || TimeFormat === null) return '';
+        if (run.status !== 'completed') return '';
+        const duration = TimeFormat.span(run.started_at, run.finished_at);
+        if (duration === '') return '';
+        return '<span data-testid="ingestion-run-duration">took ' + this._esc(duration) + '</span>';
+    },
+
     _renderRunRows(runs) {
         let html = '';
         for (let i = 0; i < runs.length; i++) {
@@ -325,8 +345,11 @@ const Ingestion = {
                 + this._esc(this._text(run.id)) + '">'
                 + '<span data-testid="ingestion-run-status">' + this._esc(this._text(run.status)) + '</span>'
                 + '<span data-testid="ingestion-run-trigger">' + this._esc(this._text(run.trigger)) + '</span>'
-                + '<span data-testid="ingestion-run-started">' + this._esc(this._text(run.started_at)) + '</span>'
-                + '<span data-testid="ingestion-run-finished">' + this._esc(this._text(run.finished_at)) + '</span>'
+                + '<span data-testid="ingestion-run-started" title="' + this._esc(this._text(run.started_at)) + '">'
+                    + this._esc(this._stamp(run.started_at)) + '</span>'
+                + '<span data-testid="ingestion-run-finished" title="' + this._esc(this._text(run.finished_at)) + '">'
+                    + this._esc(this._stamp(run.finished_at)) + '</span>'
+                + this._durationSpan(run)
                 + '<span data-testid="ingestion-run-read">' + this._esc(this._countLabel('Read', run.rows_read)) + '</span>'
                 + '<span data-testid="ingestion-run-written">' + this._esc(this._countLabel('Written', run.rows_written)) + '</span>'
                 + '<span data-testid="ingestion-run-suppressed">' + this._esc(this._countLabel('Suppressed', run.rows_suppressed)) + '</span>'

@@ -311,8 +311,8 @@ test('issue692 freeform', async ({ page }) => {
   await expect(runsArea.locator('[data-testid="ingestion-run-row"]')).toHaveCount(1);
   await expect(runsArea.locator('[data-testid="ingestion-run-status"]')).toHaveText('completed');
   await expect(runsArea.locator('[data-testid="ingestion-run-trigger"]')).toHaveText('schedule');
-  await expect(runsArea.locator('[data-testid="ingestion-run-started"]')).toHaveText('2026-10-01T02:00:00');
-  await expect(runsArea.locator('[data-testid="ingestion-run-finished"]')).toHaveText('2026-10-01T02:04:00');
+  await expect(runsArea.locator('[data-testid="ingestion-run-started"]')).toHaveText('2026-10-01 02:00 UTC');
+  await expect(runsArea.locator('[data-testid="ingestion-run-finished"]')).toHaveText('2026-10-01 02:04 UTC');
   await expect(runsArea.locator('[data-testid="ingestion-run-read"]')).toHaveText('Read: 900');
   await expect(runsArea.locator('[data-testid="ingestion-run-written"]')).toHaveText('Written: 900');
   await expect(runsArea.locator('[data-testid="ingestion-run-suppressed"]')).toHaveText('Suppressed: 0');
@@ -326,14 +326,14 @@ test('issue692 freeform', async ({ page }) => {
   await expect(row2).not.toHaveClass(/wh-ingestion-row-selected/);
   await expect(runsArea.locator('[data-testid="ingestion-run-row"]')).toHaveCount(2);
   await expect(runsArea.locator('[data-testid="ingestion-run-started"]')).toHaveText([
-    '2026-09-20T02:00:00',
-    '2026-09-10T02:00:00',
+    '2026-09-20 02:00 UTC',
+    '2026-09-10 02:00 UTC',
   ]);
   await expect(runsArea.locator('[data-testid="ingestion-run-status"]')).toHaveText(['failed', 'completed']);
   await expect(runsArea.locator('[data-testid="ingestion-run-trigger"]')).toHaveText(['manual', 'schedule']);
   await expect(runsArea.locator('[data-testid="ingestion-run-finished"]')).toHaveText([
-    '2026-09-20T02:10:00',
-    '2026-09-10T02:05:00',
+    '2026-09-20 02:10 UTC',
+    '2026-09-10 02:05 UTC',
   ]);
   await expect(runsArea.locator('[data-testid="ingestion-run-read"]')).toHaveText(['Read: 120', 'Read: 5000']);
   await expect(runsArea.locator('[data-testid="ingestion-run-written"]')).toHaveText(['Written: 0', 'Written: 4800']);
@@ -449,15 +449,15 @@ test('issue692 freeform', async ({ page }) => {
   await expect(ghostRunsArea.locator('[data-testid="ingestion-run-row"]')).toHaveCount(2);
   // The run without a started_at sorts after the dated run.
   await expect(ghostRunsArea.locator('[data-testid="ingestion-run-started"]')).toHaveText([
-    '2026-10-02T00:00:00',
-    '',
+    '2026-10-02 00:00 UTC',
+    '\u2014',
   ]);
   await expect(ghostRunsArea.locator('[data-testid="ingestion-run-status"]')).toHaveText(['completed', 'running']);
   // Error detail renders as inert text; null counts render empty.
   await expect(ghostRunsArea.locator('[data-testid="ingestion-run-error"]')).toHaveCount(1);
   await expect(ghostRunsArea.locator('[data-testid="ingestion-run-error"]')).toHaveText('<b onclick=window.__errPwned=1>bold</b>');
   await expect(ghostRunsArea.locator('[data-testid="ingestion-run-read"]')).toHaveText(['', '']);
-  await expect(ghostRunsArea.locator('[data-testid="ingestion-run-finished"]')).toHaveText(['', '']);
+  await expect(ghostRunsArea.locator('[data-testid="ingestion-run-finished"]')).toHaveText(['\u2014', '\u2014']);
 
   // Nothing executable was injected — the payloads render as text.
   expect(

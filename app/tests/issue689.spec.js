@@ -257,7 +257,7 @@ test('issue689 freeform', async ({ page }) => {
   await expect(runsArea.locator('[data-testid="retention-run-status"]')).toHaveText('completed');
   await expect(runsArea.locator('[data-testid="retention-run-purged"]')).toHaveText('Purged: 0');
   await expect(runsArea.locator('[data-testid="retention-run-anonymized"]')).toHaveText('Anonymized: 42');
-  await expect(runsArea.locator('[data-testid="retention-run-created"]')).toHaveText('2026-10-01T02:00:00');
+  await expect(runsArea.locator('[data-testid="retention-run-created"]')).toHaveText('2026-10-01 02:00 UTC');
   await expect(runsArea.locator('[data-testid="retention-run-error"]')).toHaveCount(0);
   await expect(runsArea).not.toContainText('Nightly purge');
   await expect(runsArea).not.toContainText('Manual purge');
