@@ -1,0 +1,209 @@
+/* Audit history tool (issue #816) — the "table in a card" pattern from
+ * docs/design/design-system.md, rebuilt as a fixed-height card with a
+ * single internal scroll region:
+ *
+ *   • the filter row (the entity-type select + the count line) sits at
+ *     the top of the card and stays in view
+ *   • the events table scrolls inside its own region under the filter
+ *     row; the table's header row pins to the top of that region while
+ *     the rows scroll.  Every row is one line: the Time cell does not
+ *     wrap and the Details cell is cut with an ellipsis (its title
+ *     carries the full details text, app/js/audit.js)
+ *
+ * On a desktop screen (901 px and up) the tool fits the window: the
+ * document and the main region do not scroll — only the table's region
+ * does (the shell's visibility mechanism, css/shell.css, is what the
+ * fit state keys on, the same :has() state the sibling tools reach,
+ * css/ingestion.css, css/retention.css).
+ *
+ * While the tool is shown the main region widens from the 960 px column
+ * to 1,280 px, centred (issue #816); every other Studio tool keeps the
+ * 960 px column it has.
+ *
+ * At 900 px and below the card is its natural height and the page
+ * scrolls vertically (never sideways); the table scrolls sideways
+ * inside its region when it is wider than the region.
+ *
+ * Colours, radii and spacing come from app/css/tokens.css — no raw
+ * colour values.
+ */
+
+/* --- The card body --------------------------------------------------- */
+
+.audit-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+}
+
+.audit-note {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+.audit-note[data-testid="audit-error"] {
+    color: var(--color-risk);
+}
+
+/* --- The filter row: the select + the count line ----------------------
+ *
+ * A block element (issue #754's contract) that the events table
+ * follows in document order. */
+
+.audit-filter-row {
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+}
+
+.audit-entity-filter {
+    min-height: var(--touch-min);
+    min-width: 16rem;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.audit-count {
+    margin-top: var(--space-2);
+    font-size: 0.875rem;
+    color: var(--color-ink-secondary);
+}
+
+.audit-admin {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+/* --- The table's own scroll region ------------------------------------ */
+
+.audit-table-wrap {
+    overflow: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-card);
+}
+
+/* A failed load replaces the table with the load-failure note inside
+ * this region (a filter failure keeps the filter row above it). */
+.audit-table-wrap .audit-note {
+    padding: var(--space-5) var(--space-4);
+}
+
+/* --- The events table: one line per event ------------------------------ */
+
+.wh-audit-table {
+    width: 100%;
+    /* Wide enough that at 900 px and below the table is wider than its
+     * region and scrolls sideways inside it (never the page), while at
+     * the 1,280 px desktop column the six columns fit without it. */
+    min-width: 880px;
+    /* fixed layout: the columns are sized by the header row, never by
+     * the (unbounded, nowrap) cell content — that is what lets the
+     * Details column clip with an ellipsis instead of stretching the
+     * table. */
+    table-layout: fixed;
+    /* separate + spacing 0 keeps the sticky header row's own bottom
+     * border pinned with it (collapsed borders would scroll away). */
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.875rem;
+}
+
+.wh-audit-table th,
+.wh-audit-table td {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border-subtle);
+    /* One line per event: no cell wraps (the Time cell included). */
+    white-space: nowrap;
+}
+
+/* The first five columns size themselves from the header row; the
+ * Details column (last) takes whatever width is left. */
+.wh-audit-table th:nth-child(1) { width: 13rem; } /* Time */
+.wh-audit-table th:nth-child(2) { width: 6rem; }  /* Action */
+.wh-audit-table th:nth-child(3) { width: 8rem; }  /* Entity type */
+.wh-audit-table th:nth-child(4) { width: 6rem; }  /* Entity id */
+.wh-audit-table th:nth-child(5) { width: 7rem; }  /* Actor */
+
+.wh-audit-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-surface);
+    color: var(--color-ink-secondary);
+    font-weight: 600;
+}
+
+/* The Details cell is the long one: the remaining-width column clips
+ * its nowrap text with an ellipsis, so every row stays one line high. */
+.wh-audit-table td[data-testid="audit-details"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- Desktop fit: the tool fills the window, only the table scrolls ----
+ *
+ * Only while the shell shows the audit section (its container carries
+ * no hidden attribute) does the main region lock to the viewport
+ * height (height: 100% of the .aidw-scroll region), so the document
+ * and the main region cannot scroll — only the table's region does.
+ * And the main region widens from the 960 px column to 1,280 px,
+ * centred. */
+@media (min-width: 901px) {
+    main.wh-main:has(> section.wh-panel[data-panel="audit"]:not([hidden])) {
+        max-width: 1280px;
+        height: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="audit"]:not([hidden]))
+        > section.wh-panel[data-panel="audit"] {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="audit"]:not([hidden]))
+        > section.wh-panel[data-panel="audit"] > .wh-panel-head {
+        flex: 0 0 auto;
+        padding: var(--space-4) var(--space-5) var(--space-3);
+        border-bottom: 1px solid var(--color-border-subtle);
+    }
+
+    .audit-body {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .audit-admin {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .audit-filter-row {
+        flex: 0 0 auto;
+    }
+
+    .audit-table-wrap {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+}
