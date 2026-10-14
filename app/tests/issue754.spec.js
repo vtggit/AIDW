@@ -3,6 +3,12 @@
 // Proof for issue #754 — the read-only "Audit history" admin panel on
 // /studio.html (app/js/audit.js + the audit section in app/studio.html).
 //
+// Superseded in part by issue #816: choosing an entity type now asks the
+// server (GET /api/audit?entity_type=...) instead of filtering the
+// already-loaded events locally, so the mock below answers a request
+// carrying entity_type with that type's events.  The remaining assertions
+// (columns, order, notes, fail-closed, XSS) stand unchanged.
+//
 // Boots /studio.html?panel=audit with /api/auth/config and /api/auth/me
 // mocked and every other /api/** request mocked, and proves:
 //   AC-1  app/studio.html gains <section class="wh-panel"
@@ -204,10 +210,16 @@ test('issue754 freeform', async ({ page }) => {
           body: JSON.stringify({ detail: 'audit storage unavailable' }),
         });
       }
+      // issue #816: the filter asks the server — a request carrying
+      // entity_type answers with that type's events, the unfiltered
+      // request with all of them.
+      const entityType = new URL(url).searchParams.get('entity_type');
+      const events =
+        entityType === null ? EVENTS : EVENTS.filter((e) => e.entity_type === entityType);
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(EVENTS),
+        body: JSON.stringify(events),
       });
     }
     // Every other /api/** request is mocked with an empty list.
@@ -322,9 +334,12 @@ test('issue754 freeform', async ({ page }) => {
     'note: ' + XSS_PAYLOAD
   );
 
-  // the admin read went through the API client with limit=100
+  // the admin read went through the API client with limit=100; before
+  // the filter is touched only that one, unfiltered, request was made
+  // (issue #816: choosing a type then asks the server per type)
   expect(auditRequests).toHaveLength(1);
   expect(auditRequests[0]).toContain('/api/audit?limit=100');
+  expect(auditRequests[0]).not.toContain('entity_type');
 
   // no actor email appears in the page text or the serialized DOM
   expect(await page.evaluate(() => document.body.innerText.includes('example.com'))).toBe(false);

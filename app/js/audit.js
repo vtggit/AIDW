@@ -1,19 +1,32 @@
 /**
- * Audit history — Studio panel (issue #754).
+ * Audit history — Studio panel (issue #754, refit by issue #816).
  *
  * Read-only admin panel over GET /api/audit (limit=100), through the
  * existing ApiClient (never fetch() directly).  For an admin it renders,
  * inside an element marked data-requires-role="admin":
  *   • a block element (data-testid="audit-filter-row") holding a select
- *     that lists "All entity types" plus each distinct entity type in the
- *     loaded events; choosing a type shows only its events and "All
- *     entity types" shows them all again
- *   • after that block, in document order, a table of the events ordered
- *     newest first by timestamp — ISO strings and numeric epoch values
- *     (seconds or milliseconds) compare chronologically
- * with one row per event showing the time, action, entity type, entity
- * id, the actor's username (or actor_sub when there is none) and the
- * details as compact "key: value" pairs.  The time is rendered as a
+ *     that lists "All entity types" plus the entity types of the first
+ *     load; the chosen type stays a choice while it is shown.  Choosing
+ *     a type asks the server for GET /api/audit?entity_type=<type>
+ *     &limit=100 (the type URL-encoded) and shows the events that
+ *     answer returns, newest first; choosing "All entity types" again
+ *     asks for GET /api/audit?limit=100.  A count line in the filter
+ *     row reads "N events" for what is shown, and "Latest 100 events"
+ *     when the server returned exactly 100, so a capped list says it is
+ *     capped.  While a request is out the select stays usable, and only
+ *     the newest choice's answer is shown: an answer for an older choice
+ *     is dropped (request-sequence guard).
+ *   • after that block, in document order, the events table inside its
+ *     own scroll region (css/audit.css): the header row stays in view at
+ *     the top of the region while the rows scroll, and every row is one
+ *     line — the Time cell does not wrap and the Details cell is cut
+ *     with an ellipsis whose title carries the full details text, up to
+ *     2,000 characters
+ * of the events ordered newest first by timestamp — ISO strings and
+ * numeric epoch values (seconds or milliseconds) compare chronologically
+ * — with one row per event showing the time, action, entity type,
+ * entity id, the actor's username (or actor_sub when there is none) and
+ * the details as compact "key: value" pairs.  The time is rendered as a
  * deterministic UTC-formatted string ("YYYY-MM-DD HH:MM:SS UTC"), never
  * as the raw timestamp value.
  *
@@ -30,7 +43,9 @@
  *     place as well.  In every fail-closed case no request to
  *     /api/audit is made.
  *   • With no events the section shows "No audit events yet."; a failed
- *     request shows "Could not load audit history."
+ *     load shows "Could not load audit history." — for a failed FILTER
+ *     request the note takes the table's place in the table's region
+ *     and the filter row stays, so another choice can be made.
  *   • Nothing in this section changes data: it renders, it does not
  *     write (no forms, no buttons, no mutation endpoints).
  */
@@ -42,6 +57,22 @@ const AuditView = {
     EMPTY_NOTE: 'No audit events yet.',
     ERROR_NOTE: 'Could not load audit history.',
     ALL_TYPES_LABEL: 'All entity types',
+    /** The page size every audit request asks for. */
+    PAGE_SIZE: 100,
+    /** "N events" reads "Latest 100 events" when the server returned
+     *  exactly one page, so a capped list says it is capped. */
+    CAPPED_COUNT: 'Latest 100 events',
+    /** The Details cell's title carries the full details text, up to
+     *  this many characters. */
+    DETAILS_TITLE_LIMIT: 2000,
+
+    // Panel state, set when the admin content renders:
+    _knownTypes: [], // the entity types of the first load (the choices)
+    _requestSeq: 0,  // the newest audit request's sequence number
+    _select: null,
+    _countEl: null,
+    _tableWrap: null,
+    _host: null,
 
     /** The panel section from studio.html, or null when absent. */
     _section() {
@@ -149,6 +180,17 @@ const AuditView = {
     },
 
     /**
+     * The count line's text: "N events" for what is shown, and
+     * "Latest 100 events" when the server returned exactly one page,
+     * so a capped list says it is capped.
+     */
+    _countText(events) {
+        return events.length === this.PAGE_SIZE
+            ? this.CAPPED_COUNT
+            : events.length + ' events';
+    },
+
+    /**
      * Actor cell text: the username, or actor_sub when there is no
      * username.  The actor's email is never read or shown.
      */
@@ -186,7 +228,10 @@ const AuditView = {
         return pairs.join('; ');
     },
 
-    /** One <tr> per event.  Every value is written with textContent. */
+    /** One <tr> per event.  Every value is written with textContent.
+     *  The Details cell carries the full details text in its title
+     *  (up to DETAILS_TITLE_LIMIT characters); the CSS cuts the visible
+     *  text with an ellipsis so the row stays one line. */
     _renderRow(event) {
         const record = event && typeof event === 'object' ? event : {};
         const cells = [
@@ -195,7 +240,6 @@ const AuditView = {
             ['audit-entity-type', this._text(record.entity_type)],
             ['audit-entity-id', this._text(record.entity_id)],
             ['audit-actor', this._actorLabel(record)],
-            ['audit-details', this._detailsText(record)],
         ];
         const tr = document.createElement('tr');
         tr.setAttribute('data-testid', 'audit-row');
@@ -205,6 +249,12 @@ const AuditView = {
             td.textContent = cells[i][1];
             tr.appendChild(td);
         }
+        const detailsText = this._detailsText(record);
+        const detailsTd = document.createElement('td');
+        detailsTd.setAttribute('data-testid', 'audit-details');
+        detailsTd.textContent = detailsText;
+        detailsTd.title = detailsText.slice(0, this.DETAILS_TITLE_LIMIT);
+        tr.appendChild(detailsTd);
         return tr;
     },
 
@@ -234,56 +284,119 @@ const AuditView = {
         return table;
     },
 
-    /** Refill the table body with the rows matching the selected filter. */
-    _applyFilter(tbody, events, selectedType) {
-        tbody.textContent = '';
-        const visible =
-            selectedType === ''
-                ? events
-                : events.filter((event) => {
-                      const record = event && typeof event === 'object' ? event : {};
-                      return this._text(record.entity_type) === selectedType;
-                  });
-        for (let i = 0; i < visible.length; i++) {
-            tbody.appendChild(this._renderRow(visible[i]));
-        }
-    },
-
-    /**
-     * The admin content: a data-requires-role="admin" wrapper holding
-     * the filter row (block element with the entity-type select) and,
-     * after it in document order, the events table.
-     */
-    _renderAdmin(events) {
-        const wrapper = document.createElement('div');
-        wrapper.setAttribute('data-requires-role', 'admin');
-        wrapper.setAttribute('data-testid', 'audit-admin');
-
-        const filterRow = document.createElement('div');
-        filterRow.setAttribute('data-testid', 'audit-filter-row');
-        const select = document.createElement('select');
-        select.setAttribute('data-testid', 'audit-entity-type-filter');
+    /** Rebuild the select's options: "All entity types" plus the
+     *  first load's types; the chosen type stays a choice while it is
+     *  shown. */
+    _rebuildChoices(types, selected) {
+        const select = this._select;
+        select.textContent = '';
         const allOption = document.createElement('option');
         allOption.value = '';
         allOption.textContent = this.ALL_TYPES_LABEL;
         select.appendChild(allOption);
-        const types = this._distinctEntityTypes(events);
         for (let i = 0; i < types.length; i++) {
             const option = document.createElement('option');
             option.value = types[i];
             option.textContent = types[i];
             select.appendChild(option);
         }
+        if (selected !== '' && types.indexOf(selected) === -1) {
+            const option = document.createElement('option');
+            option.value = selected;
+            option.textContent = selected;
+            select.appendChild(option);
+        }
+        select.value = selected;
+    },
+
+    /** Show one answer: the table (re)renders the events newest first,
+     *  the count line reads what is shown, and the select keeps its
+     *  choices with the answer's choice selected. */
+    _showEvents(selected, events) {
+        this._rebuildChoices(this._knownTypes, selected);
+        this._countEl.textContent = this._countText(events);
+        this._tableWrap.textContent = '';
+        this._tableWrap.appendChild(this._renderTable(events));
+    },
+
+    /** The load-failure note in place of the table, inside the table's
+     *  region — the filter row above it stays, so another choice can be
+     *  made. */
+    _showLoadErrorInTableRegion() {
+        this._tableWrap.textContent = '';
+        const note = document.createElement('p');
+        note.className = 'audit-note';
+        note.setAttribute('data-testid', 'audit-error');
+        note.textContent = this.ERROR_NOTE;
+        this._tableWrap.appendChild(note);
+    },
+
+    /**
+     * Ask the server for the audit events of one choice.
+     *
+     * `selected` is '' for "All entity types" (GET /api/audit?limit=100)
+     * or a type, URL-encoded, for GET /api/audit?entity_type=<type>
+     * &limit=100.  A request-sequence guard drops an answer that is no
+     * longer the newest choice's: while a request is out the select
+     * stays usable, and an older choice's late answer never renders.
+     */
+    async _loadEvents(selected) {
+        const seq = ++this._requestSeq;
+        const query =
+            selected === ''
+                ? '/audit?limit=100'
+                : '/audit?entity_type=' + encodeURIComponent(selected) + '&limit=100';
+        let res;
+        try {
+            res = await ApiClient.get(query);
+        } catch (e) {
+            res = null;
+        }
+        if (seq !== this._requestSeq) return; // an older choice's answer
+        if (res && res.ok && Array.isArray(res.data)) {
+            this._showEvents(selected, this._sortedNewestFirst(res.data));
+            return;
+        }
+        this._showLoadErrorInTableRegion();
+    },
+
+    /**
+     * The admin content: a data-requires-role="admin" wrapper holding
+     * the filter row (block element with the entity-type select and the
+     * count line) and, after it in document order, the events table in
+     * its own scroll region.
+     */
+    _renderAdmin(events, types) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'audit-admin';
+        wrapper.setAttribute('data-requires-role', 'admin');
+        wrapper.setAttribute('data-testid', 'audit-admin');
+
+        const filterRow = document.createElement('div');
+        filterRow.className = 'audit-filter-row';
+        filterRow.setAttribute('data-testid', 'audit-filter-row');
+        const select = document.createElement('select');
+        select.className = 'audit-entity-filter';
+        select.setAttribute('data-testid', 'audit-entity-type-filter');
+        const count = document.createElement('div');
+        count.className = 'audit-count';
+        count.setAttribute('data-testid', 'audit-count');
+        count.textContent = this._countText(events);
         filterRow.appendChild(select);
+        filterRow.appendChild(count);
         wrapper.appendChild(filterRow);
 
-        const table = this._renderTable(events);
-        wrapper.appendChild(table);
+        const tableWrap = document.createElement('div');
+        tableWrap.className = 'audit-table-wrap';
+        tableWrap.setAttribute('data-testid', 'audit-table-wrap');
+        tableWrap.appendChild(this._renderTable(events));
+        wrapper.appendChild(tableWrap);
 
-        const tbody = table.querySelector('tbody');
-        select.addEventListener('change', () => {
-            this._applyFilter(tbody, events, select.value);
-        });
+        this._select = select;
+        this._countEl = count;
+        this._tableWrap = tableWrap;
+        this._rebuildChoices(types, '');
+        select.addEventListener('change', () => this._loadEvents(select.value));
 
         return wrapper;
     },
@@ -314,6 +427,7 @@ const AuditView = {
         if (!section) return;
         const host = section.querySelector('[data-testid="audit-body"]');
         if (!host) return;
+        this._host = host;
 
         if (!this._isAdmin()) {
             this._setNote(host, 'audit-admin-only-note', this.ADMIN_ONLY_NOTE);
@@ -333,8 +447,10 @@ const AuditView = {
                 return;
             }
             const events = this._sortedNewestFirst(res.data);
+            this._knownTypes = this._distinctEntityTypes(events);
+            this._requestSeq = 0;
             host.textContent = '';
-            host.appendChild(this._renderAdmin(events));
+            host.appendChild(this._renderAdmin(events, this._knownTypes));
             return;
         }
 
