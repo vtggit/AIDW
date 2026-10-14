@@ -51,7 +51,7 @@ const SequenceRuns = {
     if (this._hasValue(startedAt)) {
       times += `<span data-testid="run-started" title="${this._esc(startedAt)}">${this._esc(TimeFormat.stamp(startedAt))}</span>`;
     }
-    if (effectiveStatus === 'completed' && this._hasValue(finishedAt)) {
+    if (this._hasValue(startedAt) && this._hasValue(finishedAt)) {
       const duration = TimeFormat.span(startedAt, finishedAt);
       if (duration !== '') {
         times += `<span data-testid="run-duration">took ${this._esc(duration)}</span>`;

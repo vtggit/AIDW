@@ -326,11 +326,12 @@ const Ingestion = {
         return this._text(value);
     },
 
-    /** "took <span>" for a finished run with a computable span; ''
+    /** "took <span>" for a run that carries both a start and a finish
+     *  time and a computable span — whatever its status (completed,
+     *  failed or any other finished status the server sends); ''
      *  otherwise.  The span is the time between started and finished. */
     _durationSpan(run) {
         if (typeof TimeFormat === 'undefined' || TimeFormat === null) return '';
-        if (run.status !== 'completed') return '';
         const duration = TimeFormat.span(run.started_at, run.finished_at);
         if (duration === '') return '';
         return '<span data-testid="ingestion-run-duration">took ' + this._esc(duration) + '</span>';
