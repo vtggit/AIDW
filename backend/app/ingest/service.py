@@ -38,7 +38,9 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.db.connection import get_cursor
+from app.egress import EgressError
 from app.egress.http import _effective_origin, fetch_bytes, resolve_fetch_timeout
+from app.governance.safe_error import safe_error_detail
 from app.ingest.cursor import _acceptable, _later, apply_rows
 from app.ingest.filters import build_page_url
 from app.ingest.mapper import business_key, extract_entries, normalize_cursor_value
@@ -578,7 +580,7 @@ def execute_run(run_id: str, claimed: bool = False) -> dict | None:
         logger.exception(
             "post-ingest profiling failed for source %s", dataset["source_id"]
         )
-        profile_error = str(exc)
+        profile_error = _error_detail(exc)
 
     body = _run_body(
         repo,
@@ -606,6 +608,38 @@ def _run_body(repo, run_id: str, **extras) -> dict:
     return {**row, **extras}
 
 
+# The failure classes whose message is safe to store verbatim on the run row: the
+# service's own errors (IngestError, egress EgressError and its subclasses — message
+# text authored by this codebase, carrying no data), plus OS transport failures
+# (OSError and its subclasses — "connection refused", "connection reset by peer",
+# timeouts: fixed OS wording, no data) and internal runtime failures (RuntimeError —
+# this codebase's own failure text, a db blip in context loading). EVERY other class
+# — a ValueError built from payload data, a database error with its DETAIL/HINT lines,
+# any other foreign exception — degrades to the message-free fixed-shape
+# safe_error_detail, so its message and any value in it never land on the run row.
+_MESSAGE_SAFE_EXCEPTIONS = (IngestError, EgressError, OSError, RuntimeError)
+
+
+def _error_detail(exc: Exception) -> str:
+    """The error text stored on the run (a failed run's error_detail, a succeeded run's
+    profile_error): an own error — an IngestError, or an egress EgressError (or a subclass
+    of it) — keeps its message, cut to 1,024 characters, as before; so do OS transport
+    failures (the OSError family) and internal runtime failures (RuntimeError), whose
+    messages are fixed OS/library wording naming no data. EVERY other exception degrades
+    to the fixed-shape, message-free safe_error_detail (the class name, plus the SQLSTATE
+    code for a database error), so a foreign exception's message — its DETAIL/HINT lines
+    and any value in them — never lands on the run row. The full exception is still
+    written to the server log at the failure site."""
+    if isinstance(exc, _MESSAGE_SAFE_EXCEPTIONS):
+        try:
+            return str(exc)[:1024]
+        except Exception:
+            # an exception whose message cannot even be rendered must not block the run's
+            # finalization — degrade to the message-free fixed shape
+            return safe_error_detail(exc)
+    return safe_error_detail(exc)
+
+
 def _finalize_failed(repo, run_id: str, exc: Exception) -> dict:
     """Record a post-claim failure ON the run and return the failed run body. Status-guarded:
     a row already finalized externally (reaper, admin) keeps its terminal state."""
@@ -615,7 +649,7 @@ def _finalize_failed(repo, run_id: str, exc: Exception) -> dict:
         cur.execute(
             "UPDATE runs SET status = %s, error_detail = %s, finished_at = %s, "
             "updated_at = %s WHERE id = %s AND status = 'running'",
-            ("failed", str(exc)[:1024], finished, finished, run_id),
+            ("failed", _error_detail(exc), finished, finished, run_id),
         )
     return _run_body(repo, run_id, inserts=0, updates=0, skipped_no_key=0)
 
