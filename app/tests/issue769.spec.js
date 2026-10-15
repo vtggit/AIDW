@@ -257,9 +257,15 @@ test('issue769 freeform', async ({ page }) => {
   await expect(page.locator('#sources .src-row')).toHaveCount(30);
   const tallRegion = await page.evaluate(() => {
     const el = document.querySelector('[data-testid="main-content"]');
-    return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+    const list = document.getElementById('sources');
+    return {
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      listScroll: list.scrollHeight - list.clientHeight,
+    };
   });
-  expect(tallRegion.scrollHeight, 'tall tool: the main region scrolls').toBeGreaterThan(tallRegion.clientHeight);
+  expect(tallRegion.scrollHeight, 'the Data sources tool fits: the main region does not scroll').toBeLessThanOrEqual(tallRegion.clientHeight);
+  expect(tallRegion.listScroll, 'the source list scrolls in its own region').toBeGreaterThan(0);
   await expectNoDocumentScroll(page);
 
   // Switch to a short tool: the region no longer scrolls.
@@ -286,12 +292,13 @@ test('issue769 freeform', async ({ page }) => {
   // the proof pushes it away from the top.
   await expect(page.locator('#sources .src-row')).toHaveCount(30);
   // Put the region somewhere other than the top (it is scrollable:
-  // 30 sources)...
+  // 30 sources; since issue #826 the source list is the region that
+  // scrolls in the Data sources tool)...
   await page.evaluate(() => {
-    const el = document.querySelector('[data-testid="main-content"]');
+    const el = document.getElementById('sources');
     el.scrollTop = 400;
   });
-  expect(await page.evaluate(() => document.querySelector('[data-testid="main-content"]').scrollTop)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.getElementById('sources').scrollTop)).toBeGreaterThan(0);
 
   // ...then a sidebar item shows its tool WITHOUT a page load...
   await page.click('.aidw-nav-item[data-nav-panel="retention"]');

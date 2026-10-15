@@ -1,0 +1,345 @@
+/* Data sources tool (issue #826) — "Form in a pane" + list, rebuilt on the
+ * design tokens (app/css/tokens.css):
+ *
+ *   • the add form (labelled Name / Endpoint URL / OData version fields) stays
+ *     at the top of the tool; the source list (#sources) is the ONE region
+ *     that scrolls, under it
+ *   • one line per source: name, type badge, endpoint, dataset count, and —
+ *     for an admin only — the Discover button at the row's right edge; a long
+ *     name or endpoint cuts with an ellipsis and its title carries the full
+ *     text; the discovery status line (#src-status-<id>) sits under its row
+ *     while it has text
+ *   • on a desktop screen (901 px and up) the tool fits the window: the
+ *     document and the main .aidw-scroll region do not scroll — only #sources
+ *     does.  The shown state is detected from the section's hidden attribute
+ *     (the shell's visibility mechanism, css/shell.css) with :has() — the same
+ *     fit state the sibling tools reach (css/ingestion.css and friends)
+ *   • at 900 px and below the row wraps onto two lines (name + badge over
+ *     endpoint + count + button) and the page never scrolls sideways
+ *
+ * Colours, radii and spacing come from tokens.css only — no raw colour values.
+ */
+
+/* --- Add form: labelled fields, one column of label-over-control -------- */
+
+.src-form {
+    display: grid;
+    grid-template-areas:
+        "name-lbl endpoint-lbl version-lbl submit"
+        "name endpoint version submit";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto auto;
+    gap: var(--space-2) var(--space-3);
+    align-items: end;
+    margin: 0;
+}
+
+.src-form label[for="src-name"] { grid-area: name-lbl; }
+#src-name { grid-area: name; }
+.src-form label[for="src-endpoint"] { grid-area: endpoint-lbl; }
+#src-endpoint { grid-area: endpoint; }
+.src-form label[for="src-version"] { grid-area: version-lbl; }
+#src-version { grid-area: version; }
+#src-submit { grid-area: submit; }
+
+.src-field-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--color-ink-secondary);
+}
+
+.src-form input[type="text"],
+.src-form input[type="url"],
+.src-form select {
+    min-width: 0;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+}
+
+.src-form input::placeholder {
+    color: var(--color-ink-secondary);
+}
+
+#src-submit {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-4);
+    border: none;
+    border-radius: var(--radius-control);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#src-submit:hover {
+    opacity: 0.9;
+}
+
+#src-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* --- Source list: one line per source -----------------------------------
+ *
+ * A row is a single flex line plus a status line under it.  The line holds
+ * the row's two groups, .src-l1 (name + type badge) and .src-l2 (endpoint
+ * + dataset count + Discover).  Desktop: l1 shrink-wraps at the row's
+ * start edge and l2 takes the rest — its endpoint cell stretches, pinning
+ * the count and the Discover button at the row's right edge — so all five
+ * cells share ONE line.  Every group and long cell carries min-width: 0,
+ * so a long name or endpoint ellipsises (overflow hidden + text-overflow)
+ * instead of pushing the line past the row.  Narrow (900 px and below):
+ * the line wraps and each group takes its own full-width line —
+ * (name + badge) over (endpoint + count + Discover) — two lines per row,
+ * never a sideways page scroll. */
+
+.src-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.src-row {
+    display: flex;
+    flex-direction: column;
+    /* Reset the legacy row's flex properties (css/warehouse.css): the
+     * single line must stretch to the row's full width (stretch), the
+     * row never wraps, and the line starts at the top.  With the legacy
+     * align-items: center the line shrink-wrapped to its content and a
+     * 300-character name/endpoint blew past the row's right edge. */
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--space-1);
+    min-height: var(--row-min);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-control);
+}
+
+/* The single line of the row. */
+.src-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+}
+
+/* The row's two groups: name + type badge, then endpoint + dataset count
+ * + Discover.  Plain flex rows at every width (never display:contents),
+ * so the line can never be pushed wider than the row — the long cells
+ * inside them ellipsize instead. */
+.src-l1,
+.src-l2 {
+    display: flex;
+    align-items: center;
+}
+
+/* l1 shrink-wraps (it holds the ellipsising name next to the badge) and
+ * may shrink to nothing (min-width: 0) when the name is long. */
+.src-l1 {
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: var(--space-2);
+}
+
+/* l2 takes the rest of the line, its endpoint stretching to push the
+ * count and the Discover button to the row's right edge.  It may shrink
+ * to nothing (min-width: 0): a flex item's automatic minimum is its
+ * min-content size, and an item with an auto basis contributes its full
+ * min-content width to that floor — so without the reset, the endpoint's
+ * 300-character unbroken line would set l2's floor and push the row's
+ * tail past the row's right edge.  The endpoint absorbs every bit of
+ * shrinkage (its own min-width: 0 + overflow hidden); the count and the
+ * Discover button are unsquishable (flex: 0 0 auto) and always keep
+ * their width, so the row's tail can never be pushed out. */
+.src-l2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: var(--space-3);
+    justify-content: flex-end;
+}
+
+.src-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+
+/* The type badge reuses the existing .badge pill base (css/styles.css). */
+.src-type {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    border-radius: var(--radius-pill);
+    background: var(--color-border-subtle);
+    color: var(--color-ink-secondary);
+}
+
+.src-endpoint {
+    flex: 1 1 auto;
+    min-width: 0;
+    /* The legacy .src-endpoint (css/warehouse.css) caps it at 420px and
+     * dims it: uncapped, it grows to push Discover to the row's right
+     * edge, and full opacity keeps it readable. */
+    max-width: none;
+    opacity: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--color-ink-secondary);
+}
+
+.src-ds-count {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    color: var(--color-ink-secondary);
+    font-feature-settings: var(--font-feature-tabular);
+}
+
+/* The admin-only Discover button at the row's right edge (for a
+ * non-admin it is not rendered at all — see js/sources.js). */
+.src-discover {
+    flex: 0 0 auto;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.src-discover:hover:not(:disabled) {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.src-discover:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* The discovery status line: under its row while it has text (empty
+ * while it does not — min-height 0 keeps the row one line). */
+.src-status {
+    flex: 0 0 auto;
+    min-height: 0;
+    /* Reset the legacy .src-status dimming (css/warehouse.css). */
+    opacity: 1;
+    font-size: 0.8125rem;
+    color: var(--color-ink-secondary);
+}
+
+/* The error notice: the risk token from css/tokens.css through a class —
+ * the render helper carries no inline style. */
+.src-notice-error {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--color-risk) 25%, var(--color-border));
+    border-radius: var(--radius-control);
+    background: var(--color-risk-bg);
+    color: var(--color-risk);
+}
+
+/* --- Desktop fit: the tool fills the window, only #sources scrolls -------
+ *
+ * Only while the shell shows the sources section (its container carries no
+ * hidden attribute) does the main region lock to the viewport height
+ * (height: 100% of the .aidw-scroll region), so the document and the main
+ * region cannot scroll — only #sources does.  The form stays at the top; the
+ * list takes the rest. */
+@media (min-width: 901px) {
+    main.wh-main:has(> section.wh-panel[data-panel="sources"]:not([hidden])) {
+        height: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="sources"]:not([hidden]))
+        > section.wh-panel[data-panel="sources"] {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="sources"]:not([hidden]))
+        > section.wh-panel[data-panel="sources"] > .wh-panel-head {
+        flex: 0 0 auto;
+        padding: var(--space-4) var(--space-5) var(--space-3);
+        border-bottom: 1px solid var(--color-border-subtle);
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="sources"]:not([hidden]))
+        > section.wh-panel[data-panel="sources"] > .src-form {
+        flex: 0 0 auto;
+        padding: var(--space-3) var(--space-5) var(--space-4);
+        border-bottom: 1px solid var(--color-border-subtle);
+    }
+
+    main.wh-main:has(> section.wh-panel[data-panel="sources"]:not([hidden]))
+        > section.wh-panel[data-panel="sources"] > .src-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: var(--space-3) var(--space-5) var(--space-4);
+    }
+}
+
+/* --- Narrow screens: the row wraps onto two lines -------------------------
+ *
+ * Name + badge on the first line, endpoint + dataset count + Discover on
+ * the second.  Each group is a full-width flex line, so the wrap is
+ * structural (it holds for any name/endpoint length) and the page may
+ * scroll vertically but never sideways. */
+@media (max-width: 900px) {
+    .src-form {
+        grid-template-areas:
+            "name-lbl"
+            "name"
+            "endpoint-lbl"
+            "endpoint"
+            "version-lbl"
+            "version"
+            "submit";
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .src-line {
+        flex-wrap: wrap;
+        row-gap: var(--space-1);
+    }
+
+    .src-l1,
+    .src-l2 {
+        flex: 0 0 100%;
+    }
+}

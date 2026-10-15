@@ -267,12 +267,20 @@ test('issue767 freeform', async ({ page }) => {
   expect(await page.locator('a[data-testid="nav-dashboard"]').count()).toBe(0);
 
   // The main content region scrolls only when the SHOWN tool is taller
-  // than it: Data sources with a long list is...
+  // than it: since issue #826 the Data sources tool fits the window —
+  // the main region no longer scrolls for it; the source list
+  // (#sources) scrolls in its own region under the form...
   const region = await page.evaluate(() => {
     const el = document.querySelector('[data-testid="main-content"]');
-    return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+    const list = document.getElementById('sources');
+    return {
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      listScroll: list.scrollHeight - list.clientHeight,
+    };
   });
-  expect(region.scrollHeight, 'tall tool: the main region scrolls').toBeGreaterThan(region.clientHeight);
+  expect(region.scrollHeight, 'the Data sources tool fits: the main region does not scroll').toBeLessThanOrEqual(region.clientHeight);
+  expect(region.listScroll, 'the source list scrolls in its own region').toBeGreaterThan(0);
   // ...a short tool (the empty PII flags panel) is not.
   await page.click('.aidw-nav-item[data-nav-panel="pii"]');
   const shortRegion = await page.evaluate(() => {
