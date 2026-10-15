@@ -19,8 +19,12 @@ reaped and re-claimed can no longer stomp the live claim's state or burn its att
 
 Failure is retry-not-fail (#76: no 'failed' state — erasure is pure in-DB and idempotent):
 any error rolls the erasure transaction back whole and resets executing -> verifying with
-attempts+1 and error_detail. execute_deletion returns False rather than raising; if even the
-reset fails, the reaper is the designed backstop for orphaned 'executing' rows.
+attempts+1 and a cause on the row — the fixed-shape, message-free rendering
+(safe_error_detail, issue #823: never the exception's message or its DETAIL/HINT lines);
+the one fixed-cause precondition (the suppression pepper is not set) records its fixed
+cause text instead. The full exception stays in the server log. execute_deletion
+returns False rather than raising; if even the reset fails, the reaper is the designed
+backstop for orphaned 'executing' rows.
 
 Recorded limitations (product-level, not this module's): profiles whose discovered_field lost
 its dataset (FK ON DELETE SET NULL) are unscopable and escape the wipe — datasets soft-delete
@@ -29,14 +33,31 @@ in this product, so the path is cold; subject_key matching is exact-byte against
 """
 
 import contextlib
+import logging
+import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.audit.recorder import record_audit
 from app.db.connection import get_cursor
+from app.governance.hashing import _ENV as _PEPPER_ENV
 from app.governance.hashing import subject_key_hash
+from app.governance.safe_error import safe_error_detail
+
+logger = logging.getLogger(__name__)
+
 
 _KEY_MAX = 255  # mirrors app/ingest/mapper business_key cap
+
+# Fixed cause text for the one erasure precondition that cannot run: the suppression
+# pepper is not in the environment, so the hash step is guaranteed to fail. It is a
+# developer-authored constant naming the env var only — never an exception message —
+# so it is the one fixed cause the retry reset records verbatim (issue #823 keeps
+# free-form exception text off the row; the full exception stays in the log).
+_PEPPER_MISSING_DETAIL = (
+    f"{_PEPPER_ENV} environment variable is not set — the suppression pepper is required "
+    "for RTBF hashing"
+)
 
 
 def claim_for_execution(request_id: str) -> int | None:
@@ -55,13 +76,22 @@ def claim_for_execution(request_id: str) -> int | None:
 
 def _reset_to_verifying(request_id: str, generation: int, exc: Exception) -> None:
     """Retry-not-fail: requeue with the cause recorded — fenced to OUR generation, so a
-    zombie's late failure can never knock back a newer claim."""
+    zombie's late failure can never knock back a newer claim. error_detail carries the
+    fixed-shape, message-free rendering (issue #823): the message itself never lands on
+    the row."""
+    _requeue(request_id, generation, safe_error_detail(exc))
+
+
+def _requeue(request_id: str, generation: int, detail: str) -> None:
+    """The fenced reset itself: executing -> verifying, attempts+1, cause on the row.
+    WHERE status='executing' AND attempts=<generation> keeps a late failure from a
+    superseded claim a no-op."""
     with get_cursor() as cur:
         cur.execute(
             "UPDATE deletion_requests SET status = 'verifying', "
             "attempts = COALESCE(attempts, 0) + 1, error_detail = %s, updated_at = NOW() "
             "WHERE id = %s AND status = 'executing' AND COALESCE(attempts, 0) = %s",
-            (str(exc)[:255], request_id, generation),
+            (detail, request_id, generation),
         )
 
 
@@ -168,9 +198,18 @@ def execute_deletion(
                 )
         return True
     except Exception as exc:  # noqa: BLE001 — retry-not-fail: record and requeue
+        # the full exception stays in the server log (issue #823 keeps the
+        # audit row safe, not the operator blind)
+        logger.exception("erasure %s failed — requeueing (retry-not-fail)", request_id)
         if generation is not None:
             with contextlib.suppress(
                 Exception
             ):  # reset failing too: reaper is the backstop
-                _reset_to_verifying(request_id, generation, exc)
+                if not os.environ.get(_PEPPER_ENV):
+                    # no pepper: the hash step is guaranteed to fail — a fixed-cause
+                    # precondition, so the row records the fixed cause text (it names
+                    # the env var only), never the exception's message (issue #823)
+                    _requeue(request_id, generation, _PEPPER_MISSING_DETAIL)
+                else:
+                    _reset_to_verifying(request_id, generation, exc)
         return False
