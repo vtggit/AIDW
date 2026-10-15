@@ -14100,12 +14100,13 @@
             "title": "Revoked"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name"
         ],
         "title": "FeedCredentialCreate",
-        "description": "Request model for creating a feed_credential."
+        "description": "Request model for creating a feed_credential.\n\nUnknown fields are rejected: ``last_used_at`` is written exclusively by\nthe authentication path and cannot be set through the create route."
       },
       "FeedCredentialResponse": {
         "properties": {
@@ -14157,6 +14158,17 @@
           "updated_at": {
             "type": "string",
             "title": "Updated At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
           }
         },
         "type": "object",
@@ -14227,9 +14239,10 @@
             "title": "Revoked"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "FeedCredentialUpdate",
-        "description": "Request model for updating a feed_credential (all fields optional)."
+        "description": "Request model for updating a feed_credential (all fields optional).\n\nUnknown fields are rejected: ``last_used_at`` is written exclusively by\nthe authentication path and cannot be set through the update route."
       },
       "FieldProfileCreate": {
         "properties": {

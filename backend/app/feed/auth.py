@@ -26,6 +26,13 @@ malformed, unknown, mismatched, or revoked credential yields a 401 with a
 ``WWW-Authenticate`` challenge.  A malformed stored ``key_hash`` (e.g. a
 non-ASCII value) is treated as a non-match rather than raising, so it 401s
 instead of 500ing.
+After a non-revoked row has matched, the dependency records the use: one
+conditional ``UPDATE`` sets the row's ``last_used_at`` to the current time,
+changing the row only when ``last_used_at`` is ``NULL`` or more than 60
+seconds old, so a busy feed writes at most once a minute per key.  A failure
+of that write is logged and the request still succeeds; a failed
+authentication (missing, malformed, unknown, mismatched, or revoked) never
+writes.
 """
 
 import base64
@@ -96,7 +103,7 @@ def _load_non_revoked_rows(principal: str | None) -> list[dict]:
         if principal is not None:
             cur.execute(
                 "SELECT id, name, principal, key_hash, key_prefix, revoked, "
-                "created_at, updated_at "
+                "created_at, updated_at, last_used_at "
                 "FROM feed_credentials "
                 "WHERE revoked IS NOT TRUE AND principal = %s",
                 (principal,),
@@ -104,7 +111,7 @@ def _load_non_revoked_rows(principal: str | None) -> list[dict]:
         else:
             cur.execute(
                 "SELECT id, name, principal, key_hash, key_prefix, revoked, "
-                "created_at, updated_at "
+                "created_at, updated_at, last_used_at "
                 "FROM feed_credentials "
                 "WHERE revoked IS NOT TRUE",
             )
@@ -118,6 +125,33 @@ def _match_row(rows: list[dict], key_digest: str) -> dict | None:
         if _hash_matches(row.get("key_hash"), key_digest):
             return row
     return None
+
+
+def _record_last_used(credential_id: str) -> None:
+    """Best-effort: record that a matched feed credential was just used.
+
+    One conditional ``UPDATE`` changes the row only when ``last_used_at`` is
+    ``NULL`` or more than 60 seconds old, so a busy feed writes at most once
+    a minute per key.  Any failure is logged and swallowed: recording usage
+    must never fail an authenticated request, and nothing here is called on
+    the failure paths of :func:`require_feed_credential` (a failed
+    authentication never writes).
+    """
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                "UPDATE feed_credentials "
+                "SET last_used_at = NOW() "
+                "WHERE id = %s "
+                "AND (last_used_at IS NULL "
+                "OR last_used_at < NOW() - INTERVAL '60 seconds')",
+                (credential_id,),
+            )
+    except Exception:  # noqa: BLE001 - a usage-recording failure must not 500 the feed
+        logger.exception(
+            "Failed to record feed credential last_used_at (id=%s); request continues",
+            credential_id,
+        )
 
 
 def require_feed_credential(request: Request) -> dict:
@@ -164,6 +198,7 @@ def require_feed_credential(request: Request) -> dict:
             raise _unauthorized()
         if basic_row.get("id") != api_row.get("id"):
             raise _unauthorized()
+        _record_last_used(basic_row.get("id"))
         return basic_row
 
     # Exactly one form is presented (or a non-Basic Authorization alongside an
@@ -182,4 +217,5 @@ def require_feed_credential(request: Request) -> dict:
     row = _match_row(_load_non_revoked_rows(principal), key_digest)
     if row is None:
         raise _unauthorized()
+    _record_last_used(row.get("id"))
     return row
