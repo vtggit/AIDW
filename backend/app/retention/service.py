@@ -8,8 +8,14 @@ than raising, so a committed 'running' row is never left behind. The sweep itsel
 decision, so the correctness rails stay (closed table allowlist, parameterized predicates,
 fail-closed on unsupported action/scope) while backup/recovery machinery is deliberately absent.
 
-A failure's cause lands on the run row itself (error_detail, VARCHAR(1024) — issue #129)
-and in the log.
+Two failure kinds land ON the run (the cause is on the row, issue #129): a policy
+MISCONFIGURATION (unsupported action/scope, no valid period, no policy attached) is
+fail-closed with a fixed, developer-authored cause text — it names the misconfigured
+knob only, never data — while ANY other exception escaping the sweep execution (a
+database error first and foremost) is recorded with the fixed-shape, message-free
+detail from ``safe_error_detail`` (issue #823): the exception's class name plus its
+SQLSTATE code for a database error — never the message, its DETAIL or HINT lines, or
+any value in them. The full exception stays in the server log either way.
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.db.connection import get_cursor
+from app.governance.safe_error import safe_error_detail
 from app.retention.planner import plan_sweep
 
 logger = logging.getLogger(__name__)
@@ -92,8 +99,9 @@ def execute_sweep(run_id: str) -> dict | None:
     except Exception as exc:
         logger.exception("retention sweep %s failed", run_id)
         try:
-            # the cause lands ON the run (issue #129): error_detail is VARCHAR(1024)
-            _finish(run_id, "failed", 0, 0, detail=str(exc)[:1024] or "unknown failure")
+            # the cause lands ON the run (issue #129) as a fixed-shape, message-free
+            # detail (issue #823) — the full exception stays in the log above
+            _finish(run_id, "failed", 0, 0, detail=safe_error_detail(exc))
         except Exception:
             logger.exception("retention sweep %s: could not record the failure", run_id)
     try:
@@ -107,7 +115,10 @@ def _do_sweep(run_id: str) -> None:
     """The sweep body: load the run's policy, compute the cutoff, DELETE below it — and commit
     the DELETE together with the run's succeeded/counters update in ONE transaction, so a crash
     can never leave rows deleted without the audit record that explains them. Fail-closed on
-    every unsupported combination."""
+    every unsupported combination: a policy misconfiguration records the run failed with its
+    fixed cause text and returns (the cause is on the row, issue #129); only the execution
+    itself (the DELETE + its succeeded record) may raise, into execute_sweep's catch-all,
+    where the fixed-shape, message-free detail lands (issue #823)."""
     now = datetime.now(timezone.utc)
     with get_cursor() as cur:
         cur.execute(
@@ -119,7 +130,8 @@ def _do_sweep(run_id: str) -> None:
         )
         row = cur.fetchone()
     if row is None:
-        raise SweepError(f"run {run_id} has no policy attached")
+        _fail_precondition(run_id, f"run {run_id} has no policy attached")
+        return
     policy = dict(row)  # get_cursor yields RealDictCursor rows
 
     cutoff = plan_sweep(policy, now)
@@ -128,18 +140,26 @@ def _do_sweep(run_id: str) -> None:
             # an ENABLED policy with no valid period is a misconfiguration, not a no-op —
             # recording it as succeeded would hide "retention never enforced" behind a green
             # audit trail forever
-            raise SweepError("enabled policy has no valid retention_period_days")
-        _finish(run_id, "succeeded", 0, 0)  # disabled policy: a clean, recorded no-op
+            _fail_precondition(
+                run_id, "enabled policy has no valid retention_period_days"
+            )
+        else:
+            _finish(
+                run_id, "succeeded", 0, 0
+            )  # disabled policy: a clean, recorded no-op
         return
 
     table = policy["table_class"]
     if table not in _SWEEPABLE:
-        raise SweepError(f"table class {table!r} is not sweepable")
+        _fail_precondition(run_id, f"table class {table!r} is not sweepable")
+        return
     has_dataset, lifecycle_guard = _SWEEPABLE[table]
     if policy["action"] != "purge":
-        raise SweepError(
-            "action {!r} is not yet supported (purge only)".format(policy["action"])
+        _fail_precondition(
+            run_id,
+            "action {!r} is not yet supported (purge only)".format(policy["action"]),
         )
+        return
 
     where, params = "created_at < %s", [cutoff]
     if lifecycle_guard:
@@ -148,12 +168,15 @@ def _do_sweep(run_id: str) -> None:
         )  # terminal rows only — never queued/in-flight work
     if policy["scope"] == "dataset":
         if not has_dataset:
-            raise SweepError(
+            _fail_precondition(
+                run_id,
                 f"table class {table!r} has no dataset_id column — a dataset-scoped policy "
-                "cannot sweep it"
+                "cannot sweep it",
             )
+            return
         if not policy["dataset_id"]:
-            raise SweepError("dataset-scoped policy has no dataset_id set")
+            _fail_precondition(run_id, "dataset-scoped policy has no dataset_id set")
+            return
         where += " AND dataset_id = %s"
         params.append(policy["dataset_id"])
 
@@ -167,6 +190,14 @@ def _do_sweep(run_id: str) -> None:
             "records_anonymized = 0, updated_at = %s WHERE id = %s AND status = 'running'",
             (purged, datetime.now(timezone.utc), run_id),
         )
+
+
+def _fail_precondition(run_id: str, detail: str) -> None:
+    """Fail-closed on a policy misconfiguration: record the run failed with its fixed
+    cause text (issue #129 — the cause is on the row). The text is developer-authored
+    and names the misconfigured knob only — never request or row data — so it is safe
+    to persist as-is (contrast the execution path's safe_error_detail, issue #823)."""
+    _finish(run_id, "failed", 0, 0, detail=detail)
 
 
 def _finish(
