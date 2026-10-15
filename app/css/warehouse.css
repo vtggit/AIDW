@@ -351,3 +351,23 @@
 
 /* v2 charts (640x360 SVG) scale to the card slot; viewBox keeps the aspect */
 [data-testid="chart"] svg { max-width: 100%; height: auto; }
+
+/* ── Feed keys: the "Not used for 90 days" label in the Last used cell (issue #821).
+   Colours and radii from the design tokens in tokens.css. ───────────────────────── */
+/* The one-line error in a row's action cell after a failed revoke or
+   delete: the colour is the risk design token, never a raw value. */
+.feedkeys-row-error {
+    color: var(--color-risk);
+}
+
+.feedkeys-stale {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-risk-bg);
+    color: var(--color-risk);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}

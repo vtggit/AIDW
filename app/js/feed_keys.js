@@ -16,8 +16,14 @@
  *     none; an empty name shows "Name is required." and sends nothing.
  * and one table row per credential with name, principal, key prefix
  * (rendered as "<prefix>…" — or "no key issued" when the row has no
- * prefix), status ("Revoked" or "Active"), the created time and an action
- * cell.  Every credential that is not revoked carries an "Issue new key"
+ * prefix), status ("Revoked" or "Active"), the created time and the
+ * last-used time as readable UTC stamps (or "Never" when the key was
+ * never used) and an action cell.  Each time cell carries the server's
+ * original value in its title attribute.  A non-revoked key that was
+ * last used more than 90 days ago — or never used, and created more than
+ * 90 days ago — carries data-stale="true" on its row and the label
+ * "Not used for 90 days" in its Last used cell; a revoked key is never
+ * marked.  Every credential that is not revoked carries an "Issue new key"
  * button (data-requires-role="admin"); clicking it shows "Issuing a new
  * key stops the current key from working." with "Confirm" and "Cancel".
  * "Confirm" sends POST /api/feed-credentials/<id>/rotate; "Cancel" sends
@@ -40,9 +46,10 @@
  * the box and the key from the page, then the table reloads.
  *
  * Security contract:
- *   • Only id, name, principal, key_prefix, revoked and created_at are
- *     read from each row; no other field of the response (key_hash
- *     included) is ever rendered, stored or otherwise reaches the page.
+ *   • Only id, name, principal, key_prefix, revoked, created_at and
+ *     last_used_at are read from each row; no other field of the response
+ *     (key_hash included) is ever rendered, stored or otherwise reaches
+ *     the page.
  *   • The one-time plaintext key from a rotate is written once, as text
  *     (textContent) into the reveal box, and only there.  It is never
  *     written to localStorage, sessionStorage, a cookie, the URL or the
@@ -70,6 +77,12 @@ const FeedKeys = {
     /** The feed address shown above the table (AC-1). */
     FEED_ADDRESS: '/api/feed/v4',
 
+    /** Keys last used more than this many days ago are "stale". */
+    STALE_AFTER_DAYS: 90,
+
+    /** The label shown in the Last used cell of a stale row. */
+    STALE_LABEL: 'Not used for 90 days',
+
     /** The section element from studio.html, or null when absent. */
     _section() {
         return document.querySelector('[data-panel="feedkeys"]');
@@ -94,6 +107,86 @@ const FeedKeys = {
     _text(value) {
         if (value === null || value === undefined) return '';
         return String(value);
+    },
+
+    /** The value's readable UTC stamp via TimeFormat (issue #810); a
+     *  missing module degrades to the plain text form.  Never throws. */
+    _stamp(value) {
+        try {
+            if (typeof TimeFormat !== 'undefined' && typeof TimeFormat.stamp === 'function') {
+                return TimeFormat.stamp(value);
+            }
+        } catch (e) {
+            // fall through to the plain text form
+        }
+        return this._text(value);
+    },
+
+    /** A cell's title: the server's original value as text; null or
+     *  missing render as an empty title.  Never throws. */
+    _title(value) {
+        if (value === null || value === undefined) return '';
+        try {
+            return String(value);
+        } catch (e) {
+            return Object.prototype.toString.call(value);
+        }
+    },
+
+    /** The row's last_used_at, normalised: null, missing and the empty
+     *  string (an older server's "never used") are null; anything else
+     *  is passed through unchanged. */
+    _lastUsedValue(record) {
+        const value = record.last_used_at;
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'string' && value.trim() === '') return null;
+        return value;
+    },
+
+    /** The page's clock as epoch milliseconds, or null when it cannot be
+     *  read (a render without a clock makes no stale mark).  Never
+     *  throws. */
+    _nowMs() {
+        try {
+            const ms = new Date().getTime();
+            return Number.isFinite(ms) ? ms : null;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /**
+     * True when a row's key is stale: not revoked, and either last used
+     * more than STALE_AFTER_DAYS days ago, or never used (last_used_at
+     * null, missing or empty — or not readable as a time) and created
+     * more than STALE_AFTER_DAYS days ago.  A revoked key is never
+     * stale, and a reference time that cannot be read makes no mark.
+     *  Never throws.
+     */
+    _isStale(record, nowMs) {
+        if (record.revoked === true) return false;
+        if (nowMs === null) return false;
+        const parse =
+            typeof TimeFormat !== 'undefined' && typeof TimeFormat.parse === 'function'
+                ? TimeFormat.parse
+                : null;
+        if (parse === null) return false;
+        let reference = null;
+        const lastUsed = this._lastUsedValue(record);
+        if (lastUsed !== null) reference = parse(lastUsed);
+        if (reference === null) reference = parse(record.created_at);
+        if (reference === null) return false;
+        return nowMs - reference.getTime() > this.STALE_AFTER_DAYS * 86400000;
+    },
+
+    /** One time cell: the readable text plus the server's original value
+     *  in its title.  Built with createElement/textContent. */
+    _timeCell(testid, rawValue, text) {
+        const td = document.createElement('td');
+        td.setAttribute('data-testid', testid);
+        td.setAttribute('title', this._title(rawValue));
+        td.textContent = text;
+        return td;
     },
 
     /** Key cell text: "<prefix>…" when the row carries a non-empty key
@@ -539,7 +632,10 @@ const FeedKeys = {
     _rowActionError(td, testid, text) {
         const err = document.createElement('span');
         err.setAttribute('data-testid', testid);
-        err.style.color = '#c0392b';
+        // The error colour is the design token's: css/warehouse.css
+        // styles .feedkeys-row-error with var(--color-risk), so the
+        // script itself writes no colour value.
+        err.className = 'feedkeys-row-error';
         err.textContent = text;
         td.appendChild(err);
     },
@@ -648,8 +744,8 @@ const FeedKeys = {
     },
 
     /** One <tr> per credential.  Reads only id, name, principal,
-     *  key_prefix, revoked and created_at and writes every value with
-     *  textContent — nothing else from the row is touched. */
+     *  key_prefix, revoked, created_at and last_used_at and writes every
+     *  value with textContent — nothing else from the row is touched. */
     _renderRow(row) {
         const record = row && typeof row === 'object' ? row : {};
         const cells = [
@@ -657,7 +753,6 @@ const FeedKeys = {
             ['feedkeys-principal', this._text(record.principal)],
             ['feedkeys-key', this._keyLabel(record)],
             ['feedkeys-status', this._statusLabel(record)],
-            ['feedkeys-created', this._text(record.created_at)],
         ];
         const tr = document.createElement('tr');
         tr.setAttribute('data-testid', 'feedkeys-row');
@@ -667,11 +762,26 @@ const FeedKeys = {
             td.textContent = cells[i][1];
             tr.appendChild(td);
         }
+        tr.appendChild(
+            this._timeCell('feedkeys-created', record.created_at, this._stamp(record.created_at))
+        );
+        const lastUsed = this._lastUsedValue(record);
+        const lastUsedText = lastUsed === null ? 'Never' : this._stamp(lastUsed);
+        const lastUsedCell = this._timeCell('feedkeys-last-used', lastUsed, lastUsedText);
+        if (this._isStale(record, this._nowMs())) {
+            tr.setAttribute('data-stale', 'true');
+            const stale = document.createElement('span');
+            stale.className = 'feedkeys-stale';
+            stale.setAttribute('data-testid', 'feedkeys-stale');
+            stale.textContent = this.STALE_LABEL;
+            lastUsedCell.appendChild(stale);
+        }
+        tr.appendChild(lastUsedCell);
         tr.appendChild(this._renderActionsCell(record));
         return tr;
     },
 
-    /** The credentials table: a six-column header plus one row per
+    /** The credentials table: a seven-column header plus one row per
      *  credential.  Built entirely with createElement/textContent. */
     _renderTable(rows) {
         const table = document.createElement('table');
@@ -680,7 +790,7 @@ const FeedKeys = {
 
         const thead = document.createElement('thead');
         const headRow = document.createElement('tr');
-        const headers = ['Name', 'Principal', 'Key', 'Status', 'Created', 'Actions'];
+        const headers = ['Name', 'Principal', 'Key', 'Status', 'Created', 'Last used', 'Actions'];
         for (let i = 0; i < headers.length; i++) {
             const th = document.createElement('th');
             th.textContent = headers[i];
