@@ -195,7 +195,9 @@ test('issue740 freeform', async ({ page }) => {
   await expect(rowActive.locator('[data-testid="feedkeys-principal"]')).toHaveText('svc-bi');
   await expect(rowActive.locator('[data-testid="feedkeys-key"]')).toHaveText('abcd1234\u2026');
   await expect(rowActive.locator('[data-testid="feedkeys-status"]')).toHaveText('Active');
-  await expect(rowActive.locator('[data-testid="feedkeys-created"]')).toHaveText('2026-09-15T10:30:00');
+  // issue #821: the Created cell now shows a readable UTC stamp
+  // (TimeFormat, issue #810) instead of the server's raw value.
+  await expect(rowActive.locator('[data-testid="feedkeys-created"]')).toHaveText('2026-09-15 10:30 UTC');
 
   const rowRevoked = table.locator('[data-testid="feedkeys-row"]').last();
   await expect(rowRevoked.locator('[data-testid="feedkeys-name"]')).toHaveText('Legacy ETL');
@@ -203,7 +205,9 @@ test('issue740 freeform', async ({ page }) => {
   // the no-prefix text appears
   await expect(rowRevoked.locator('[data-testid="feedkeys-key"]')).toHaveText('no key issued');
   await expect(rowRevoked.locator('[data-testid="feedkeys-status"]')).toHaveText('Revoked');
-  await expect(rowRevoked.locator('[data-testid="feedkeys-created"]')).toHaveText('2026-07-01T08:00:00');
+  // issue #821: the Created cell now shows a readable UTC stamp
+  // (TimeFormat, issue #810) instead of the server's raw value.
+  await expect(rowRevoked.locator('[data-testid="feedkeys-created"]')).toHaveText('2026-07-01 08:00 UTC');
 
   // the key_hash of the revoked credential appears nowhere in the page:
   // not in any text — rendered or not (the document title, hidden
