@@ -12,7 +12,7 @@ def _generate_id() -> str:
 
 def _row_to_dict(row) -> dict:
     d = dict(row)
-    for key in ("created_at", "updated_at"):
+    for key in ("created_at", "updated_at", "last_used_at"):
         if d.get(key) and isinstance(d[key], datetime):
             d[key] = d[key].isoformat()
     return d
@@ -33,6 +33,8 @@ class FeedCredentialPostgresRepository:
             return _row_to_dict(row) if row else None
 
     def create(self, data: dict) -> dict:
+        # ``last_used_at`` is intentionally not written here: new keys start
+        # with NULL and the value is set only by the authentication path.
         new_id = data.get("id", _generate_id())
         now = datetime.now(timezone.utc)
         with get_cursor() as cur:

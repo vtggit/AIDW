@@ -81,7 +81,7 @@ def test_issue648_freeform():
     # ------------------------------------------------------------------
     config = AlembicConfig(str(_BACKEND / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["0104_align_reaper_idx_null_stat"]
+    assert script.get_heads() == ["0105_add_feed_cred_last_used"]
     assert (
         script.get_revision("0104_align_reaper_idx_null_stat").down_revision
         == "0103_add_idx_sequence_runs_reap"
