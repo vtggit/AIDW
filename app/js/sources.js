@@ -2,23 +2,32 @@
  * Sources UI — register a data server and discover its schema (the missing front door).
  *
  * One panel, two halves:
- *   • Add form — name + endpoint + OData version; submit chains the backend flow
- *     (POST /sources → /source-connections → /odata-service-configs → /sources/{id}/discover)
- *     with per-step failure reporting, then refreshes the whole app (the inbox and PII
- *     panels populate from discovery's side effects).
- *   • List — every registered source with its endpoint, dataset count, and a
- *     Discover button for re-runs (idempotent server-side: reconcile, not duplicate).
+ *   • Add form — labelled name + endpoint + OData version fields; submit chains
+ *     the backend flow (POST /sources → /source-connections → /odata-service-configs
+ *     → /sources/{id}/discover) with per-step failure reporting, then refreshes the
+ *     whole app (the inbox and PII panels populate from discovery's side effects).
+ *     The form stays at the top of the tool; it is admin-only (data-requires-role)
+ *     and leaves the DOM for a non-admin.
+ *   • List — every registered source in ONE line: name, type badge, endpoint,
+ *     dataset count, and — for an admin only — a Discover button at the row's
+ *     right edge (idempotent server-side: reconcile, not duplicate).  Long names
+ *     and endpoints cut with an ellipsis; the full text rides the element's title.
+ *     The discovery status line (#src-status-<id>) shows under its row while it
+ *     has text.  At desktop width the list scrolls in its own region under the
+ *     form (css/sources.css) — the document and the main region do not scroll.
  *
  * House conventions (mirrors warehouse.js): ApiClient only, pure render helpers,
- * everything escaped, toast feedback. Anonymous-auth servers only in v1 —
- * credentialed sources (auth_scheme/secret_ref) are a follow-up.
+ * everything escaped, toast feedback.  Admin-only controls are rendered
+ * conditionally (never merely hidden) and carry data-requires-role="admin", so
+ * no role-gated element survives for a non-admin.  Anonymous-auth servers only
+ * in v1 — credentialed sources (auth_scheme/secret_ref) are a follow-up.
  */
 const Sources = {
     async init() {
         await Auth.init();
         const form = document.getElementById('source-form');
         if (form) {
-            if (!Auth.isAdmin()) {
+            if (!this._isAdmin()) {
                 form.remove();
                 const submit = document.getElementById('src-submit');
                 if (submit) submit.remove();
@@ -57,17 +66,32 @@ const Sources = {
         const esc = this._esc;
         const conn = conns.find((c) => c.source_id === s.id);
         const dsCount = datasets.filter((d) => d.source_id === s.id).length;
+        const name = s.name || '(unnamed)';
+        const endpoint = (conn && conn.endpoint) || 'no connection';
+        // Admin-only control: for a non-admin the button is not rendered at
+        // all (AC: query count 0, never a CSS-hidden element); for an admin
+        // it carries the fail-closed marker.
+        const discoverBtn = this._isAdmin()
+            ? `<button class="btn btn-secondary src-discover" data-id="${esc(s.id)}"
+                    data-requires-role="admin"
+                    ${conn ? '' : 'disabled title="add a connection first"'}>Discover</button>`
+            : '';
+        // ONE line at desktop width: the two groups (.src-l1/.src-l2)
+        // flatten into the line (css/sources.css), name and endpoint
+        // ellipsize, Discover sits at the row's right edge.  At 900 px
+        // and below each group takes its own line (two lines per row).
         return `
           <div class="src-row" data-id="${esc(s.id)}">
-            <div class="src-main">
-              <strong>${esc(s.name || '(unnamed)')}</strong>
-              <span class="badge">${esc(s.type || '?')}</span>
-              <span class="src-endpoint">${esc((conn && conn.endpoint) || 'no connection')}</span>
-            </div>
-            <div class="src-meta">
-              ${dsCount} dataset${dsCount === 1 ? '' : 's'}
-              <button class="btn btn-secondary src-discover" data-id="${esc(s.id)}"
-                      ${conn ? '' : 'disabled title="add a connection first"'}>Discover</button>
+            <div class="src-line">
+              <div class="src-l1">
+                <strong class="src-name" title="${esc(name)}">${esc(name)}</strong>
+                <span class="badge src-type">${esc(s.type || '?')}</span>
+              </div>
+              <div class="src-l2">
+                <span class="src-endpoint" title="${esc(endpoint)}">${esc(endpoint)}</span>
+                <span class="src-ds-count">${dsCount} dataset${dsCount === 1 ? '' : 's'}</span>
+                ${discoverBtn}
+              </div>
             </div>
             <div class="src-status" id="src-status-${esc(s.id)}"></div>
           </div>`;
@@ -80,6 +104,7 @@ const Sources = {
         const version = document.getElementById('src-version').value;
         if (!name || !endpoint) return;
         const btn = document.getElementById('src-submit');
+        const btnLabel = btn ? btn.textContent : '';
         if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
         try {
             const src = await ApiClient.post('/sources', { name, type: 'odata' });
@@ -99,7 +124,7 @@ const Sources = {
             await this._discover(sid);
             e.target.reset();
         } finally {
-            if (btn) { btn.disabled = false; btn.textContent = 'Add & discover'; }
+            if (btn) { btn.disabled = false; btn.textContent = btnLabel; }
             await this._refreshAll();
         }
     },
@@ -140,8 +165,25 @@ const Sources = {
         if (typeof Warehouse !== 'undefined' && Warehouse.refresh) await Warehouse.refresh();
     },
 
+    /**
+     * The empty / error notices.  The error colour is the risk token from
+     * css/tokens.css applied through a class (css/sources.css) — never an
+     * inline style.
+     */
     _notice(text, isError) {
-        return `<p class="wh-sub" style="${isError ? 'color:#e05555;' : ''}">${this._esc(text)}</p>`;
+        const cls = isError ? 'wh-sub src-notice-error' : 'wh-sub';
+        return `<p class="${cls}">${this._esc(text)}</p>`;
+    },
+
+    /** Fail-closed admin check (mirrors the other Studio panels). */
+    _isAdmin() {
+        try {
+            return typeof Auth !== 'undefined' &&
+                typeof Auth.isAdmin === 'function' &&
+                Auth.isAdmin() === true;
+        } catch (e) {
+            return false;
+        }
     },
 
     _esc(s) {

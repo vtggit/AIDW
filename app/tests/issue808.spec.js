@@ -489,9 +489,15 @@ test('issue808 freeform', async ({ page }) => {
   await expect(page.locator('#sources .src-row')).toHaveCount(SOURCE_COUNT);
   const tallRegion = await page.evaluate(() => {
     const el = document.querySelector('[data-testid="main-content"]');
-    return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+    const list = document.getElementById('sources');
+    return {
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      listScroll: list.scrollHeight - list.clientHeight,
+    };
   });
-  expect(tallRegion.scrollHeight, 'a tall tool still scrolls the main region').toBeGreaterThan(tallRegion.clientHeight);
+  expect(tallRegion.scrollHeight, 'the Data sources tool fits: the main region does not scroll').toBeLessThanOrEqual(tallRegion.clientHeight);
+  expect(tallRegion.listScroll, 'the source list scrolls in its own region').toBeGreaterThan(0);
   const docStillLocked = await page.evaluate(() => document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight);
   expect(docStillLocked).toBeLessThanOrEqual(0);
 
