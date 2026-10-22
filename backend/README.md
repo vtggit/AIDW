@@ -39,6 +39,7 @@ backend/
 │   └── versions/         # 0001_baseline.py … one file per schema change
 ├── openapi.json          # committed API contract artifact
 ├── requirements.txt
+├── constraints.txt       # exact pinned version of every package; installs use -c constraints.txt
 ├── app/
 │   ├── main.py           # application factory, exception handlers, router mounts
 │   ├── config.py         # application and database configuration (env-driven)
@@ -101,7 +102,7 @@ Requires a running PostgreSQL and Python 3.11.
 
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 export DB_HOST=localhost DB_NAME=aidw DB_USER=aidw DB_PASSWORD=change-me
 export AUTH_MODE=development AUTH_DEV_TOKEN=dev-secret-token
 
@@ -137,6 +138,10 @@ application and fails the build if one does not. Routes that need elevated acces
 The OData feed under `/api/feed/v4` does not use bearer tokens. It authenticates machine clients
 against feed credentials, presented as `Authorization: Basic base64(principal:key)` or
 `X-Api-Key: <key>`. Feed credentials are managed at `/api/feed-credentials`.
+
+Each successful feed request records the time on its key (`last_used_at`, returned with the
+credential), at most once a minute per key. If that write fails the request still succeeds, and
+a failed authentication never writes.
 
 ## Configuration
 
@@ -181,7 +186,7 @@ rely on them: `DB_NAME`, `DB_USER` and `DB_PASSWORD` have no compose default and
 | `AUTH_ISSUER` | `https://dev.example.com/realms/aicrm` | Identity provider issuer URL (placeholder) |
 | `AUTH_CLIENT_ID` | `aicrm-backend` | Client ID (compose default: `aidw-backend`) |
 | `AUTH_AUDIENCE` | value of `AUTH_CLIENT_ID` | JWT audience to validate |
-| `AUTH_JWKS_URL` | `{AUTH_ISSUER}/protocol/openid-connect/certs` | JWKS URL |
+| `AUTH_JWKS_URL` | `{AUTH_ISSUER}/protocol/openid-connect/certs` | JWKS URL; an empty or whitespace-only value also uses the default |
 | `AUTH_ALGORITHMS` | `RS256` | Comma-separated allowed JWT algorithms |
 | `AUTH_JWKS_CACHE_TTL` | `3600` | JWKS cache lifetime in seconds |
 | `AUTH_ROLE_CLAIMS` | `roles,realm_access.roles,resource_access.{client_id}.roles` | Claim paths scanned for roles |
@@ -198,6 +203,7 @@ rely on them: `DB_NAME`, `DB_USER` and `DB_PASSWORD` have no compose default and
 | `WORKER_POLL_SECONDS` | `5` | Worker poll interval |
 | `WORKER_STALE_RUNNING_SECONDS` | `1800` | Age after which a `running` run with no live executor is finalized `failed` |
 | `WORKER_STRANDED_SCHEDULED_SECONDS` | `1800` | Equivalent cutoff for stranded scheduled sequence runs |
+| `WORKER_STALE_SEQUENCE_RUN_SECONDS` | `7200` | Age after which a `running` sequence run with no live executor is finalized `failed`, with its unfinished steps |
 
 Link-local destinations, `0.0.0.0` and empty hosts are denied for egress in every mode
 (`app/egress/policy.py`).
@@ -271,6 +277,16 @@ Each of these bodies carries a `request_id`. Every response has an `X-Request-ID
 incoming `X-Request-ID` is preserved, otherwise one is generated. The same ID appears in the
 backend log lines for that request.
 
+### Failure details
+
+A failed retention sweep, a failed deletion-request attempt, or a failed ingestion run stores an
+`error_detail` that never carries the exception's message: only its class name and, for a
+database error, its SQLSTATE code, for example `IntegrityError (SQLSTATE 23503)`
+(`app/governance/safe_error.py`). Values from a database error's message therefore never reach
+the stored row. Ingestion keeps the message of its own errors, egress errors, OS transport
+errors and runtime errors, whose text names no data. The full exception is still written to the
+server log.
+
 ### Health
 
 ```bash
@@ -288,7 +304,9 @@ the `GIT_SHA` and `BUILD_TIMESTAMP` environment variables are set.
 
 The reported version is `APP_VERSION` if set, otherwise the `VERSION` file at the repository
 root, otherwise the fallback `0.1.0`. The Docker build context is `backend/`, which does not
-contain `VERSION`, so a container reports `0.1.0` unless `APP_VERSION` is set.
+contain `VERSION`; Docker Compose mounts the repository's `VERSION` file into the backend
+container at `/VERSION`, so a container started by Compose reports that version. A container
+started without that mount reports `0.1.0` unless `APP_VERSION` is set.
 
 ## Database migrations
 
@@ -340,7 +358,7 @@ only `docs/**` or Markdown files do not trigger it.
 |-----|----------------|
 | Release metadata | `VERSION` format and changelog consistency (`scripts/check_release_metadata.py`) |
 | Quality gates | `black --check backend/`, `ruff check backend/`, shellcheck |
-| Security hygiene | `pip-audit` on `requirements.txt`, gitleaks secret scan |
+| Security hygiene | `pip-audit` on `backend/constraints.txt`, gitleaks secret scan |
 | API contract | `backend/openapi.json` matches the schema generated from the application |
 | Backend tests | Migrations apply to a clean PostgreSQL 15, then the full pytest suite |
 

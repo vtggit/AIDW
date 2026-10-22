@@ -57,4 +57,5 @@ Enforcing. Two workflows run this tooling:
   open PR's check red without a new push.
 
 A failing check blocks a merge only if the repository's branch settings mark it
-as required. The contract schema is specified in CodeAgent `docs/contract-schema.md`.
+as required; [docs/branch-protection.md](../../docs/branch-protection.md) explains how to make
+the checks required. The contract schema is specified in CodeAgent `docs/contract-schema.md`.
