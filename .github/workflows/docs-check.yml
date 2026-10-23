@@ -1,0 +1,33 @@
+# Docs check: the only check a Markdown-only pull request gets. The backend CI and the
+# CodeAgent merge gate ignore docs/** and **/*.md, so without this a docs-only pull request
+# had no checks at all and could never pass the "every check green" merge path.
+# scripts/docs_check.py (standard library only) checks the changed .md files for unclosed
+# code fences, broken relative links, private IP addresses and literal secrets.
+name: Docs check
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**/*.md'
+      - 'docs/**'
+      - 'scripts/docs_check.py'
+      - '.github/workflows/docs-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  docs-check:
+    name: Docs check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the changed Markdown
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/docs_check.py "origin/${BASE_REF}"
