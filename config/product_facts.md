@@ -53,7 +53,8 @@ today. Last checked against the code and the persistent stack on 2026-11-02.
   persistent stack runs it (`INGEST_EXECUTOR=worker`); the interim in-API executor
   (`INGEST_EXECUTOR=inline`) remains the compose default.
 - Scheduled/recurring triggering is **BUILT for load sequences**: a sequence carries a
-  `schedule_cadence` (`hourly`, `daily` or `weekly`), the worker fires the sequences that are due
+  `schedule_cadence` (`hourly`, `daily` or `weekly`) and a `schedule_enabled` switch, the worker
+  fires the enabled sequences that are due
   (`app/worker/scheduling.py`, one pending `sequence_runs` row with `triggered_by = 'schedule'`)
   and executes them, running the sequence's pipelines in step order. A single pipeline has no
   schedule of its own: `pipelines.schedule` is stored and has no consumer. The schedule is
@@ -76,8 +77,9 @@ today. Last checked against the code and the persistent stack on 2026-11-02.
   **public Northwind demo service** (26 datasets), an ERP vendor's demo tenant holding sample
   data (11 datasets) and a feed from a sibling internal application (7 datasets). Together: 44
   discovered datasets, 1,321 discovered fields and about 85,000 ingested records. All 17 pipelines
-  use cursor CDC, and three load sequences run them, one hourly and two daily. No production ERP
-  source is connected and none is planned.
+  use cursor CDC. Three load sequences run them: two scheduled daily, and one whose hourly
+  schedule is switched off (`schedule_enabled` is false). No production ERP source is connected
+  and none is planned.
 - **Outbound OData v4 feed: BUILT.** `/api/feed/v4` exposes ingested datasets to spreadsheet and
   BI clients, authenticated with feed keys (`feed_credentials`), not user tokens.
 - Outbound calls go through the egress subsystem (`app/egress/`), which validates each destination

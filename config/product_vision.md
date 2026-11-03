@@ -124,7 +124,7 @@ operator-assigned.
   repository, a linked issue, a green contract, no open panel questions, no carve-out label
   (`compliance`, `governance`, `ca-needs-human`), no change to authentication or authorization
   paths, no destructive SQL, no file deletions or renames, no unresolved confirmed review
-  finding, and every named required check configured and green. A PR that fails any
+  finding, not a test-only change, and every named required check configured and green. A PR that fails any
   precondition is held with `ca-needs-human` and merges only after an explicit review by the
   operator or the operator's delegated reviewer.
 - Governance blockers respected, not argued away.
