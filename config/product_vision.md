@@ -36,7 +36,8 @@ lineage, governance, and API-contract discipline — delivered incrementally.
 5. **Governance & process (shipped, not adjuncts).** PII flagging/decisions, retention
    policies and sweeps, right-to-be-forgotten deletion requests + suppression, and BPMN
    process definition/generation/validation are live subsystems with their own tables and
-   fail-closed rules. An embedded AI assistant panel is a shipped surface.
+   fail-closed rules. An embedded AI assistant panel is a shipped surface, served by a separate
+   Assistant service.
 
 ## Domain vocabulary (prefer these nouns)
 
@@ -58,13 +59,17 @@ the codebase; do not answer as though it exists.
   NEW domain state; satellite tables over column sprawl. Flat v1 API surfaces over normalized
   storage. (Discovered-schema metadata and CDC state are first-class relational tables.) ONE
   recorded exception: `ingested_payloads.payload` is JSONB — the raw landing copy of a source
-  record, keyed (dataset_id, business_key) and FK'd to `datasets`.
-- **Pagination contract (DECIDED TARGET — NOT built; list endpoints are unpaginated full-table
-  reads):** when it lands — offset, limit default 20, cap 100, non-negative validation (422),
-  X-Total-Count, bare-array responses; envelope deferred to v2. Today the only limit parameter
-  in the product is `GET /api/audit` (default 100, uncapped, unvalidated).
+  record, keyed (dataset_id, business_key) and FK'd to `datasets`. The baseline
+  `audit_log.details_json` column is also JSONB; it predates this rule.
+- **Pagination contract (DECIDED TARGET — mostly NOT built; most list endpoints are unpaginated
+  full-table reads):** when it lands — offset, limit default 20, cap 100, non-negative validation
+  (422), X-Total-Count, bare-array responses; envelope deferred to v2. Two endpoints already take
+  `limit` and `offset`: `GET /api/load-sequences` and `GET /api/sequence-runs` validate them (limit
+  1-100, offset 0 or more, 422 otherwise), set X-Total-Count and return a bare array, but have no
+  default limit, so omitting it returns every row. The only other limit parameter in the product
+  is `GET /api/audit` (default 100, uncapped, unvalidated).
 - **Errors:** duplicates → 409 (central UniqueViolation handler); bad references → 422 (FK
-  handler).
+  handler); CHECK violations → 422 (CheckViolation handler).
 - **Soft-delete (DECIDED TARGET — NOT built):** no table has `deleted_at`, no endpoint accepts
   `include_deleted`, and every repository DELETE is a hard row delete. When it lands:
   `deleted_at`; list/get exclude by default; `include_deleted` opt-in. Do NOT answer
@@ -114,13 +119,14 @@ operator-assigned.
 
 ## Hard boundaries
 
-- Every PR opens as a draft. It merges automatically only when all nine auto-merge
-  preconditions hold: a pipeline-authored branch, a linked issue, a green contract, no open
-  panel questions, no carve-out label (`compliance`, `governance`, `ca-needs-human`), no
-  change to authentication or authorization paths, no destructive SQL, no file deletions or
-  renames, and every CI check green. A PR that fails any precondition is held with
-  `ca-needs-human` and merges only after an explicit review by the operator or the
-  operator's delegated reviewer.
+- Every pipeline PR opens as a draft. It merges automatically only when every auto-merge
+  precondition holds: a pipeline-authored branch, opened by the pipeline's own account from this
+  repository, a linked issue, a green contract, no open panel questions, no carve-out label
+  (`compliance`, `governance`, `ca-needs-human`), no change to authentication or authorization
+  paths, no destructive SQL, no file deletions or renames, no unresolved confirmed review
+  finding, and every named required check configured and green. A PR that fails any
+  precondition is held with `ca-needs-human` and merges only after an explicit review by the
+  operator or the operator's delegated reviewer.
 - Governance blockers respected, not argued away.
 - No production data destruction; migrations succeed on existing (dirty) data.
 - Never exfiltrate source data or credentials to third parties.

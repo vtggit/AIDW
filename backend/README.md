@@ -115,14 +115,15 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 9000
 Bearer-token authentication has two modes, selected by `AUTH_MODE`:
 
 - `development`: accepts the shared bearer token `AUTH_DEV_TOKEN`. The token's roles come from
-  `AUTH_DEV_ROLES` (default `user`; set `admin,user` to act as an admin).
+  `AUTH_DEV_ROLES` (default `user`; set `admin,user` to act as an admin). The token with `:admin`
+  or `:user` appended is also accepted and selects that identity, whatever `AUTH_DEV_ROLES` says.
 - `production`: validates JWTs against the configured identity provider (JWKS signature
   verification, issuer, audience and expiry checks). Roles and groups are read from the claim
   paths in `AUTH_ROLE_CLAIMS` and `AUTH_GROUP_CLAIMS`.
 
 Any other `AUTH_MODE` value fails closed: every token is rejected.
 
-Only these routes are served without authentication (`app/auth/public_routes.py`):
+Only these `/api` routes are served without authentication (`app/auth/public_routes.py`):
 
 | Method | Path |
 |--------|------|
@@ -133,7 +134,9 @@ Only these routes are served without authentication (`app/auth/public_routes.py`
 
 Every other `/api` route must reach an authentication dependency; a test walks the served
 application and fails the build if one does not. Routes that need elevated access declare
-`require_role("admin")`.
+`require_role("admin")`. Outside `/api`, the backend also serves `/` and FastAPI's `/docs`, `/redoc`
+and `/openapi.json` without authentication; the frontend's nginx forwards only `/api/` to the
+backend.
 
 The OData feed under `/api/feed/v4` does not use bearer tokens. It authenticates machine clients
 against feed credentials, presented as `Authorization: Basic base64(principal:key)` or
@@ -146,7 +149,10 @@ a failed authentication never writes.
 ## Configuration
 
 All configuration comes from environment variables. `.env.example` at the repository root lists
-the ones Docker Compose reads.
+the ones Docker Compose reads. Compose hands a container only the variables its `environment` block
+names, so the others in the tables below (for example `EGRESS_POLICY` and the `FEED_*` settings), and
+any variable a source credential's `secret_ref` names, have no effect from `.env`: set them on the
+service, for example in a `docker-compose.override.yml`.
 
 The code-level fallbacks for the database settings and `AUTH_CLIENT_ID` still carry the names of
 the project this backend was bootstrapped from (`aicrm`, `aicrm-backend`). Docker Compose does not
@@ -170,8 +176,8 @@ rely on them: `DB_NAME`, `DB_USER` and `DB_PASSWORD` have no compose default and
 |----------|---------|-------------|
 | `APP_VERSION` | unset | Overrides the reported version (see Health) |
 | `GIT_SHA`, `BUILD_TIMESTAMP` | empty | Build metadata reported by the health endpoints |
-| `ENVIRONMENT` | `development` | Environment label |
-| `DEBUG` | `true` | Debug flag |
+| `ENVIRONMENT` | `development` | Environment label; read by `app/config.py`, nothing uses it yet |
+| `DEBUG` | `true` | Debug flag; read by `app/config.py`, nothing uses it yet |
 | `LOG_LEVEL` | `INFO` | Python log level |
 | `CORS_ORIGINS` | `http://localhost:3000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080` | Comma-separated allowed origins |
 
@@ -184,8 +190,8 @@ rely on them: `DB_NAME`, `DB_USER` and `DB_PASSWORD` have no compose default and
 | `AUTH_DEV_TOKEN` | `dev-secret-token` | Shared bearer token for development mode |
 | `AUTH_DEV_ROLES` | `user` | Comma-separated roles for the development token |
 | `AUTH_ISSUER` | `https://dev.example.com/realms/aicrm` | Identity provider issuer URL (placeholder) |
-| `AUTH_CLIENT_ID` | `aicrm-backend` | Client ID (compose default: `aidw-backend`) |
-| `AUTH_AUDIENCE` | value of `AUTH_CLIENT_ID` | JWT audience to validate |
+| `AUTH_CLIENT_ID` | `aicrm-backend` | OAuth client the frontend logs in with: `/api/auth/config` returns it as `clientId` for the login redirect, so in production it must be the public frontend client, not the audience. Also fills `{client_id}` in `AUTH_ROLE_CLAIMS`. Compose default: `aidw-backend` |
+| `AUTH_AUDIENCE` | value of `AUTH_CLIENT_ID` | JWT audience to validate; tokens are checked against this, not `AUTH_CLIENT_ID`. Compose default: `aidw-backend`, so under compose it does not follow `AUTH_CLIENT_ID` |
 | `AUTH_JWKS_URL` | `{AUTH_ISSUER}/protocol/openid-connect/certs` | JWKS URL; an empty or whitespace-only value also uses the default |
 | `AUTH_ALGORITHMS` | `RS256` | Comma-separated allowed JWT algorithms |
 | `AUTH_JWKS_CACHE_TTL` | `3600` | JWKS cache lifetime in seconds |
@@ -196,13 +202,14 @@ rely on them: `DB_NAME`, `DB_USER` and `DB_PASSWORD` have no compose default and
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `INGEST_EXECUTOR` | `inline` | `inline` runs ingestion in the API process; `worker` only enqueues a pending run for the worker |
-| `ENABLE_INAPI_EGRESS` | `false` | Allows the API process to call source systems: discovery, profiling, `inline` ingestion and live dashboard-item data |
+| `INGEST_EXECUTOR` | `inline` | `inline` runs ingestion in the API process; `worker` only enqueues a pending run for the worker. A verified deletion request follows the same setting |
+| `INGEST_MAX_ROWS_PER_RUN` | `50000` | Rows one ingestion run may read; the run stops at the cap. An invalid or non-positive value uses the default |
+| `ENABLE_INAPI_EGRESS` | `false` | Allows the API process to call source systems for discovery, profiling, `inline` ingestion and live dashboard-item data. `POST /api/connection-tests/{entity_id}/run` and `POST /api/sequence-runs/{run_id}/execute` do not check it and always call out from the API process |
 | `EGRESS_POLICY` | unset | `strict` additionally denies loopback destinations |
 | `EGRESS_ALLOWED_HOSTS` | unset | Comma-separated hostnames exempt from the egress denial rules |
 | `WORKER_POLL_SECONDS` | `5` | Worker poll interval |
 | `WORKER_STALE_RUNNING_SECONDS` | `1800` | Age after which a `running` run with no live executor is finalized `failed` |
-| `WORKER_STRANDED_SCHEDULED_SECONDS` | `1800` | Equivalent cutoff for stranded scheduled sequence runs |
+| `WORKER_STRANDED_SCHEDULED_SECONDS` | `1800` | Age after which a stranded scheduled sequence run has its claim cleared, so it can be picked up again |
 | `WORKER_STALE_SEQUENCE_RUN_SECONDS` | `7200` | Age after which a `running` sequence run with no live executor is finalized `failed`, with its unfinished steps |
 
 Link-local destinations, `0.0.0.0` and empty hosts are denied for egress in every mode
@@ -223,7 +230,7 @@ Link-local destinations, `0.0.0.0` and empty hosts are denied for egress in ever
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AIDW_SUPPRESSION_PEPPER` | unset | HMAC key for erased-subject hashes. Required to execute a deletion request; must be identical for the backend and the worker; rotating it orphans existing suppression entries. See `.env.example`. |
-| `FLOWABLE_BASE_URL`, `FLOWABLE_REST_USER`, `FLOWABLE_REST_PASSWORD` | empty | Optional Flowable sidecar used by `/api/workflows`. The sidecar is not part of this repository's compose file. |
+| `FLOWABLE_BASE_URL`, `FLOWABLE_REST_USER`, `FLOWABLE_REST_PASSWORD` | empty | Optional Flowable sidecar used by `/api/workflows`, which returns 503 until all three are set. The sidecar is not part of this repository's compose file. |
 
 ## API
 
@@ -273,9 +280,11 @@ Routes beyond that pattern:
 | 503 | Any other database error |
 | 500 | Unhandled exception |
 
-Each of these bodies carries a `request_id`. Every response has an `X-Request-ID` header; an
-incoming `X-Request-ID` is preserved, otherwise one is generated. The same ID appears in the
-backend log lines for that request.
+Each of these bodies has a `request_id` field. Every response has an `X-Request-ID` header; an
+incoming `X-Request-ID` is preserved, otherwise one is generated. The exception is the 500: its
+handler runs outside the request-ID middleware, so it has no header and its `request_id` is `null`.
+The same ID appears in the backend log lines written while the request is handled, but not in the
+`request completed` summary line.
 
 ### Failure details
 
@@ -364,6 +373,10 @@ only `docs/**` or Markdown files do not trigger it.
 
 `.github/workflows/codeagent-merge-gate.yml` separately checks a pull request's acceptance-criteria
 proof map; see [scripts/ca_gate/README.md](../scripts/ca_gate/README.md).
+
+`.github/workflows/docs-check.yml` runs on pull requests that change Markdown, and is the only check
+a Markdown-only pull request gets: `scripts/docs_check.py` checks the changed `.md` files for
+unclosed code fences, broken relative links, private IP addresses and literal secrets.
 
 ### API contract
 

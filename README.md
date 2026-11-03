@@ -13,7 +13,7 @@ What it does:
   schedule; scheduled runs are fired by the worker. The worker also finishes off a run whose
   executor stopped mid-run, so an interrupted run does not block its sequence's schedule.
 - **Profiling and PII** — profile fields and flag likely PII for a reviewer to confirm or dismiss.
-- **Retention** — retention policies and sweeps.
+- **Retention** — retention policies and admin-run purge sweeps.
 - **Right-to-be-forgotten (RTBF)** — deletion requests with verification, erasure, and suppression
   so an erased subject is not re-ingested. Deletion requests are handled through the API.
 - **Failure details without data** — a failed ingestion run, retention sweep or erasure stores
@@ -25,7 +25,8 @@ What it does:
   be shown and downloaded as BPMN.
 - **OData v4 feed** — exposes ingested datasets to spreadsheet and BI clients, authenticated with
   feed keys. Each key records when it was last used.
-- **Audit** — an audit history of changes, visible to admins.
+- **Audit** — an audit history of changes, visible to admins. A second log, written by most
+  changes, is readable by any signed-in user at `/api/audit-logs`.
 
 The web app has two pages: Dashboards (`app/index.html`) and Studio (`app/studio.html`). Studio
 shows one tool at a time: Data sources, Suggested dashboard items, PII flags, Process wizard,
@@ -85,6 +86,9 @@ docker compose up -d --build
   fire when the worker is running.
 - Executing a deletion request needs `AIDW_SUPPRESSION_PEPPER`, set to the same value for the
   backend and the worker and never changed afterwards; `.env.example` explains why.
+- The `/api/workflows` routes talk to an optional Flowable engine that this Compose file does not
+  start. Set `FLOWABLE_BASE_URL` and the `FLOWABLE_REST_*` variables to use it; without them those
+  routes answer 503.
 - The backend reports the version in the repository's `VERSION` file, which Compose mounts into
   the container.
 
@@ -99,9 +103,9 @@ and tests are described in [backend/README.md](backend/README.md).
 | `backend/` | FastAPI backend, Alembic migrations, pytest suite, committed OpenAPI contract, pinned dependency versions (`constraints.txt`) |
 | `docs/` | [Behavioral architecture](docs/BEHAVIORAL-ARCHITECTURE.md), [design system](docs/design/design-system.md), [compliance controls](docs/compliance/CONTROLS.md), [merge-gate required checks](docs/branch-protection.md) |
 | `config/` | Product vision, deployment facts and compliance capabilities used by the build pipeline |
-| `scripts/` | OpenAPI export, release-metadata check, dependency-pin refresh (`refresh_constraints.sh`), and the [contract merge-gate](scripts/ca_gate/README.md) |
+| `scripts/` | OpenAPI export, release-metadata check, dependency-pin refresh (`refresh_constraints.sh`), Markdown docs check (`docs_check.py`), and the [contract merge-gate](scripts/ca_gate/README.md) |
 | `tests/` | Tests for the merge-gate scripts (`tests/ca_gate/`) |
-| `.github/workflows/` | Backend CI, the contract merge-gate, and its daily re-validation |
+| `.github/workflows/` | Backend CI, the contract merge-gate and its daily re-validation, and the Docs check |
 | `docker-compose.yml`, `.env.example` | Stack definition and its environment template |
 | `VERSION`, `CHANGELOG.md` | Release version and change log |
 

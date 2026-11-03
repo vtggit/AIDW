@@ -4,13 +4,17 @@ The merge gate (`.github/workflows/codeagent-merge-gate.yml`) runs **enforcing**
 verdict fails the job, so the check turns red. A red check blocks a merge in GitHub only
 when the check is marked **required** in branch protection.
 
-## Current state (2026-10-12)
+## Current state (2026-11-02)
 
 `main` has no branch protection rule today, so GitHub itself does not block a merge on a
 red gate. The gate is enforced by how merges are made: the engine's auto-merge and the
 maintainers' pinned merges both require every named check, `CodeAgent contract gate`
 included, to have succeeded on the exact commit being merged. Marking the check required
 in GitHub, as described below, is a separate switch for the repository owner.
+
+The named checks are the five Backend CI jobs and the contract gate. A pull request that
+changes only Markdown or `docs/` gets none of them; it gets the `Docs check` instead
+(`.github/workflows/docs-check.yml`).
 
 ## The checks
 
@@ -23,15 +27,35 @@ in GitHub, as described below, is a separate switch for the repository owner.
 
 ## Make the checks required
 
+Read this first: a required check that never reports leaves a pull request waiting for good.
+Both checks above are conditional. `CodeAgent contract gate` does not run on a pull request
+that changes only Markdown or `docs/`, and `codeagent-contract-revalidate` is posted only on
+open pull requests that carry a contract. Requiring them as they stand would block every
+docs-only pull request and every pull request without a contract, so those paths need a
+solution before this switch is turned on.
+
 GitHub, repository **Settings**, **Branches**, **Branch protection rules**, `main`,
 *Require status checks to pass before merging*, then add the two checks above.
 
-Or through the API, with the repository owner's token:
+Or through the API, with the repository owner's token. `main` has no rule yet, so this
+creates one; the narrower `.../protection/required_status_checks` endpoint answers 404
+("Branch not protected") until a rule exists:
 
 ```bash
-gh api -X PATCH repos/vtggit/AIDW/branches/main/protection/required_status_checks \
-  -f 'checks[][context]=CodeAgent contract gate' \
-  -f 'checks[][context]=codeagent-contract-revalidate'
+gh api -X PUT repos/vtggit/AIDW/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": {
+    "strict": false,
+    "checks": [
+      {"context": "CodeAgent contract gate"},
+      {"context": "codeagent-contract-revalidate"}
+    ]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+JSON
 ```
 
 ## Author workflow
