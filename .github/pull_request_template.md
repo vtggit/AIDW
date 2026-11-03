@@ -22,6 +22,7 @@ Implements: #
 
 <!-- Generate the skeleton with:
        gh issue view <N> --json body -q .body | python scripts/ca_gate/new_pr_contract.py
-     then replace each tests:["TODO"] with the pytest nodeid(s) that prove that AC.
-     (A later CI phase reads this and blocks merge until every active AC is proven.)
+     then replace each tests:["TODO"] with the test nodeid(s) that prove that AC.
+     (The `CodeAgent contract gate` check reads this and fails until every active AC is proven;
+     see docs/branch-protection.md.)
      If this PR does not implement a deliberated issue, remove this whole section. -->
