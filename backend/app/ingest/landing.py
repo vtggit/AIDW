@@ -149,6 +149,9 @@ def aggregate_series(
     """
     cur.execute(bucket_query, [dimension] + measure_params + where_params)
     buckets = cur.fetchall()
+    buckets.sort(
+        key=lambda b: (-float(b["val"]) if b["val"] is not None else 0.0, b["label"])
+    )
 
     total_query = f"SELECT COUNT(*) AS n FROM ingested_payloads ip WHERE {where_sql}"
     cur.execute(total_query, where_params)
