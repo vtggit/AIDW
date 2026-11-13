@@ -46,6 +46,16 @@ lineage) · `pipelines`/`runs` (ingestion jobs + executions) · `delta_cursors`/
 (CDC state per PIPELINE — `delta_cursors` is UNIQUE(pipeline_id), no source_id) ·
 `dashboards`/`dashboard_items` (suggested + user-curated).
 
+## Who does the work (design direction)
+
+Every process AIDW supports lists its steps and marks each as done by AIDW, proposed by AIDW
+for a person to approve, or done by a person. A step stays with a person only for a stated
+reason, and it names the evidence that would move it to AIDW: how AIDW's own answer measured
+against the changes people made, and whether the step can be undone. A new capability starts
+with AIDW doing the work, the way dashboard items are suggested and the user accepts or edits
+them. Each suggestion shows what it was derived from, and AIDW counts how many steps people
+still do and how its suggestions fared against their edits.
+
 ## Standing engineering decisions (answer consistently)
 
 Most of these describe how the skeleton **was** built — match them. Any bullet marked
