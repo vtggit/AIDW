@@ -50,8 +50,9 @@ the full terms; the summary below does not replace them.
   offer it as a hosted or managed service.
 - ❌ **No modification** — do not modify it or create derivative works.
 - ❌ **Keep the notices** — do not remove or alter the license or copyright notices.
-- ⚠️ **No warranty, no support** — the software is provided "as is", with no warranty and no
-  support, maintenance or service commitment.
+- ⚠️ **Use at your own risk** — the software is provided "as is", with no warranty and no
+  support, maintenance or service commitment. It is not meant for production use, and Virtual
+  Technology Group is not liable for any damage, data loss or business interruption it causes.
 
 This is a **proprietary** license, **not** an open-source license. All rights are reserved by
 Virtual Technology Group LLC.
