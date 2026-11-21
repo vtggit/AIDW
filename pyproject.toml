@@ -1,4 +1,4 @@
-# AICRM — Python quality tooling configuration
+# AIDW — Python quality tooling configuration
 #
 # This file configures the formatter (black) and linter (ruff) used by
 # CI and local development to enforce consistent, readable Python code.

@@ -13,8 +13,9 @@ These four principles answer the four failures of the earlier screens.
   body, a detail pane) scroll on their own.
 - **One plan, not pieces.** Every screen is built from the same handful of patterns below, with
   the same shell, header, spacing, type and status language, so the product reads as one thing.
-- **Current, quiet visual language.** Tokens only (never raw colours or sizes), IBM Plex Sans for
-  text and IBM Plex Mono for figures, tabular numbers, generous spacing, and one accent colour.
+- **Current, quiet visual language.** Tokens only (never raw colours, radii or spacing), IBM Plex
+  Sans for text and IBM Plex Mono for figures, tabular numbers, generous spacing, and one accent
+  colour.
 - **An obvious workflow.** Each screen answers one question, its primary action is a single
   primary button, and the user always sees where they are (an active nav item, the page title,
   the selected row).
@@ -23,14 +24,14 @@ These four principles answer the four failures of the earlier screens.
 
 - A fixed-height layout (`height: 100vh`, never taller) with two columns: a dark sidebar
   (`--sidebar-width`, 232 px) and the main area.
-- **Sidebar**, top to bottom: the product mark and name, the navigation (one button per screen,
+- **Sidebar**, top to bottom: the product mark and name, the navigation (one item per screen,
   the active one highlighted; counts where they help), and at the bottom the data status (for
   example "Synced today 07:30 UTC") and the signed-in user with Sign out.
 - **Main area header**: the page title, a one-line subtitle, and on the right the as-of date or
   other context.
 - Below the header, the screen fills the remaining height.
-- Navigation is hash-based (`#/<screen>`), switches screens without a page load and survives a
-  reload.
+- Navigation keeps the screen in the URL (`#/<screen>`, or `?panel=<name>` on AIDW's Studio),
+  switches screens without a page load and survives a reload.
 
 ## Patterns
 
@@ -67,7 +68,7 @@ Every screen is one of these, or a combination of them on one page.
 The token file is `app/css/tokens.css`, and screens use its variables, never raw values.
 
 - **Type:** IBM Plex Sans for UI text and IBM Plex Mono for figures, with tabular numbers
-  throughout.
+  throughout. Font sizes have no token; screens set them in `rem`.
 - **Colours:**
   - ground #EEF1F4; surface #FFFFFF; sidebar #16212C;
   - ink #17212B, secondary ink #4A5865;
@@ -90,7 +91,8 @@ Nothing may clip, overflow its box or scroll the page sideways.
 - Tabs use `role="tablist"`/`role="tab"` with `aria-selected`; toggle buttons use `aria-pressed`;
   switches use `role="switch"` with `aria-checked`; the selected row uses `aria-current`.
 - Text contrast is at least 4.5:1, and colour is never the only signal.
-- Every value that comes from an API is inserted as text, never as HTML.
+- Every value that comes from an API renders as text, never as HTML: it is written with
+  `textContent`, or escaped before it enters an HTML string.
 
 ## Configuration
 
@@ -115,3 +117,23 @@ Each screen's browser proof checks:
    pattern, keeping its test hooks or superseding the named proofs explicitly.
 3. **Retire long pages last.** A screen that today is a long scrolling page becomes a pattern
    above (often a Work queue or a Table in a card plus a Form in a pane), not a shorter long page.
+
+## Where AIDW stands
+
+AIDW's screens (`app/`) are part-way through this port. The shell and the Dashboards, Data sources,
+Suggestions, PII flags, Load sequences, Data retention, Ingestion and Audit history screens have
+token-based stylesheets; Process wizard and Feed keys do not yet. These parts of the standard are
+not met yet:
+
+- **Older styles.** `app/css/styles.css` and `app/css/warehouse.css` predate the tokens and hold raw
+  colours and their own variables. `.btn-primary` takes its colour from the older `--accent`
+  (#4F46E5), not the token accent, and `.btn` sets no minimum height, so `.btn` buttons fall short
+  of 44 px.
+- **Navigation.** Dashboards and Studio are separate pages, so moving between them is a page load.
+- **Sidebar and header.** The bottom of the sidebar has only the signed-in user or a Log in button:
+  no data status and no Sign out. The main header has no context on the right.
+- **Status badges.** Only a load sequence's run status uses the scale above. The token file has no
+  pale accent token, and no amber apart from the risk pair.
+- **Loading and errors.** No screen has skeleton rows, and the drill-down pane shows a bare
+  "Loading..." line. Errors show inline or in a toast, and no screen has a Retry button.
+- **Settings.** There is no Settings screen; AIDW is configured through environment variables.

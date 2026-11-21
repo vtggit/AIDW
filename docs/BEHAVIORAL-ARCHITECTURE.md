@@ -1,9 +1,10 @@
 # AIDW Behavioral-Layer Architecture
 
-Status: **design, verified** · Owner: CodeAgent (AIDW instance) · Supersedes: ad-hoc entity work
+Status: **design of record, verified; partly built** ([what exists today](#implementation-status-checked-2026-11-02-commit-c142baa)) · Owner: CodeAgent (AIDW instance) · Supersedes: ad-hoc entity work
 
 This is the target architecture for AIDW's behavioral layer — the vision's substance beyond the
-CRUD scaffold that is already on `main` (`sources → datasets → discovered_fields`). It was
+CRUD scaffold that was all `main` held when this was written in July 2026 (`sources → datasets →
+discovered_fields`). Much of it has since been built; the status section below says what. It was
 produced by a multi-agent design workflow (3 independent proposals → judge-panel synthesis) and
 then **adversarially verified** across four lenses. Constraint-fidelity held; the buildability,
 vision-completeness, and risk lenses surfaced defects in the *backlog* that are corrected here
@@ -11,6 +12,43 @@ vision-completeness, and risk lenses surfaced defects in the *backlog* that are 
 
 The four capabilities, in vision priority: **connectivity (OData-first) → schema discovery →
 CDC ingestion → dynamic dashboard suggestion.**
+
+---
+
+## Implementation status (checked 2026-11-02, commit c142baa)
+
+The rest of this document is the design of record: the target, the reasoning and the verification
+history as written in July 2026. It does not describe the running product. Where it differs from
+the code, the code and this table win. Notes marked **Built differently**, **Not built** or
+**Current state** in later sections were added in this check; text without a note was left as
+written, so "today" there means July 2026.
+
+Schema: 105 migrations, head `0105_add_feed_cred_last_used`, 35 application tables. Only the
+`cursor` CDC pattern runs.
+
+| Item | Status | Code, and what is missing |
+|---|---|---|
+| M0 de-risk | Built | `backend/app/discovery/schema_reader.py`, `backend/app/worker/`, `backend/app/egress/secrets.py`. Parser tests use one small inline V4 EDMX, and the 0b live probe is not in the repo's tests |
+| M1 connectivity config | Partly built | `source_connections`, `source_credentials`, `odata_service_configs`. No `sources.is_enabled` or `sources.last_test_status` |
+| M2 test one connection | Built | `POST /api/connection-tests/{id}/run` in `backend/app/api/connection_tests.py`, not `POST /api/sources/{id}/test` |
+| M3 discover schema | Partly built | `backend/app/discovery/service.py`. No `discovery_runs` rows, tombstones or lifecycle columns |
+| M4 cursor ingest | Built | `backend/app/ingest/`, `POST /api/pipelines/{id}/runs` |
+| M5 profile, suggest, accept, render | Built | `backend/app/profiling/`, `backend/app/suggestion/`, `backend/app/dashboard/`, `app/js/warehouse.js` |
+| M6 real runtime | Partly built | Worker runs ingest, erasure and scheduled sequences (`backend/app/worker/loop.py`). Landing is one JSONB table, `ingested_payloads`, not typed tables. No Vault; test, discover and on-demand profile stay in the API |
+| M7 breadth | Not built | `backend/app/egress/http.py` does Basic auth only. No OAuth, mTLS, delta queue, snapshot diff, `information_schema` reader, `run_id` FKs or LLM tier |
+| M8 governance | Partly built | The six pillars below |
+| #75 PII watchdog (issue closed) | Partly built | `backend/app/pii/`, `backend/app/api/pii_decisions.py`. Core shipped. No unique index on `(dataset_id, fingerprint)`; generic `PUT` can still set `status` |
+| #76 RTBF (issue closed) | Partly built | `backend/app/governance/`, `backend/app/worker/loop.py`. Core shipped. No guard on `PUT`/`DELETE` of finished requests, no `needs_attention` filter, `name` not overwritten |
+| #77 RBAC and masking (issue open) | Not built | `backend/app/auth/authorization.py` has `admin` and `user` only. No `steward`, `pii_reader`, `pii_status` or masking engine |
+| #78 encryption (issue open) | Partly built | `backend/app/egress/http.py`, `backend/app/egress/policy.py`; backend port on loopback by default. No TLS in the repo, `verify_tls` unread, no `DB_SSLMODE`. LUKS and backups are operator work and cannot be checked from code |
+| #79 audit (issue open) | Partly built | `backend/app/audit/recorder.py` writes `audit_logs`; PII writes `audit_log`. No middleware, read auditing, tamper trigger or purge function |
+| #80 retention (issue closed) | Partly built | `backend/app/retention/`, `POST /api/retention-policies/{id}/sweep`. Manual purge only. No `anonymize`, scheduled sweep, seeded defaults or audit rows |
+
+Shipped outside this design: the OData v4 feed with feed keys (`backend/app/api/feed_odata.py`,
+`backend/app/feed/`), load sequences with the worker's scheduler
+(`backend/app/api/load_sequences.py`, `backend/app/worker/scheduling.py`), process definitions with
+the BPMN generator (`backend/app/bpmn/`), dashboard layouts (`dashboard_item_layouts`) and an
+optional Flowable proxy (`backend/app/api/workflows.py`).
 
 ---
 
@@ -22,19 +60,32 @@ Two runtimes, one Postgres, one secret seam:
   reads, and *thin behavioral seams* that either **enqueue** work (insert a `queued`/`pending`
   row) or run **pure in-DB logic** over already-persisted rows (accept a suggestion; run the
   suggestion rule engine over stored profiles). **Zero source egress; never touches raw secrets.**
+  **Built differently:** the API still reaches sources. In the default `INGEST_EXECUTOR=inline`
+  mode it runs ingest itself; discovery, on-demand profiling and chart data have no worker path.
+  `POST /api/connection-tests/{id}/run` and `POST /api/sequence-runs/{id}/execute` reach the
+  source with no `ENABLE_INAPI_EGRESS` check at all.
 - **Connector/ingestion worker** — ONE shared service (operator-provisioned; see §5). Owns *all*
   egress and heavy I/O: OData `$metadata` GET, DB `information_schema`, CDC drain/poll/diff, row
   landing, profiling scans. Claims work via `SELECT … FOR UPDATE SKIP LOCKED`, resolves
   `secret_ref` at connect time, writes results + status in one transaction.
+  **Built differently:** the worker is in this repo (`backend/app/worker/`, opt-in compose profile
+  `worker`). It claims `runs`, `deletion_requests` and scheduled `sequence_runs`, so its egress is
+  ingest and the profiling pass that follows. `information_schema` discovery and drain/diff CDC
+  are not built.
 - **One job substrate (decided once):** every behavioral trigger is a DB work-table row in a
   `queued`/`pending` state the worker drains via skip-locked polling — `connection_tests`,
   `discovery_runs`, and `runs` alike. A real broker (Redis/LISTEN-NOTIFY) is a later
   scale-triggered issue.
+  **Built differently:** connection tests, discovery and retention sweeps run synchronously in the
+  request; only the three spines above are drained.
 - **Secret boundary (one rule):** credentials live ONLY as `secret_ref` (opaque path) +
   non-secret `principal`. The namespace is **`aidw/sources/<id>/<key>` from day one.** An interim
   env/file resolver (secrets are `.env` on the host today) satisfies it now; **Vault later is a
   resolver-internal swap, not a schema or API change.** No secret material ever lands in a DB
   column, `audit.details`, an `error`/`message` field, or a log line.
+  **Built differently:** `secret_ref` is the name of an environment variable
+  (`^[A-Z][A-Z0-9_]{2,63}$`), and `backend/app/egress/secrets.py` reads only the environment. There
+  is no `aidw/sources/…` namespace, file resolver or Vault.
 - **Interim in-API egress (`ENABLE_INAPI_EGRESS`, default OFF):** a flag-gated synchronous in-API
   path runs the OData fetch inline for **anonymous / basic-auth-only** sources (short timeout, no
   cert material), writing the *same* `connection_tests`/`discovery_runs`/`runs` rows the worker
@@ -49,13 +100,21 @@ Two runtimes, one Postgres, one secret seam:
    (`source_connections`, `source_credentials`, `odata_service_configs`) are the target. The
    flat `endpoint_url`/`auth_mode`/`secret_ref`-on-`sources` alternative is dropped to avoid a
    build-then-migrate. `sources` itself gains only `is_enabled` + `last_test_status`.
+   **Not built:** neither column exists; `sources` is still `id`, `name`, `type` and timestamps.
 2. **Two run spines, kept separate.** `discovery_runs` (discovery) and `runs` (ingestion) have
    different shapes/lifecycles. `field_profiles`/`suggestions` get a `run_id` FK only in breadth,
    once `runs` is on `main` — the *only* cross-capability FK edge in the whole plan.
+   **Current state:** `runs` is on `main`, but those FKs were not added. `discovery_runs` exists
+   with generic CRUD only; `POST /api/sources/{id}/discover` writes no row to it.
 
 ---
 
 ## 3. Data model — 18 tables (2 extended + 16 new)
+
+**Current state:** the count above is the July 2026 design of the first slice, not today's schema,
+which has 35 application tables. The diagram below draws 19 tables; 18 of them exist, and
+`delta_queues` was not built. The other 17 are the audit, governance, process, sequence, feed,
+layout and landing tables listed by the migrations.
 
 ```
 sources (MAIN; +is_enabled, +last_test_status)
@@ -83,6 +142,13 @@ suggestions (title, item_type, aggregation, score, rationale, strategy, status) 
  └─ suggestion_fields (field_role)                                                           [DASHBOARD]
 ```
 
+**Built differently:** `discovered_fields.ordinal` is `field_position`, and `pipelines.enabled` is
+`is_enabled`. Not built: `sources.is_enabled`, `sources.last_test_status`,
+`datasets.source_object_name`, `discovered_fields.source_field_name`, `lifecycle_status` on both
+tables, `field_profiles` mean and stddev, and the `discovery_runs` timing, count and error columns.
+`pipelines.cdc_pattern`, `.schedule` and `.is_enabled` are stored, but no backend code acts on them,
+so every pipeline runs the cursor path when triggered.
+
 **FK edges** (all nullable `VARCHAR(64)`, `ON DELETE SET NULL`, indexed): the satellite/child
 tables → their parent (`source_id`, `dataset_id`, `pipeline_id`, `discovered_field_id`,
 `dashboard_id`, `suggestion_id`, etc.); `datasets`/`discovered_fields.first|last_seen_run_id →
@@ -95,12 +161,22 @@ Every new table follows the standing contract: `VARCHAR(64)` string PK; audit + 
 `X-Total-Count`, bare-array v1); 409 on duplicate, 422 on bad FK; Alembic head-chained revisions
 ≤32 chars that succeed on dirty data.
 
+**Current state:** the string PKs, the 409 and 422 handling and the revision rules hold. No table
+has `deleted_at`, and repositories hard-delete. Most list endpoints are unpaginated full-table
+reads; only `GET /api/load-sequences` and `GET /api/sequence-runs` take `limit`/`offset` and emit
+`X-Total-Count`, with no default limit. Audit writes cover some tables, not all (see #79).
+
 **Landing = PostgreSQL now** — one typed table per dataset (schema-on-write, columns mirror
 `discovered_fields`), managed by the worker at ingest, reachable only through the
 pipeline/dataset indirection so a later OLAP-engine swap is a localized worker+landing change,
 never an API rewrite. `ingested_records` is the substrate-agnostic CDC op-log (business_key + op
 + provenance) so delete/lineage/idempotent-replay semantics are representable independent of the
 typed table.
+
+**Built differently:** landing is one shared table, `ingested_payloads` (migration 0075): the raw
+source row as JSONB, unique on `(dataset_id, business_key)`, with no typed columns or per-dataset
+DDL. `apply_rows` (`backend/app/ingest/cursor.py`) writes it in both executor modes, and chart
+aggregation and the OData feed read it directly by `dataset_id`.
 
 ---
 
@@ -125,7 +201,7 @@ Rules (several are corrections from the verify — see §7):
   shrinking an existing module below 50%). A non-converging freeform trial opens **no PR** (worst
   case = spent tokens).
 - **Any code that lands outside the API repo is `[MI]`, never `[FF]`** (the worker, Vault, cert
-  storage, OLAP).
+  storage, OLAP). **Built differently:** the worker's code landed inside this repo.
 - **Every freeform behavioral module must assert on OBSERVABLE OUTPUT STATE** (rows actually
   landed / cursor actually advanced / a suggestion actually references real field ids) — not
   merely a 200/handler-ran assertion — so a gamed proof cannot pass (the reward-hack guard).
@@ -140,7 +216,7 @@ bottleneck; the critical path is the ~10 freeform + `[MI]` links.
 **Milestone 0 — de-risk the existential unknowns first** (parallel; depend only on `main`):
 1. `[FF]` OData `$metadata` (EDMX/CSDL **V2 + V4**) parser module — pure XML→normalized-list, AC-tested vs checked-in real V2/V4 fixtures with exact counts (probe R3).
 2. `[MI]` **Skeleton worker** — polls a `pending` row, flips status, writes latency; proves substrate + `SKIP LOCKED` claim + writeback before any connector logic (probe R1).
-3. `[MI]` **Interim env/file secret resolver** on `aidw/sources/<id>/<key>` (probe R2).
+3. `[MI]` **Interim env/file secret resolver** on `aidw/sources/<id>/<key>` (probe R2). **Built differently:** `backend/app/egress/secrets.py`, environment variables only (see §1).
 - **0b (critical, from verify): live-OData fidelity probe** — point the `ENABLE_INAPI_EGRESS` path at ONE real public OData service (SAP ES5 / TripPin / Northwind V2+V4) and run parser(#1)+reconciler(#18) against its **live `$metadata` + one real data page**, asserting exact entity-set/field counts + one full discover→ingest cycle. Retires the load-bearing risk before any infra is built; costs only tokens on failure. Fixture tests stay as the CI net.
 
 **Milestone 1 — connectivity config:** `[E]` `source_connection`, `source_credential`,
@@ -150,12 +226,17 @@ bottleneck; the critical path is the ~10 freeform + `[MI]` links.
 **Milestone 2 — test one connection** 🟢 *first thin API⊥worker proof:* `[E]` `connection_test`
 + `[F+]` `source_id`; `[FF]` `POST /api/sources/{id}/test` (enqueue + interim exec:
 anonymous/basic OData root GET, record status/latency/sanitized message).
+**Built differently:** the route is `POST /api/connection-tests/{id}/run`. It fetches `$metadata`
+synchronously, with no `ENABLE_INAPI_EGRESS` check.
 
 **Milestone 3 — discover schema:** `[E]` `discovery_run` + `[F+]` `source_id`; the `datasets`
 (4) and `discovered_fields` (7) discovery columns **as individual `[F+]` PRs**, the two
 `first/last_seen_run_id` FKs each ordered **after `discovery_run` is merged**; `[FF]`
 reconciliation module (UPSERT + tombstone, idempotent, 5 named test cases); `[FF]`
 `POST /api/sources/{id}/discover`. **Schema-tier suggestions fire here** (see §6).
+**Built differently:** discovery upserts and never tombstones, so a field that disappears upstream
+keeps its row. It writes no `discovery_runs` row, so `first_seen_run_id` and `last_seen_run_id`
+are set only through generic CRUD. The endpoint takes an optional `entity_sets` allowlist.
 
 **Milestone 4 — ingest one dataset (cursor pattern):** `[E]` `pipeline`, `run`, `delta_cursor`,
 `ingested_record` (+ each FK as its own `[F+]`); `[FF]` `POST /api/pipelines/{id}/runs`
@@ -177,6 +258,9 @@ behind `ENABLE_INAPI_EGRESS`.
 `[MI]` promote the skeleton worker to the full connector/ingestion worker (migrate `/test`,
 `/discover`, cursor-ingest, `/profile` logic out of the API *unchanged*); `[MI]` per-dataset
 typed landing tables.
+**Built differently:** the worker took cursor-ingest and the profiling pass after it, plus erasure
+and scheduled load sequences. Landing is the shared `ingested_payloads` table (§3). Vault is not
+provisioned.
 
 **Milestone 7 — breadth:** OAuth client-credentials; x509/mTLS `[MI]`; `delta_queue` +
 snapshot-diff CDC strategies (worker-side `[MI]`/`[FF]` split); DB `information_schema` discovery
@@ -205,12 +289,18 @@ Rule sketch: categorical low-card → bar/pie; numeric measure + categorical dim
 temporal + measure → line; single high-fill numeric → KPI; high-card string → table.
 `score = fill_rate × cardinality_fit × type_fit`.
 
+**Built differently:** the schema tier emits `kpi`, `bar`, `line` and `table`, never `pie`. The
+profile-tier score is not this formula: `backend/app/suggestion/rescore.py` sets fixed bands for a
+dimension (0.82 low-arity, 0.12 near-unique, 0.45 otherwise) and lifts a measure's score by its
+fill rate. After ingest, suggestions are re-scored, not regenerated.
+
 ### Chart data for accepted items (interim in-API egress)
 
 An accepted item renders as a real chart in the warehouse UI via
 `GET /api/dashboard-items/{id}/data` (any authenticated user; gated by `ENABLE_INAPI_EGRESS`
-like discovery/profiling — 503 when off). There is deliberately **no local row store to
-query yet** (typed landing tables are Milestone 6), so the endpoint reuses profiling's seam:
+like discovery/profiling — 503 when off). When this was designed there was deliberately **no
+local row store to query** (typed landing tables are Milestone 6), so the endpoint reuses
+profiling's seam:
 resolve the item's role-tagged fields to its dataset (field-less row-count KPIs resolve via
 `source_suggestion_id -> suggestions.dataset_id`), fetch one sampled page
 (`{endpoint}/{set}?$top=200`), aggregate in Python (`count`/`sum`/`avg` grouped by the
@@ -219,6 +309,15 @@ resolve the item's role-tagged fields to its dataset (field-less row-count KPIs 
 `sample_size`/`buckets_total` provenance (top-20 buckets, `truncated` flagged; fetch
 failures are logged server-side and surface as a generic 422 — no upstream error text).
 When landing tables land, only the row source changes (SQL replaces the live sample).
+
+**Current state:** that swap has happened for items with a dimension. When `ingested_payloads` holds
+rows for the dataset, `item_data` (`backend/app/dashboard/data_service.py`) aggregates all of them
+in SQL and adds `source: "landed"`, `total_rows` and `refreshed_at`. KPI items and datasets with no
+landed rows stay on the live sample. More than the row source changed: `aggregate_series`
+(`backend/app/ingest/landing.py`) orders by value even for a temporal dimension, and folds the tail
+beyond 20 buckets into an `Other` bucket. The 503 gate also applies to landed charts, which need no
+egress. `GET /api/dashboard-items/{id}/series` is a second endpoint with the same governance that
+reads the live sample only.
 
 Governance is inherited, not re-invented:
 - **PII:** any referenced field with an ACTIVE flag (`flagged` or `confirmed`) withholds the
@@ -265,6 +364,10 @@ The adversarial pass (constraint-fidelity **held**) forced these fixes into the 
 5. The **dedicated OLAP/column engine** (scale-triggered; the landing indirection keeps it local).
 6. **Standing up** the job substrate / worker runtime (the *decision* is made here; the deploy is operator).
 
+**Current state:** the worker's code is in this repo and compose can start it (`--profile worker`);
+running it remains an operator choice. Items 2, 4 and 5 do not exist. Item 3 was built differently,
+with no runtime DDL (see §3).
+
 ---
 
 ## 9. Risk ledger
@@ -301,13 +404,26 @@ verification verdicts — is preserved as comments on the AIDW issues: **#75** p
 **#76** rtbf · **#77** rbac-masking · **#78** encryption · **#79** audit-traceability ·
 **#80** retention.
 
+**Current state:** "normative" here means normative for the design. #75, #76 and #80 are closed and
+#77, #78 and #79 are open, but no pillar is built as written; the status table records what is.
+
 ### Auditability & traceability (#79)
 
-**Verified baseline:** `audit_log` + `AuditService` exist, but `AuditService.write()` has ZERO
-call sites — only `GET /api/audit` (admin, read-only) touches the service; the documented
-"Option B: audit failure rolls back the mutation" policy governs nothing today. This pillar makes
+**Verified baseline (July 2026):** `audit_log` + `AuditService` exist, but `AuditService.write()`
+has ZERO call sites — only `GET /api/audit` (admin, read-only) touches the service; the documented
+"Option B: audit failure rolls back the mutation" policy governed nothing then. This pillar makes
 auditing *structural* rather than call-site discipline, because nearly every mutation endpoint is
 lane-generated CRUD that will never remember to call a service.
+
+**Built differently:** `AuditService.write()` still has no call sites, but audit rows are written,
+to two tables. `record_audit` (`backend/app/audit/recorder.py`) inserts into `audit_logs` (migration
+0055) on the caller's cursor. The repositories for sources, source connections and credentials,
+datasets, pipelines, suggestions, PII flags and retention policies call it, as do the RTBF lifecycle
+and executor. PII decisions and retro-scrubs insert into the original `audit_log` directly
+(`backend/app/pii/service.py`). `GET /api/audit` and the Audit history screen read `audit_log` only.
+`audit_logs` has generic CRUD at `/api/audit-logs`: any authenticated user can read it and an admin
+can create, edit or delete rows. Items 1, 2 and 4–8 and the schema deltas below are not built. Item
+3 holds in part: bulk writes write no audit rows, but the human trigger is not recorded either.
 
 1. **Mutation auditing is middleware, not call sites.** An `AuditMiddleware` records every 2xx
    `POST/PUT/PATCH/DELETE` under `/api/`: `entity_type` = first path segment, `entity_id` = path
@@ -343,6 +459,8 @@ lane-generated CRUD that will never remember to call a service.
    own follow-up. Per-row read audit is rejected (unbounded volume); flag-aware scoping is a
    deferred refinement on the watchdog's `pii_flags`. Dashboards/suggestions reads
    (aggregates/metadata) are not audited. `[FF]`
+   **Current state:** the value-bearing surfaces now also include `ingested_payloads`, read through
+   the OData feed, and two list endpoints do emit `X-Total-Count` (see §3).
 5. **Governance events are explicit, not inferred.** A small writer module + action vocabulary
    (`pii.flag_set|cleared`, `deletion.requested|approved|executed`, `retention.policy_set|purged`,
    `audit.purged`) with reserved system actors (`system:worker`, `system:retention`, …) — used by
@@ -413,6 +531,8 @@ values are never persisted for a flagged field.
   SELECT-then-INSERT into duplicate flags. Until CodeAgent#393's composite-unique grammar lands,
   the unique index ships as a tiny single-purpose `[FF]` migration and the reconciler INSERTs
   `ON CONFLICT (dataset_id, fingerprint) DO NOTHING`; #393 stays the lane-native replacement.
+  **Not built:** `pii_flags` has no such unique index, and the reconciler still does a SELECT then a
+  plain INSERT, so this race is open.
 - **Sticky overrides, tier-scoped staling.** `confirmed`/`dismissed` are human, audited, never
   touched by the reconciler; `dismissed` lifts suppression at the next profile pass. Schema-tier
   flags go `stale` when the rule stops firing or the field vanishes; **profile-tier flags
@@ -431,6 +551,9 @@ values are never persisted for a flagged field.
   route through the same suppression check the profiling pass uses (active flag ⇒ value columns
   forced NULL) — so a plain admin PUT cannot re-write raw values into a suppressed row. `[FF]`,
   sequenced immediately after confirm/dismiss.
+  **Built differently:** only the audit half shipped. `PUT` and `DELETE /api/pii-flags/{id}` write
+  `audit_logs`, but `PUT` still accepts `status`, and `PUT /api/field-profiles/{id}` writes value
+  columns with no suppression check.
 
 **Data model (1 new table):**
 
@@ -455,7 +578,18 @@ value stores — `ingested_records.business_key`, `ingested_records.name` (the `
 and `delta_cursors.cursor_value` (non-numeric/non-timestamp cursor kinds pass any value through
 unchanged) — so the hash-at-rest operator question covers every surface, not just the key column.
 
+**Built differently:** nothing masks on these flags yet (see #77), and an erasure runs on the
+request's own `dataset_id` with no flag check. The key-field rationale names only the op-log, not
+all three stores. `ingested_payloads` is now a further verbatim store, and the OData feed serves its
+values with no PII check.
+
 ### RBAC & data masking (#77)
+
+**Not built:** only `admin` and `user` exist (`backend/app/auth/authorization.py`, about 120
+`require_role` route dependencies). `steward`, `pii_reader`, `pii_status`, `app/masking/engine.py`,
+`is_masked` and the steward transition endpoint do not exist. Classification lives in `pii_flags`
+and decisions are admin-only. What runs is #75's write-time NULLing and chart withholding, so
+values of unflagged fields stay readable by any authenticated user.
 
 **Role catalog — four flat JWT roles, no hierarchy, no role tables.** `admin` (mutations) and
 `user` (authenticated read) stay exactly as enforced today (`require_role` per endpoint, 110 call
@@ -546,6 +680,9 @@ deleted; governance records are retention-protected** — the lifecycle `[FF]` b
 completed/rejected `deletion_requests` (409), so lane CRUD cannot destroy a proof-of-erasure
 record.
 
+**Not built:** that guard does not exist. `DELETE /api/deletion-requests/{id}` removes a row in any
+status, and the admin-only generic `PUT` can set `status` directly.
+
 **`deletion_requests` is a third claim spine, not a generalized `runs`.** §1 settled the
 substrate; a generic jobs table would be a §2 build-then-migrate violation and could not be
 minted by the `[E]` lane. First live use of the enum AC grammar: `status` constrained to one of
@@ -573,6 +710,9 @@ remaining 8 scalars. Inline mode (`INGEST_EXECUTOR=inline`) executes synchronous
 `/verify` — erasure needs NO egress, so it never gates on `ENABLE_INAPI_EGRESS`; identical rows
 either way (§1).
 
+**Not built:** the `needs_attention` filter in (b). The list endpoint takes no filters, so admins
+read `attempts` and `error_detail` from the full list. The attempts cap itself ships and is tested.
+
 **One erasure transaction** (all-or-nothing): (1) `DELETE FROM ingested_records WHERE
 dataset_id=? AND business_key=?` — the `name` column's `rec:<key>` copy dies with the row;
 (2) NULL `field_profiles.min/max/most_common_value` for ALL the dataset's fields — the subject's
@@ -589,6 +729,12 @@ at `/verify` (the erasure executes on that admin's authority; details note
 free-text `name` is where an admin would naturally paste the identifier). The completed row +
 audit event ARE the proof of erasure without retaining the identifier.
 
+**Built differently:** step 1 also deletes the subject's `ingested_payloads` row, and
+`records_deleted` counts both. Step 4 is `record_audit` on the same cursor: an `audit_logs` row with
+`action='delete'`, `entity_type='erasure'` and the counts + `key_hash` in `detail`, with no
+`executed_via` and a fallback actor of `system`. Step 5 NULLs `subject_key` but does not overwrite
+`name`, so an identifier pasted there survives the erasure.
+
 **Suppression (re-ingest must not resurrect):** `key_hash = hex(HMAC-SHA256(pepper,
 dataset_id‖0x00‖business_key))` — deterministic (matchable at ingest), non-attributable without
 the pepper (plain SHA-256 rejected: business keys are low-entropy, dictionary-reversible).
@@ -596,7 +742,9 @@ Folding `dataset_id` into the HMAC input makes `key_hash` alone globally unique 
 unique index; CodeAgent#393 stays off the critical path. The pepper lives ONLY in the secret seam
 (`aidw/governance/suppression_pepper`, env-resolved interim; Vault later is resolver-internal) —
 never a DB column — and is write-once: rotation orphans every entry, so pepper custody is
-DB-backup-grade `[MI]`. Three verification-forced semantics:
+DB-backup-grade `[MI]`. **Built differently:** the pepper is read from the environment variable
+`AIDW_SUPPRESSION_PEPPER` (`backend/app/governance/hashing.py`), not through a namespaced secret
+seam. Three verification-forced semantics:
 
 - **Lazy, fail-closed filter.** `apply_rows` loads the dataset's suppression entries first; when
   empty it skips hashing entirely — no pepper resolution, so RTBF never becomes a hard runtime
@@ -622,6 +770,9 @@ DB-backup-grade `[MI]`. Three verification-forced semantics:
 MUST carry an indexed `business_key` (same derivation); the landing writer consults the same hash
 module before insert; the erasure executor gains a registry-driven `DELETE FROM landing_<ds>`
 step; backfills check suppression before writing. Ships `[MI]` with the landing DDL.
+**Built differently:** the shared `ingested_payloads` table meets this without a registry: it has
+`business_key`, `apply_rows` lands only non-suppressed rows, and the executor deletes from it in the
+erasure transaction.
 
 **Lane gaps → engine candidates:** the `[E]` lane cannot express admin-only READS (interim `[FF]`
 tightens the router); verify/reject is the second live status-transition endpoint shape (after
@@ -633,6 +784,10 @@ Retention is **policy-driven, sweep-executed, audit-evidenced**: one config enti
 (`retention_policies`), one work spine (`retention_runs`) on the settled SKIP-LOCKED claim
 substrate, zero new runtimes. Retention is a **ceiling** — RTBF's `deletion_requests` delete
 sooner regardless of schedule; nothing here ever extends a row's life.
+
+**Built differently:** what runs is a manual purge of one policy at a time, from the Data retention
+screen or `POST /api/retention-policies/{id}/sweep` (`backend/app/retention/service.py`). The notes
+below give the details.
 
 **Data model — decomposed to lane-proven width.** The `[E]` lane mints name + string/enum fields
 only (the 0017 precedent; ints/bools/timestamps have always arrived as `[F+]`), so:
@@ -646,6 +801,11 @@ then `[F+]` each for `started_at`, `finished_at`, `policies_applied`, `rows_purg
 "timestamp" precedent emitted `VARCHAR(32)`, the due-check and reaper key on the contract
 `created_at`/`updated_at` (real TIMESTAMPTZ); real timestamp typing is filed as an engine gap.
 
+**Built differently:** `table_class` allows `connection_tests`, `runs`, `discovery_runs`,
+`ingested_records` and `field_profiles` only. `dataset_id` is `ON DELETE CASCADE` (migration 0045).
+A `retention_runs` row covers one policy: `policy_id`, `records_purged`, `records_anonymized` and
+`error_detail`, with no `started_at`, `finished_at` or `policies_applied`.
+
 1. **Granularity + the scope fail-close.** Class + optional dataset, most-specific wins;
    `dataset_id` honored only for dataset-partitioned classes (`ingested_records`,
    `field_profiles`, `landing`), ignored elsewhere. The `scope` enum exists because
@@ -657,12 +817,17 @@ then `[F+]` each for `started_at`, `finished_at`, `policies_applied`, `rows_purg
    `discovered_fields`, and orphaned profiles (`discovered_field_id IS NULL` — precisely the
    stale-PII rows) always fall under the class-wide policy. Same-scope duplicates: shortest
    period wins (most restrictive, deterministic).
+   **Built differently:** partial unique indexes (migrations 0048, 0049) allow one policy per class
+   and one per class + dataset, and each sweep runs only the policy it names, so there is no
+   most-specific or shortest-period resolver. A dataset-scoped policy works for `ingested_records`
+   only; on `field_profiles` it fails closed.
 2. **Defaults: telemetry seeded, business data operator-set.** A seed migration `[FF]` inserts
    enabled 365-day purge policies for `connection_tests`/`runs`/`discovery_runs` — pure telemetry
    whose unbounded growth is the on-prem failure mode; their inbound FKs are ON DELETE SET NULL,
    so purging the spine degrades lineage, never integrity. `ingested_records`, `field_profiles`,
    `audit_log`, `landing` ship with NO policy: a warehouse must never destroy business data by
    default. Defaults are visible, editable rows, never sweeper constants.
+   **Not built:** no seed migration exists. No policy exists until an admin creates one.
 3. **Actions, with normative scrub + cutoff matrices** (a freeform build must not guess).
    `purge` = batched hard DELETE — the only *bulk/automated* deletion path (generic CRUD
    hard-deletes too; no `deleted_at` exists on `main`) — 10k-row batches, commit per batch,
@@ -680,6 +845,9 @@ then `[F+]` each for `started_at`, `finished_at`, `policies_applied`, `rows_purg
    `runs`/`discovery_runs`/`connection_tests` → `created_at`, terminal statuses only; `audit_log`
    → `timestamp`; landing → `ingested_at` partitions. The seed `[FF]` also indexes
    `ingested_records(updated_at)` — the warehouse's largest table must not seq-scan per batch.
+   **Built differently:** `purge` is one unbatched `DELETE`, and `anonymize` fails closed ("purge
+   only"). The cutoff is `created_at` for every class, including `ingested_records`, which is the
+   case this item warns about. The `updated_at` index was not added.
 4. **Scheduling: the worker self-enqueues.** Each poll, the worker inserts a `scheduled`
    retention_run when none ran within `RETENTION_SWEEP_INTERVAL_HOURS` (default 24), guarded by a
    partial unique index (at most one non-terminal run — no overlap, no duplicate-enqueue race);
@@ -689,6 +857,9 @@ then `[F+]` each for `started_at`, `finished_at`, `policies_applied`, `rows_purg
    rows (§1 rule). An inline sweep of a large backlog can outlive HTTP timeouts (documented —
    mirrors inline ingest; optionally capped via `RETENTION_INLINE_MAX_BATCHES`, remainder picked
    up by the next sweep — safe because the cutoff predicate is stable).
+   **Not built:** the worker neither enqueues nor runs sweeps, and neither setting exists. A sweep is
+   per policy and synchronous, at `POST /api/retention-policies/{id}/sweep`. `reap_stale_sweeps`
+   (`backend/app/retention/reaper.py`) exists, but only tests call it.
 5. **Audit evidence — self-consistent.** Every applied policy writes one audit row:
    `action='retention_purge'`/`'retention_anonymize'`, `actor_sub='system:retention'`, entity =
    the policy, details = class, dataset, cutoff, row count — counts and cutoffs ONLY, never
@@ -702,6 +873,8 @@ then `[F+]` each for `started_at`, `finished_at`, `policies_applied`, `rows_purg
    idempotent. And the blast-radius control is itself audited: a small `[FF]` instruments
    `retention_policies` create/update/delete with audit writes carrying the real AuthUser actor —
    the first CRUD audit writer — so shorten-sweep-restore leaves a trace.
+   **Built differently:** policy create/update/delete are audited as designed, but a sweep writes no
+   audit row. The `retention_runs` row commits with the `DELETE` and is the only evidence.
 6. **Landing purge contract (binds the M6 `[MI]`).** Every typed landing table MUST carry a
    last-seen `ingested_at TIMESTAMPTZ NOT NULL` and be range-partitioned on it (monthly); PG15
    cross-partition UPDATE re-homes re-seen rows, so old partitions hold only rows "not seen
@@ -710,6 +883,8 @@ then `[F+]` each for `started_at`, `finished_at`, `policies_applied`, `rows_purg
    skipped fail-closed and reported. `ingested_records` itself CANNOT take this path (partitioned
    unique indexes must embed the partition key, and `UNIQUE(dataset_id, business_key)` is global
    across time) — it stays DELETE-based.
+   **Not built:** there are no partitioned landing tables, and `ingested_payloads` is not a
+   retention class, so purging `ingested_records` leaves the matching payload rows in place.
 7. **"Securely purged", defined honestly.** A purge makes rows immediately irrecoverable through
    every AIDW surface (API and SQL); physical remanence persists in dead tuples until autovacuum
    reuses pages, in WAL until it recycles, and in backups until they rotate. The sweeper never
@@ -731,6 +906,10 @@ as production. Effort is ordered edge-inward: (1) close/loopback-bind published 
 5433 closes; (2) TLS at the one remaining LAN edge (the frontend nginx, which already proxies
 `/api`); (3) TLS on the Postgres link for the day the worker or admin psql is remote;
 (4) source-egress TLS policy. Intra-compose mTLS is explicitly NOT pursued.
+
+**Current state:** the backend port now binds to `127.0.0.1` by default (`BACKEND_BIND_HOST` in
+`docker-compose.yml`). 5432, 8080 and the hardcoded 5433 are still published on all interfaces, and
+`test-db` still shares `DB_PASSWORD`.
 
 **At rest — block layer, not database layer.**
 - **LUKS on the host path backing the Postgres volume is THE at-rest mechanism `[MI]`.** Vanilla
@@ -754,11 +933,14 @@ as production. Effort is ordered edge-inward: (1) close/loopback-bind published 
    conf diff bundles into the same `[MI]` — compose/nginx-only diffs have no assertable test
    surface, flagged as a CodeAgent engine candidate (infra lane, healthcheck-proven — now resting
    on the TLS server block, since the port binds turned out to be `.env`-only).
+   **Not built in this repo:** `app/nginx.conf` listens on 8080 only and compose publishes no 443. A
+   compose comment mentions a TLS proxy, but nothing here configures one.
 2. **App→Postgres:** `get_connection_params()` gains env passthrough
    `DB_SSLMODE`/`DB_SSLROOTCERT` `[FF]` — absent = today's exact params dict, so nothing breaks.
    The operator then provisions the server cert (`ssl=on`), loopback-binds the published 5432,
    and flips `verify-full` `[MI]`. Ships even though same-host today: it is the precondition for
    a remote worker (post-M6) and remote psql.
+   **Not built:** `get_connection_params()` has no SSL settings.
 3. **Egress (the in-repo core):** `verify_tls` is stored (0009) but read by NOTHING — all three
    fetch seams (discovery / profiling / ingest `_fetch_*`) verify by urllib default, so
    `verify_tls=false` silently lies to the user. One shared opener (`app/egress/http.py`)
@@ -781,9 +963,20 @@ as production. Effort is ordered edge-inward: (1) close/loopback-bind published 
    deliberately OUTSIDE the source-egress seam (operator-configured target, verifies by default;
    the auth pillar owns it if it ever needs CA/proxy policy). Private-CA endpoints (SAP
    landscapes): `source_connections.ca_bundle_ref` `[F+]` — a resolver-namespace ref
-   (`aidw/sources/<id>/ca_bundle`), never PEM-in-DB — **but the interim env/file resolver does
-   not exist yet** (§5 M0 #3 planned it; it was never built), so an explicit predecessor `[FF]`
+   (`aidw/sources/<id>/ca_bundle`), never PEM-in-DB — **but the interim env/file resolver did
+   not exist when this was verified** (§5 M0 #3 planned it), so an explicit predecessor `[FF]`
    ships `app/secrets/resolver.py` first and the CA-resolution `[FF]` depends on it.
+   **Built differently:** every source fetch goes through `fetch_bytes` in
+   `backend/app/egress/http.py`, which adds credential resolution, redirect rules and a destination
+   policy (`backend/app/egress/policy.py`: `EGRESS_POLICY`, `EGRESS_ALLOWED_HOSTS`). The env-only
+   resolver now exists as `backend/app/egress/secrets.py`. Connection tests, discovery and ingest
+   honor `timeout_seconds`; profiling and chart fetches use a fixed 30 seconds. A refusal raises
+   `EgressDestinationDenied`: discovery returns 422, ingest fails the run and a connection test
+   records `unreachable`, but profiling still logs and continues, so a fully refused source returns
+   200 with zero datasets profiled. Not built: any read of `verify_tls`, `ALLOW_INSECURE_EGRESS`,
+   the http-with-credentials refusal (Basic credentials go over plain `http`), `ca_bundle_ref` and
+   `app/secrets/resolver.py`. `_fetch_jwks` now uses `requests`, and the optional Flowable proxy
+   also fetches outside this seam.
 
 **Secrets posture (reaffirmed, extended).** `secret_ref`-only stands. This pillar adds:
 **endpoint URLs must not carry userinfo** — `https://user:pass@…` would store a verbatim secret
@@ -794,6 +987,9 @@ blobs; Vault PKI as the internal CA issuing the nginx/Postgres certs. Insecure-e
 LOG-warned, not audit-written — first-writer wiring belongs to the audit pillar, not smuggled in
 through an egress module.
 
+**Not built:** `source_connections.endpoint` has no userinfo check, so such a URL is stored and
+echoed as written. Vault and insecure-egress logging do not exist.
+
 ### Cross-pillar contracts
 
 - **One audit actor convention + one transactional seam.** System-originated events share
@@ -802,10 +998,13 @@ through an egress module.
   admin's authority). Three pillars independently hit the same wall — `AuditService.write`
   commits on its own connection — so the cursor-accepting `write_event(cur, event)` repository
   variant is ONE shared prerequisite for every same-transaction audit guarantee (steward
-  transitions, erasure proof, sweep evidence).
+  transitions, erasure proof, sweep evidence). **Built differently:** the seam is
+  `record_audit(cur, …)` on `audit_logs`, not a `write_event` variant. PII decisions use their own
+  INSERT into `audit_log`, and sweeps write no audit row.
 - **Masking keys on confirmed flags.** The watchdog's `pii_flags` (`category` +
   `status='confirmed'`) are the policy input for RBAC masking; RTBF scopes erasure to datasets
-  holding confirmed flags. One classification substrate, three consumers.
+  holding confirmed flags. One classification substrate, three consumers. **Not built:** neither
+  consumer reads the flags; profiling and charts do, on any active flag.
 - **RTBF overrides retention — floor vs ceiling.** Retention schedules are a ceiling (nothing
   outlives its policy); `deletion_requests` are a floor (delete sooner regardless of schedule);
   neither ever extends a row's life.
@@ -814,6 +1013,8 @@ through an egress module.
   + monthly range partitioning (retention's DETACH/DROP purge); the landing query path routes
   through the masking engine and the volume lives on the LUKS mount (masking + encryption).
   Ships `[MI]` with the landing DDL; a non-conforming table is skipped fail-closed.
+  **Built differently:** `ingested_payloads` meets the RTBF part only. It is not partitioned and its
+  read paths use no masking engine.
 - **Engine gaps surfaced (prime directive: lane gaps become engine features):** positive-integer
   CHECK grammar (`<field> constrained to be a positive integer` — `retention_period_days` interim
   relies on sweeper-side fail-close), real timestamp column typing (the `[F+]` "timestamp"
@@ -821,6 +1022,9 @@ through an egress module.
   column+index ship only together) — all extending the CodeAgent#392/#393 line, alongside the
   per-pillar candidates above (`[F+]` ALTER-TABLE CHECK-enum, partial/predicate unique index,
   admin-only reads, status-transition endpoints, non-contract-table support).
+  **Current state:** later migrations carry a positive-integer CHECK (0046), a partial unique index
+  (0048), a standalone index (0056) and a real timestamp column (0105). The engine is not in this
+  repo, so whether those lanes now exist was not checked.
 
 ---
 

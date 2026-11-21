@@ -11,7 +11,7 @@ dependency on the CodeAgent service.
 |---|---|
 | `contract_lib.py` | **vendored** from `vtggit/CodeAgent` `src/orchestration/contract_lib.py`. The AC-text hash + the `raw_decode` contract extractor. Do not edit by hand — keep it byte-identical to the source so hashes reproduce. |
 | `new_pr_contract.py` | offline generator: turn an issue's `codeagent-contract` into a `codeagent-pr-contract` skeleton (one `proof_map` entry per active AC, `ac_text_hash` filled, `tests:["TODO"]`). |
-| `list_proof_nodeids.py` | prints the proving-test nodeids from a PR's `codeagent-pr-contract`, so the gate runs only those tests rather than the whole suite. |
+| `list_proof_nodeids.py` | prints the proving-test nodeids from a PR's `codeagent-pr-contract`, so the gate runs only those pytest tests rather than the whole suite. |
 | `check_pr_contract.py` | the checker: resolves the PR contract against the linked issue's `codeagent-contract` and a junit test report, and produces a per-AC verdict. |
 | `revalidate.py` | re-checks the issue-side invariants (governance, decision pin, AC text hashes) for every open contract PR and posts a `codeagent-contract-revalidate` check-run on its head commit. |
 
@@ -28,19 +28,25 @@ gh issue view 128 --json body -q .body | python scripts/ca_gate/new_pr_contract.
 
 Paste the printed `## CodeAgent PR Contract` section into your PR description and
 replace each `tests: ["TODO"]` with the test nodeid(s) that prove that AC: pytest
-nodeids relative to `backend/`, or Playwright specs under `app/tests/`.
+nodeids relative to `backend/` (`tests/test_x.py::test_y`), or Playwright tests
+relative to `app/` (`tests/x.spec.js::<test title>`).
 
 ## What the gate checks
 
 `check_pr_contract.py` passes a PR only when all of these hold:
 
-- A PR with no contract and no `Implements`/`Closes` link to a contracted issue is
-  not gated. A PR that links a contracted issue but omits the PR contract fails.
+- A PR with no contract and no `Implements`/`Closes`/`Fixes`/`Resolves` link to a
+  contracted issue is not gated, and neither is a PR whose contract's
+  `implements_issue` has no `codeagent-contract`. A PR that links a contracted issue
+  but omits the PR contract fails.
 - Every linked issue can be fetched; a failed fetch fails the check.
+- The contract's `implements_issue` is among the PR's links, if it has any.
 - The issue's contract has `may_proceed == true` and no blockers.
 - The PR's `decision_id` equals the issue's current decision.
 - Every active AC has a `proven` proof-map entry whose `ac_text_hash` matches the
-  live AC text and whose mapped tests were all collected and passed.
+  live AC text and whose mapped tests were all collected and passed, have a real
+  assertion (checked for pytest tests only) and live in a file the PR adds or
+  modifies.
 
 ## Status
 

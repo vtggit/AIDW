@@ -14,9 +14,9 @@ the **controls-not-law** principle:
 ## How the corpus is used
 
 An issue that touches controlled data (or carries the `ca-adopt` label) references the
-applicable control files **by path in its body** — the deliberation engine injects those
-files into every panel agent's context. Findings, vetoes, and ratification conditions
-must cite the control `id`. Every gate decision is judged against the corpus version in
+applicable control files **by path in its body**. Panel agents work from a checkout of this
+repository, which is how they read those files; the engine does not paste them into the
+prompt. Findings, vetoes, and ratification conditions must cite the control `id`. Every gate decision is judged against the corpus version in
 force at that time; controls are amended by a deliberated issue + human ratification,
 never edited silently.
 
@@ -34,3 +34,8 @@ never edited silently.
 **Ratification state:** all v1 controls ratified by the operator (interim ratifier —
 theoretical-company phase, 2026-07-16). A future compliance authority re-ratifies on
 assumption of the role.
+
+**Proposed, not ratified:** `VTG-DEPLOY-001`, the trust-surface control for deploying an
+executable BPMN definition to the workflow engine ([#290](https://github.com/vtggit/AIDW/issues/290),
+draft [PR #292](https://github.com/vtggit/AIDW/pull/292)). It is not part of the corpus until
+it is ratified.
